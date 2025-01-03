@@ -1,0 +1,11 @@
+[package]
+name = "Renderer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cgmath = "0.18.0"
+glium = "0.36.0"
+image = "0.25.5"
+tobj = "4.0.2"
+
