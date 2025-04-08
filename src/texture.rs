@@ -1,17 +1,17 @@
-use glium::Display;
 use glium::texture::{RawImage2d, Texture2d};
 use image::ImageFormat;
 use std::fs::File;
 use std::io::BufReader;
+use crate::types::GliumDisplay;
 
 pub struct Texture {
     pub texture: Texture2d,
 }
 
 impl Texture {
-    pub fn load_from_file(display: &Display, path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_file(display: &GliumDisplay, path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         println!("Loading texture: {}", path);
-        
+
         // 加载图像
         let image = image::load(
             BufReader::new(File::open(path)?),
