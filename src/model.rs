@@ -1,6 +1,6 @@
-use glium::VertexBuffer;
+use glium::Display;
+use glium::{glutin::surface::WindowSurface, VertexBuffer};
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
-use crate::types::GliumDisplay;
 
 #[derive(Copy, Clone)]
 pub struct TexturedVertex {
@@ -16,7 +16,10 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn load_from_obj(display: &GliumDisplay, path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_obj(
+        display: &Display<WindowSurface>,
+        path: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         println!("Loading OBJ file: {}", path);
         let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)?;
 

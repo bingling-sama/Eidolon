@@ -1,10 +1,10 @@
-use glium::{Program, uniform, DrawParameters, Surface};
-use glium::draw_parameters::{DepthTest, BackfaceCullingMode};
-use glium::index::PrimitiveType;
+use glium::draw_parameters::{BackfaceCullingMode, DepthTest};
+use glium::glutin::surface::WindowSurface;
 use glium::index::NoIndices;
+use glium::index::PrimitiveType;
 use glium::uniforms::SamplerWrapFunction::Repeat;
+use glium::{uniform, Display, DrawParameters, Program, Surface};
 use std::time::Instant;
-use crate::types::GliumDisplay;
 
 use crate::model::Model;
 use crate::texture::Texture;
@@ -17,7 +17,11 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(display: &GliumDisplay, vertex_shader: &str, fragment_shader: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        display: &Display<WindowSurface>,
+        vertex_shader: &str,
+        fragment_shader: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // 编译着色器
         let program = Program::from_source(display, vertex_shader, fragment_shader, None)?;
 
@@ -26,11 +30,11 @@ impl Renderer {
             depth: glium::Depth {
                 test: DepthTest::IfLess,
                 write: true,
-                .. Default::default()
+                ..Default::default()
             },
             backface_culling: BackfaceCullingMode::CullingDisabled, // 禁用背面剔除
-            blend: glium::Blend::alpha_blending(), // 启用alpha混合
-            .. Default::default()
+            blend: glium::Blend::alpha_blending(),                  // 启用alpha混合
+            ..Default::default()
         };
 
         Ok(Renderer {
@@ -40,7 +44,12 @@ impl Renderer {
         })
     }
 
-    pub fn render(&self, display: &GliumDisplay, model: &Model, texture: &Texture) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn render(
+        &self,
+        display: &Display<WindowSurface>,
+        model: &Model,
+        texture: &Texture,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // 计算基于时间的旋转，降低旋转速度
         let elapsed = self.start_time.elapsed().as_secs_f32();
         let rotation_angle = elapsed * 0.3; // 降低旋转速度
@@ -75,10 +84,20 @@ impl Renderer {
         // 创建带旋转的模型矩阵
         let scale = 1.2; // 缩放比例
         let model_matrix = [
-            [rotation_angle.cos() * scale, 0.0, rotation_angle.sin() * scale, 0.0],
+            [
+                rotation_angle.cos() * scale,
+                0.0,
+                rotation_angle.sin() * scale,
+                0.0,
+            ],
             [0.0, scale, 0.0, 0.0],
-            [-rotation_angle.sin() * scale, 0.0, rotation_angle.cos() * scale, 0.0],
-            [0.0, -0.8, 0.0, 1.0f32]  // 将模型向下移动更多
+            [
+                -rotation_angle.sin() * scale,
+                0.0,
+                rotation_angle.cos() * scale,
+                0.0,
+            ],
+            [0.0, -0.8, 0.0, 1.0f32], // 将模型向下移动更多
         ];
 
         let uniforms = uniform! {
@@ -96,7 +115,7 @@ impl Renderer {
             &NoIndices(PrimitiveType::TrianglesList),
             &self.program,
             &uniforms,
-            &self.params
+            &self.params,
         )?;
 
         target.finish()?;

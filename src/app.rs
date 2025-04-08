@@ -1,16 +1,17 @@
 use glium::backend::glutin::SimpleWindowBuilder;
+use glium::glutin::surface::WindowSurface;
 use glium::winit::event::{Event, WindowEvent};
 use glium::winit::event_loop::{ControlFlow, EventLoop};
+use glium::Display;
 
+use crate::constants::{FRAGMENT_SHADER, VERTEX_SHADER};
 use crate::model::Model;
-use crate::texture::Texture;
 use crate::renderer::Renderer;
-use crate::constants::{VERTEX_SHADER, FRAGMENT_SHADER};
-use crate::types::GliumDisplay;
+use crate::texture::Texture;
 
 pub struct App {
     window: glium::winit::window::Window,
-    display: GliumDisplay,
+    display: Display<WindowSurface>,
     model: Model,
     texture: Texture,
     renderer: Renderer,
@@ -48,7 +49,14 @@ impl App {
     }
 
     pub fn run(self) -> Result<(), Box<dyn std::error::Error>> {
-        let App { window, display, model, texture, renderer, event_loop } = self;
+        let App {
+            window,
+            display,
+            model,
+            texture,
+            renderer,
+            event_loop,
+        } = self;
 
         // 主事件循环
         #[allow(deprecated, reason = "TODO: Migrate this into `.run_app()` later")]
@@ -56,21 +64,30 @@ impl App {
             active_event_loop.set_control_flow(ControlFlow::Wait);
 
             match event {
-                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
+                    ..
+                } => {
                     active_event_loop.exit();
-                },
-                Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::RedrawRequested,
+                    ..
+                } => {
                     // 渲染模型
                     if let Err(e) = renderer.render(&display, &model, &texture) {
                         eprintln!("渲染错误: {:?}", e);
                     }
-                },
-                Event::WindowEvent { event: WindowEvent::Resized(ws), .. } => {
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::Resized(ws),
+                    ..
+                } => {
                     display.resize(ws.into());
-                },
+                }
                 Event::AboutToWait { .. } => {
                     window.request_redraw();
-                },
+                }
                 _ => {}
             }
         })?;

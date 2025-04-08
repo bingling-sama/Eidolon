@@ -2,12 +2,11 @@
 extern crate glium;
 
 mod app;
+mod constants;
 mod model;
 mod renderer;
 mod texture;
 mod utils;
-mod constants;
-mod types;
 
 use app::App;
 
