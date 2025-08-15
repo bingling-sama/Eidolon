@@ -20,6 +20,18 @@ struct Args {
     /// PNG材质文件路径
     #[arg(long, default_value = "resources/player.png")]
     texture: String,
+
+    /// 摄像机Yaw
+    #[arg(long, default_value_t = 20.0)]
+    yaw: f32,
+
+    /// 摄像机Pitch
+    #[arg(long, default_value_t = 20.0)]
+    pitch: f32,
+
+    /// 摄像机Scale
+    #[arg(long, default_value_t = 1.0)]
+    scale: f32,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,7 +49,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 创建角色和相机
     let mut character = Character::new();
-    let camera = Camera::new();
+    let camera = Camera {
+        yaw: args.yaw,
+        pitch: args.pitch,
+        scale: args.scale,
+    };
 
     // 设置皮肤文件
     println!("正在加载皮肤文件: {}", args.texture);

@@ -1,5 +1,6 @@
 use crate::utils::view_matrix;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Camera {
     /// 摄像机视角绕角色旋转角度（XZ 平面绕 Y 轴旋转），0~360，0 是正前，90 是正右，180 是正后，270 是正左
     pub yaw: f32,
@@ -19,7 +20,22 @@ impl Camera {
     }
 
     pub fn get_view_matrix(&self) -> [[f32; 4]; 4] {
-        view_matrix(&[0.0, 1.0, 4.0], &[0.0, -0.2, -1.0], &[0.0, 1.0, 0.0])
+        let distance = 4.0 / self.scale;
+        let yaw_rad = -self.yaw.to_radians();
+        let pitch_rad = (self.pitch - 90.0).to_radians();
+
+        let eye = [
+            distance * yaw_rad.sin() * pitch_rad.cos(),
+            1.0 + distance * pitch_rad.sin(),
+            distance * yaw_rad.cos() * pitch_rad.cos(),
+        ];
+
+        let center = [0.0, 1.0, 0.0];
+        let up = [0.0, 1.0, 0.0];
+
+        let direction = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]];
+
+        view_matrix(&eye, &direction, &up)
     }
 
     pub fn get_projection_matrix(&self, width: u32, height: u32) -> [[f32; 4]; 4] {
