@@ -1,5 +1,5 @@
 use clap::Parser;
-use skinviewer::{camera::Camera, character::Character, renderer::Renderer};
+use eidolon::{camera::Camera, character::Character, renderer::Renderer};
 
 /// Minecraft皮肤渲染器
 #[derive(Parser, Debug)]

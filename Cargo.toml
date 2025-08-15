@@ -1,14 +1,14 @@
 [package]
-name = "skinviewer"
+name = "eidolon"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "skinviewer"
+name = "eidolon"
 path = "src/lib.rs"
 
 [[bin]]
-name = "skinviewer"
+name = "eidolon"
 path = "src/main.rs"
 
 [dependencies]

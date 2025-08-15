@@ -1,36 +1,71 @@
-# Minecraft Skin Viewer
+# Eidolon
 
-一个用Rust编写的Minecraft皮肤查看器，可以渲染3D模型并保存为图片。
+[![Language](https://img.shields.io/badge/language-Rust-orange.svg)](https://www.rust-lang.org/)
 
-## 功能特性
+Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model of a player skin and save it as a PNG image.
 
-- 加载和渲染Minecraft玩家模型
-- 支持纹理贴图
-- 3D渲染效果
-- 可以保存渲染结果为PNG图片
-- 交互式窗口模式
+## Features
 
-## 使用方法
+- Load and render Minecraft player models
+- Texture mapping support
+- 3D rendering
+- Save rendering result as a PNG image
+- Configurable camera and output size
 
-直接渲染并保存图片：
-```bash
-cargo run -- <文件名> [--width <宽度>] [--height <高度>]
-```
+## Prerequisites
 
-参数说明：
-- <文件名>（可选）：输出图片文件名，默认 output.png
-- --width（可选）：输出图片宽度，默认 800
-- --height（可选）：输出图片高度，默认 600
+- [Rust](https://www.rust-lang.org/tools/install)
+- **Note:** This project relies on `osmesa`, which is included in `mesa` versions prior to 25.10. Please ensure you have a compatible version of `mesa` installed.
 
-示例：
-```bash
-# 保存为默认尺寸 (800x600)
-cargo run -- output.png
+## Build and Run
 
-# 保存为自定义尺寸
-cargo run -- my_skin.png --width 1024 --height 768
-```
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/bingling-sama/SkinViewer.git
+    cd SkinViewer
+    ```
 
-## 文件结构
+2.  Run the project:
 
-```
+    To render and save the image directly:
+    ```bash
+    cargo run -- [OPTIONS] [FILENAME]
+    ```
+
+    **Arguments:**
+    - `[FILENAME]` (optional): Output image filename. Defaults to `output.png`.
+
+    **Options:**
+    - `--width <WIDTH>`: Output image width. Defaults to `800`.
+    - `--height <HEIGHT>`: Output image height. Defaults to `600`.
+    - `--texture <TEXTURE>`: Path to the PNG texture file. Defaults to `resources/player.png`.
+    - `--yaw <YAW>`: Camera yaw. Defaults to `20.0`.
+    - `--pitch <PITCH>`: Camera pitch. Defaults to `20.0`.
+    - `--scale <SCALE>`: Camera scale. Defaults to `1.0`.
+
+    **Examples:**
+    ```bash
+    # Save with default settings
+    cargo run
+
+    # Specify output filename
+    cargo run -- my_skin.png
+
+    # Save with custom size and camera settings
+    cargo run -- my_skin.png --width 1024 --height 768 --yaw 30 --pitch -15 --scale 1.2
+    ```
+
+## Dependencies
+
+This project uses the following main crates:
+
+- `glium`: For OpenGL rendering.
+- `glutin`: For windowing and input.
+- `image`: For image processing.
+- `cgmath`: For 3D math.
+- `tobj`: For loading `.obj` files.
+- `clap`: For command-line argument parsing.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a pull request or open an issue.
