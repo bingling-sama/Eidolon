@@ -1,5 +1,5 @@
 use clap::Parser;
-use skinviewer::Renderer;
+use skinviewer::{camera::Camera, character::Character, renderer::Renderer};
 
 /// Minecraft皮肤渲染器
 #[derive(Parser, Debug)]
@@ -32,17 +32,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 创建渲染器
     println!("正在创建渲染器...");
-    let mut renderer = Renderer::new();
+    let renderer = Renderer::new();
     println!("渲染器创建成功");
+
+    // 创建角色和相机
+    let mut character = Character::new();
+    let camera = Camera::new();
 
     // 设置皮肤文件
     println!("正在加载皮肤文件: {}", args.texture);
-    renderer.load_skin_from_file(&args.texture)?;
+    character.load_skin_from_file(&args.texture, renderer.get_display())?;
     println!("皮肤文件加载成功");
 
     // 渲染并保存图片
     println!("正在渲染图片...");
-    renderer.render_to_image(&args.filename, (args.width, args.height))?;
+    renderer.render_to_image(
+        &character,
+        &camera,
+        &args.filename,
+        (args.width, args.height),
+    )?;
     println!("渲染完成！图片已保存到: {}", args.filename);
 
     Ok(())
