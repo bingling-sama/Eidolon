@@ -73,7 +73,8 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 
 ## Thanks
 
-- Thanks to @tnqzh123 for project feature design.
-- Thanks to @beanflame for opengl technical support.
-- Thanks to @sunjunnan97 for deleting `.DS_Store`. (Seriously)
+- Thanks to [@tnqzh123](https://github.com/tnqzh123) for project feature design.
+- Thanks to [@beanflame](https://github.com/beanflame) for opengl technical support.
+- Thanks to [@sunjunnan79](https://github.com/sunjunnan79) for deleting `.DS_Store`. (Seriously)
+
 
