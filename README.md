@@ -69,3 +69,9 @@ This project uses the following main crates:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request or open an issue.
+
+
+## Thanks
+
+- Thanks to @tnqzh123 for project feature design.
+- Thanks to @beanflame for opengl technical support.
