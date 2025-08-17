@@ -24,4 +24,3 @@ pub mod constants;
 pub mod model;
 pub mod renderer;
 pub mod texture;
-pub mod utils;

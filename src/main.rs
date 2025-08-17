@@ -6,7 +6,7 @@ use eidolon::{camera::Camera, character::Character, renderer::Renderer};
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// 输出图片文件名
-    #[arg(default_value = "output.png")]
+    #[arg(long, default_value = "output.png")]
     filename: String,
 
     /// 图片宽度
@@ -18,20 +18,45 @@ struct Args {
     height: u32,
 
     /// PNG材质文件路径
-    #[arg(long, default_value = "resources/player.png")]
+    #[arg(long, default_value = "resources/slim.png")]
     texture: String,
 
     /// 摄像机Yaw
-    #[arg(long, default_value_t = 20.0)]
+    #[arg(long, default_value_t = 180.0)]
     yaw: f32,
 
     /// 摄像机Pitch
-    #[arg(long, default_value_t = 20.0)]
+    #[arg(long, default_value_t = 80.0)]
     pitch: f32,
 
     /// 摄像机Scale
     #[arg(long, default_value_t = 1.0)]
     scale: f32,
+
+    /// 角色头部摇头角度
+    #[arg(long, default_value_t = 90.0)]
+    head_yaw: f32,
+    /// 角色头部俯仰角度
+    #[arg(long, default_value_t = 90.0)]
+    head_pitch: f32,
+    /// 左手侧举角度
+    #[arg(long, default_value_t = 90.0)]
+    left_arm_roll: f32,
+    /// 左手摆臂角度
+    #[arg(long, default_value_t = 0.0)]
+    left_arm_pitch: f32,
+    /// 右手侧举角度
+    #[arg(long, default_value_t = 90.0)]
+    right_arm_roll: f32,
+    /// 右手摆臂角度
+    #[arg(long, default_value_t = 0.0)]
+    right_arm_pitch: f32,
+    /// 左腿抬腿角度
+    #[arg(long, default_value_t = 90.0)]
+    left_leg_pitch: f32,
+    /// 右腿抬腿角度
+    #[arg(long, default_value_t = 90.0)]
+    right_leg_pitch: f32,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,6 +79,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pitch: args.pitch,
         scale: args.scale,
     };
+
+    // 设置角色姿势
+    character.posture.head_yaw = args.head_yaw;
+    character.posture.head_pitch = args.head_pitch;
+    character.posture.left_arm_roll = args.left_arm_roll;
+    character.posture.left_arm_pitch = args.left_arm_pitch;
+    character.posture.right_arm_roll = args.right_arm_roll;
+    character.posture.right_arm_pitch = args.right_arm_pitch;
+    character.posture.left_leg_pitch = args.left_leg_pitch;
+    character.posture.right_leg_pitch = args.right_leg_pitch;
 
     // 设置皮肤文件
     println!("正在加载皮肤文件: {}", args.texture);

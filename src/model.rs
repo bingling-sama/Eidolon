@@ -1,43 +1,51 @@
 //! 3D 模型模块
 //!
 //! 这个模块负责加载和处理 Minecraft 角色的 3D 模型。
-//! 支持从 OBJ 文件格式加载模型，并转换为 OpenGL 可用的顶点缓冲区。
+//! 它将 OBJ 文件中的命名对象解析为独立的、可控制的身体部位。
 
 use glium::backend::glutin::headless::Headless;
 use glium::{implement_vertex, VertexBuffer};
+use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
 
 /// 带纹理的顶点结构体
 ///
 /// 定义了每个顶点包含的数据：位置、法线和纹理坐标。
-/// 这个结构体用于在 GPU 和 CPU 之间传递顶点数据。
 #[derive(Copy, Clone)]
 pub struct TexturedVertex {
-    /// 顶点在 3D 空间中的位置坐标 (x, y, z)
     pub position: [f32; 3],
-    /// 顶点法线向量，用于光照计算 (nx, ny, nz)
     pub normal: [f32; 3],
-    /// 纹理坐标，用于纹理映射 (u, v)
     pub texture: [f32; 2],
 }
 
-// 为 TexturedVertex 实现 glium 的顶点特性
 implement_vertex!(TexturedVertex, position, normal, texture);
 
-/// 3D 模型结构体
-///
-/// 封装了模型的顶点数据和相关的渲染信息。
-/// 提供了从 OBJ 文件加载模型的功能。
-pub struct Model {
-    /// 顶点缓冲区，包含所有顶点数据
+/// 代表模型的一个可渲染部分
+pub struct ModelPart {
     pub vertices: VertexBuffer<TexturedVertex>,
+}
+
+/// 代表一个逻辑身体部位，通常包含一个主模型和一个附加层
+pub struct BodyPart {
+    pub main: ModelPart,
+    pub layer: ModelPart,
+}
+
+/// 包含所有命名身体部件的角色模型
+pub struct Model {
+    pub head: BodyPart,
+    pub body: BodyPart,
+    pub right_arm: BodyPart,
+    pub left_arm: BodyPart,
+    pub right_leg: BodyPart,
+    pub left_leg: BodyPart,
 }
 
 impl Model {
     /// 从 OBJ 文件加载 3D 模型
     ///
-    /// 加载指定路径的 OBJ 文件，解析顶点、法线和纹理坐标，
-    /// 并创建 OpenGL 顶点缓冲区。
+    /// 加载指定路径的 OBJ 文件，并将其中的命名对象解析到
+    /// `Model` 结构对应的身体部位中。
     ///
     /// # 参数
     ///
@@ -46,112 +54,110 @@ impl Model {
     ///
     /// # 返回
     ///
-    /// 成功时返回 `Model` 实例，失败时返回错误信息
-    ///
-    /// # 错误
-    ///
-    /// - 文件不存在或无法读取
-    /// - OBJ 文件格式错误
-    /// - 模型没有有效的顶点数据
-    /// - OpenGL 缓冲区创建失败
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use skinviewer::model::Model;
-    ///
-    /// let model = Model::load_from_obj(&display, "resources/player.obj")?;
-    /// ```
+    /// 成功时返回 `Model` 实例，如果 OBJ 文件缺少必要的部件则返回错误。
     pub fn load_from_obj(
         display: &Headless,
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         println!("Loading OBJ file: {}", path);
         let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)?;
+        println!("OBJ file loaded with {} objects", models.len());
 
-        println!("OBJ file loaded successfully with {} models", models.len());
+        let mut parts: HashMap<String, ModelPart> = HashMap::new();
 
-        // 创建顶点数组
-        let mut vertices: Vec<TexturedVertex> = Vec::new();
-
-        // 遍历所有模型
         for model in models {
             let mesh = &model.mesh;
-
-            // 确保模型有顶点位置
             if mesh.positions.is_empty() {
                 continue;
             }
 
-            // 处理顶点位置
-            let positions = mesh
-                .positions
-                .chunks(3)
-                .map(|p| [p[0] as f32, p[1] as f32, p[2] as f32])
-                .collect::<Vec<_>>();
+            let mut vertices_data = Vec::new();
+            let positions: Vec<_> = mesh.positions.chunks(3).collect();
+            let normals: Vec<_> = mesh.normals.chunks(3).collect();
+            let texcoords: Vec<_> = mesh.texcoords.chunks(2).collect();
 
-            // 处理法线
-            let normals = if mesh.normals.is_empty() {
-                // 如果没有法线，创建默认法线（向上）
-                vec![[0.0, 1.0, 0.0]; positions.len()]
-            } else {
-                mesh.normals
-                    .chunks(3)
-                    .map(|n| [n[0] as f32, n[1] as f32, n[2] as f32])
-                    .collect::<Vec<_>>()
-            };
+            // 根据索引构建顶点数据
+            for i in 0..mesh.indices.len() {
+                let pos_idx = mesh.indices[i] as usize;
+                let pos = [positions[pos_idx][0], positions[pos_idx][1], positions[pos_idx][2]];
 
-            // 处理纹理坐标
-            let textures = if mesh.texcoords.is_empty() {
-                // 如果没有纹理坐标，创建默认坐标
-                vec![[0.0, 0.0]; positions.len()]
-            } else {
-                mesh.texcoords
-                    .chunks(2)
-                    .map(|t| [t[0] as f32, t[1] as f32])
-                    .collect::<Vec<_>>()
-            };
+                let nml_idx = if !mesh.normal_indices.is_empty() {
+                    mesh.normal_indices[i] as usize
+                } else {
+                    pos_idx // Fallback if no specific normal indices
+                };
+                let nml = if nml_idx < normals.len() {
+                    [normals[nml_idx][0], normals[nml_idx][1], normals[nml_idx][2]]
+                } else {
+                    [0.0, 1.0, 0.0]
+                };
 
-            // 使用索引创建顶点
-            if !mesh.indices.is_empty() {
-                for idx in &mesh.indices {
-                    let i = *idx as usize;
-                    if i < positions.len() {
-                        let normal_idx = i.min(normals.len() - 1);
-                        let tex_idx = i.min(textures.len() - 1);
-                        vertices.push(TexturedVertex {
-                            position: positions[i],
-                            normal: normals[normal_idx],
-                            texture: textures[tex_idx],
-                        });
-                    }
-                }
-            } else {
-                // 如果没有索引，直接使用顶点
-                for i in 0..positions.len() {
-                    let normal_idx = i.min(normals.len() - 1);
-                    let tex_idx = i.min(textures.len() - 1);
-                    vertices.push(TexturedVertex {
-                        position: positions[i],
-                        normal: normals[normal_idx],
-                        texture: textures[tex_idx],
-                    });
-                }
+                let tex_idx = if !mesh.texcoord_indices.is_empty() {
+                    mesh.texcoord_indices[i] as usize
+                } else {
+                    pos_idx // Fallback
+                };
+                let tex = if tex_idx < texcoords.len() {
+                    [texcoords[tex_idx][0], texcoords[tex_idx][1]]
+                } else {
+                    [0.0, 0.0]
+                };
+
+                vertices_data.push(TexturedVertex {
+                    position: pos,
+                    normal: nml,
+                    texture: tex,
+                });
             }
+
+            if vertices_data.is_empty() {
+                continue;
+            }
+
+            let vertex_buffer = VertexBuffer::new(display, &vertices_data)?;
+            let model_part = ModelPart {
+                vertices: vertex_buffer,
+            };
+            println!("Loaded part: {}", model.name);
+            parts.insert(model.name, model_part);
         }
 
-        // 确保我们有顶点可用
-        if vertices.is_empty() {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "无法加载模型顶点",
-            )));
+        // 从 HashMap 中提取部件来构建 Model
+        // 我们需要一个辅助函数来避免所有权问题
+        fn extract_part(
+            parts: &mut HashMap<String, ModelPart>,
+            name: &str,
+        ) -> Result<ModelPart, String> {
+            parts
+                .remove(name)
+                .ok_or_else(|| format!("Missing model part: {}", name))
         }
-
-        let vertex_buffer = VertexBuffer::new(display, &vertices)?;
 
         Ok(Model {
-            vertices: vertex_buffer,
+            head: BodyPart {
+                main: extract_part(&mut parts, "Head")?,
+                layer: extract_part(&mut parts, "Hat Layer")?,
+            },
+            body: BodyPart {
+                main: extract_part(&mut parts, "Body")?,
+                layer: extract_part(&mut parts, "Body Layer")?,
+            },
+            right_arm: BodyPart {
+                main: extract_part(&mut parts, "Right Arm")?,
+                layer: extract_part(&mut parts, "Right Arm Layer")?,
+            },
+            left_arm: BodyPart {
+                main: extract_part(&mut parts, "Left Arm")?,
+                layer: extract_part(&mut parts, "Left Arm Layer")?,
+            },
+            right_leg: BodyPart {
+                main: extract_part(&mut parts, "Right Leg")?,
+                layer: extract_part(&mut parts, "Right Leg Layer")?,
+            },
+            left_leg: BodyPart {
+                main: extract_part(&mut parts, "Left Leg")?,
+                layer: extract_part(&mut parts, "Left Leg Layer")?,
+            },
         })
     }
 }
