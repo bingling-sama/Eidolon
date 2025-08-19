@@ -37,12 +37,14 @@ pub const VERTEX_SHADER: &str = r#"
     uniform mat4 perspective;
     uniform mat4 view;
     uniform mat4 model;
+    uniform float offset;
 
     void main() {
         mat4 modelview = view * model;
         v_texture = texture;
         v_normal = transpose(inverse(mat3(model))) * normal;
-        gl_Position = perspective * modelview * vec4(position, 1.0);
+        vec3 offset_position = position + normal * offset;
+        gl_Position = perspective * modelview * vec4(offset_position, 1.0);
     }
 "#;
 

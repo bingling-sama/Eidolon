@@ -78,6 +78,7 @@ impl Renderer {
         view: &Matrix4<f32>,
         perspective: &Matrix4<f32>,
         skin_texture: &Texture2d,
+        offset: f32,
     ) -> Result<(), glium::DrawError> {
         let perspective_arr: [[f32; 4]; 4] = (*perspective).into();
         let view_arr: [[f32; 4]; 4] = (*view).into();
@@ -87,6 +88,7 @@ impl Renderer {
             perspective: perspective_arr,
             view: view_arr,
             model: model_arr,
+            offset: offset,
             texture1: skin_texture.sampled()
                 .wrap_function(Repeat)
                 .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
@@ -147,17 +149,6 @@ impl Renderer {
         // --- Draw each body part using posture data with pivot points ---
         let posture = &character.posture;
 
-        // Body (no rotation, base of all transforms)
-        let body_transform = base_model_matrix;
-        self.draw_body_part(
-            &mut framebuffer,
-            &self.model.body,
-            &body_transform,
-            &view_matrix,
-            &perspective_matrix,
-            &skin_texture.texture,
-        )?;
-
         // Head
         let head_pivot = Vector3::new(0.0, 1.5, 0.0);
         let head_yaw_rad = (posture.head_yaw - 90.0).to_radians();
@@ -175,6 +166,7 @@ impl Renderer {
             &view_matrix,
             &perspective_matrix,
             &skin_texture.texture,
+            0.0,
         )?;
 
         // Right Arm
@@ -194,6 +186,7 @@ impl Renderer {
             &view_matrix,
             &perspective_matrix,
             &skin_texture.texture,
+            0.0,
         )?;
 
         // Left Arm
@@ -213,6 +206,7 @@ impl Renderer {
             &view_matrix,
             &perspective_matrix,
             &skin_texture.texture,
+            0.0,
         )?;
 
         // Right Leg
@@ -230,6 +224,7 @@ impl Renderer {
             &view_matrix,
             &perspective_matrix,
             &skin_texture.texture,
+            0.0,
         )?;
 
         // Left Leg
@@ -247,6 +242,19 @@ impl Renderer {
             &view_matrix,
             &perspective_matrix,
             &skin_texture.texture,
+            0.0,
+        )?;
+
+        // Body (no rotation, base of all transforms)
+        let body_transform = base_model_matrix;
+        self.draw_body_part(
+            &mut framebuffer,
+            &self.model.body,
+            &body_transform,
+            &view_matrix,
+            &perspective_matrix,
+            &skin_texture.texture,
+            0.0001,
         )?;
 
         // Read pixels from framebuffer
