@@ -14,7 +14,7 @@ impl Camera {
     pub fn new() -> Self {
         Self {
             yaw: 210.0,
-            pitch: 75.0,
+            pitch: 90.0,
             scale: 1.0,
         }
     }

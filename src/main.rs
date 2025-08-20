@@ -26,7 +26,7 @@ struct Args {
     yaw: f32,
 
     /// 摄像机Pitch
-    #[arg(long, default_value_t = 80.0)]
+    #[arg(long, default_value_t = 90.0)]
     pitch: f32,
 
     /// 摄像机Scale
