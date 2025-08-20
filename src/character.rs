@@ -1,8 +1,9 @@
 use crate::texture::Texture;
+use clap::ValueEnum;
 use glium::backend::glutin::headless::Headless;
 
 /// Minecraft 皮肤类型
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SkinType {
     /// 默认皮肤类型（Steve 样式）
     Default,

@@ -1,5 +1,9 @@
 use clap::Parser;
-use eidolon::{camera::Camera, character::Character, renderer::Renderer};
+use eidolon::{
+    camera::Camera,
+    character::{Character, SkinType},
+    renderer::Renderer,
+};
 
 /// Minecraft皮肤渲染器
 #[derive(Parser, Debug)]
@@ -20,6 +24,10 @@ struct Args {
     /// PNG材质文件路径
     #[arg(long, default_value = "resources/slim.png")]
     texture: String,
+
+    /// 皮肤类型
+    #[arg(long, value_enum, default_value_t = SkinType::Slim)]
+    skin_type: SkinType,
 
     /// 摄像机Yaw
     #[arg(long, default_value_t = 180.0)]
@@ -74,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 创建角色和相机
     let mut character = Character::new();
+    character.skin_type = args.skin_type;
     let camera = Camera {
         yaw: args.yaw,
         pitch: args.pitch,

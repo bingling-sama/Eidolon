@@ -1,5 +1,5 @@
 use crate::camera::Camera;
-use crate::character::Character;
+use crate::character::{Character, SkinType};
 use crate::constants::{FRAGMENT_SHADER, VERTEX_SHADER};
 use crate::model::{BodyPart, Model}; // Updated import
 use cgmath::{Matrix4, Rad, Vector3}; // Import cgmath
@@ -29,8 +29,10 @@ pub struct Renderer {
     program: Program,
     /// 绘制参数
     params: DrawParameters<'static>,
-    /// 3D 模型
-    model: Model, // Updated to use the new Model struct
+    /// 细臂 3D 模型
+    slim_model: Model,
+    /// 默认 3D 模型
+    default_model: Model,
 }
 
 impl Renderer {
@@ -54,14 +56,16 @@ impl Renderer {
             ..Default::default()
         };
 
-        // Load the new model structure
-        let model = Model::load_from_obj(&display, "resources/slim.obj").unwrap();
+        // 加载两种模型
+        let slim_model = Model::load_from_obj(&display, "resources/slim.obj").unwrap();
+        let default_model = Model::load_from_obj(&display, "resources/default.obj").unwrap();
 
         Self {
             display,
             program,
             params,
-            model,
+            slim_model,
+            default_model,
         }
     }
 
@@ -141,6 +145,12 @@ impl Renderer {
 
         let skin_texture = character.skin.as_ref().ok_or("No skin texture available")?;
 
+        // 根据皮肤类型选择模型
+        let model = match character.skin_type {
+            SkinType::Slim => &self.slim_model,
+            SkinType::Default => &self.default_model,
+        };
+
         // --- Transformation Matrices ---
         let translation = Matrix4::from_translation([0.0, 0.0, 0.0].into());
         let scale = Matrix4::from_scale(camera.scale);
@@ -161,7 +171,7 @@ impl Renderer {
             * Matrix4::from_translation(-head_pivot);
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.head,
+            &model.head,
             &head_transform,
             &view_matrix,
             &perspective_matrix,
@@ -181,7 +191,7 @@ impl Renderer {
             * Matrix4::from_translation(-right_arm_pivot);
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.right_arm,
+            &model.right_arm,
             &right_arm_transform,
             &view_matrix,
             &perspective_matrix,
@@ -201,7 +211,7 @@ impl Renderer {
             * Matrix4::from_translation(-left_arm_pivot);
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.left_arm,
+            &model.left_arm,
             &left_arm_transform,
             &view_matrix,
             &perspective_matrix,
@@ -219,7 +229,7 @@ impl Renderer {
             * Matrix4::from_translation(-right_leg_pivot);
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.right_leg,
+            &model.right_leg,
             &right_leg_transform,
             &view_matrix,
             &perspective_matrix,
@@ -237,7 +247,7 @@ impl Renderer {
             * Matrix4::from_translation(-left_leg_pivot);
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.left_leg,
+            &model.left_leg,
             &left_leg_transform,
             &view_matrix,
             &perspective_matrix,
@@ -249,7 +259,7 @@ impl Renderer {
         let body_transform = base_model_matrix;
         self.draw_body_part(
             &mut framebuffer,
-            &self.model.body,
+            &model.body,
             &body_transform,
             &view_matrix,
             &perspective_matrix,
