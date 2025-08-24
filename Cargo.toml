@@ -1,5 +1,5 @@
 [package]
-name = "eidolon"
+name = "eidolonmc"
 version = "0.0.1-alpha"
 description = "A Minecraft skin off-screen renderer written in Rust"
 edition = "2021"
