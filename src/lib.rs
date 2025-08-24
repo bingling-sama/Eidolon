@@ -8,16 +8,6 @@ Minecraft 皮肤渲染器库
 - 离屏渲染
 
 # 示例
-
-```rust
-use skinviewer::{Renderer, Character, Camera};
-
-let renderer = Renderer::new();
-let mut character = Character::new();
-let camera = Camera::new();
-// character.load_skin...
-renderer.render_to_image(&character, &camera, "output.png", (800, 600));
-```
 */
 
 pub mod utils;

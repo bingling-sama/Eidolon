@@ -38,7 +38,7 @@ enum Command {
         texture: String,
 
         /// 皮肤类型
-        #[arg(long, value_enum, default_value_t = SkinType::Slim)]
+        #[arg(long, value_enum)]
         skin_type: SkinType,
 
         /// 摄像机Yaw

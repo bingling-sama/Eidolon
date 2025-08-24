@@ -42,11 +42,6 @@ impl Texture {
     ///
     /// # 示例
     ///
-    /// ```rust
-    /// use skinviewer::texture::Texture;
-    ///
-    /// let texture = Texture::load_from_file(&display, "resources/player.png")?;
-    /// ```
     pub fn load_from_file(
         display: &Headless,
         path: &str,

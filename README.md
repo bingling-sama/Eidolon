@@ -22,41 +22,83 @@ Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model o
 
 ## Build and Run
 
-1.  Clone the repository:
+1. Clone the repository:
     ```bash
     git clone https://github.com/bingling-sama/SkinViewer.git
     cd SkinViewer
     ```
 
-2.  Run the project:
+2. Run with CLI subcommands:
 
-    To render and save the image directly:
-    ```bash
-    cargo run -- [OPTIONS] [FILENAME]
-    ```
+### Render 3D Skin Image
 
-    **Arguments:**
-    - `[FILENAME]` (optional): Output image filename. Defaults to `output.png`.
+Render a Minecraft skin as a 3D image.
 
-    **Options:**
-    - `--width <WIDTH>`: Output image width. Defaults to `800`.
-    - `--height <HEIGHT>`: Output image height. Defaults to `600`.
-    - `--texture <TEXTURE>`: Path to the PNG texture file. Defaults to `resources/player.png`.
-    - `--yaw <YAW>`: Camera yaw. Defaults to `20.0`.
-    - `--pitch <PITCH>`: Camera pitch. Defaults to `20.0`.
-    - `--scale <SCALE>`: Camera scale. Defaults to `1.0`.
+```bash
+cargo run -- render [OPTIONS]
+```
 
-    **Examples:**
-    ```bash
-    # Save with default settings
-    cargo run
+**Options:**
+- `--filename <FILENAME>`: Output image filename (default: `output.png`)
+- `--width <WIDTH>`: Output image width (default: `800`)
+- `--height <HEIGHT>`: Output image height (default: `600`)
+- `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
+- `--skin-type <SkinType>`: Skin type (`Steve` or `Alex`), required
+- `--yaw <YAW>`: Camera yaw (default: `180.0`)
+- `--pitch <PITCH>`: Camera pitch (default: `90.0`)
+- `--scale <SCALE>`: Camera scale (default: `1.0`)
+- `--head-yaw <ANGLE>`: Head yaw (default: `90.0`)
+- `--head-pitch <ANGLE>`: Head pitch (default: `90.0`)
+- `--left-arm-roll <ANGLE>`: Left arm roll (default: `90.0`)
+- `--left-arm-pitch <ANGLE>`: Left arm pitch (default: `0.0`)
+- `--right-arm-roll <ANGLE>`: Right arm roll (default: `90.0`)
+- `--right-arm-pitch <ANGLE>`: Right arm pitch (default: `0.0`)
+- `--left-leg-pitch <ANGLE>`: Left leg pitch (default: `90.0`)
+- `--right-leg-pitch <ANGLE>`: Right leg pitch (default: `90.0`)
 
-    # Specify output filename
-    cargo run -- my_skin.png
+**Example:**
+```bash
+cargo run -- render --filename my_skin.png --texture resources/bingling_sama.png --skin-type Steve --width 1024 --height 768 --yaw 180 --pitch 90 --scale 1.2
+```
 
-    # Save with custom size and camera settings
-    cargo run -- my_skin.png --width 1024 --height 768 --yaw 30 --pitch -15 --scale 1.2
-    ```
+### Convert Single-layer Skin to Double-layer
+
+Convert a classic single-layer Minecraft skin to double-layer format.
+
+```bash
+cargo run -- convert <INPUT> <OUTPUT>
+```
+- `<INPUT>`: Path to the single-layer skin PNG file
+- `<OUTPUT>`: Path to save the converted double-layer PNG file
+
+**Example:**
+```bash
+cargo run -- convert old_skin.png new_skin.png
+```
+
+## Library Usage
+
+Eidolon can also be used as a Rust library for Minecraft skin rendering and image generation.
+
+### Example
+
+```rust
+use skinviewer::{Renderer, Character, Camera};
+
+let renderer = Renderer::new();
+let mut character = Character::new();
+// character.load_skin("path/to/skin.png");
+let camera = Camera::new();
+renderer.render_to_image(&character, &camera, "output.png", (800, 600));
+```
+
+### Main Components
+
+- `Renderer`: Handles the rendering process and output.
+- `Character`: Represents the Minecraft player model and skin.
+- `Camera`: Controls the viewpoint, yaw, pitch, and scale.
+
+See the source code and module docs for advanced usage, such as custom poses, camera settings, and texture loading.
 
 ## Dependencies
 
