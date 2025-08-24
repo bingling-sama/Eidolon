@@ -6,7 +6,7 @@ use glium::backend::glutin::headless::Headless;
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SkinType {
     /// 默认皮肤类型（Steve 样式）
-    Default,
+    Classic,
     /// 细手臂皮肤类型（Alex 样式）
     Slim,
 }
@@ -69,7 +69,7 @@ impl Character {
     pub fn new() -> Self {
         Self {
             skin: None,
-            skin_type: SkinType::Default,
+            skin_type: SkinType::Classic,
             cape: None,
             nametag: None,
             posture: DefaultPostures::STAND,

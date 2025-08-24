@@ -58,7 +58,7 @@ impl Renderer {
 
         // 加载两种模型
         let slim_model = Model::load_from_obj(&display, "resources/slim.obj").unwrap();
-        let default_model = Model::load_from_obj(&display, "resources/default.obj").unwrap();
+        let default_model = Model::load_from_obj(&display, "resources/classic.obj").unwrap();
 
         Self {
             display,
@@ -148,7 +148,7 @@ impl Renderer {
         // 根据皮肤类型选择模型
         let model = match character.skin_type {
             SkinType::Slim => &self.slim_model,
-            SkinType::Default => &self.default_model,
+            SkinType::Classic => &self.default_model,
         };
 
         // --- Transformation Matrices ---

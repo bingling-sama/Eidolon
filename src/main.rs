@@ -33,7 +33,7 @@ enum Command {
         height: u32,
 
         /// PNG材质文件路径
-        #[arg(long, default_value = "resources/slim.png")]
+        #[arg(long, default_value = "resources/bingling_sama.png")]
         texture: String,
 
         /// 皮肤类型
@@ -121,11 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 创建角色和相机
             let mut character = Character::new();
             character.skin_type = skin_type;
-            let camera = Camera {
-                yaw,
-                pitch,
-                scale,
-            };
+            let camera = Camera { yaw, pitch, scale };
 
             // 设置角色姿势
             character.posture.head_yaw = head_yaw;
@@ -144,12 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 渲染并保存图片
             println!("正在渲染图片...");
-            renderer.render_to_image(
-                &character,
-                &camera,
-                &filename,
-                (width, height),
-            )?;
+            renderer.render_to_image(&character, &camera, &filename, (width, height))?;
             println!("渲染完成！图片已保存到: {}", filename);
 
             Ok(())

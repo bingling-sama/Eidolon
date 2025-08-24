@@ -11,11 +11,14 @@ Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model o
 - 3D rendering
 - Save rendering result as a PNG image
 - Configurable camera and output size
-
 ## Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install)
-- **Note:** This project relies on `osmesa`, which is included in `mesa` versions prior to 25.10. Please ensure you have a compatible version of `mesa` installed.
+- [Rust](https://www.rust-lang.org/tools/install) (latest stable recommended)
+- **System dependencies:**  
+	This project requires `osmesa`, which is included in `mesa` versions prior to 25.10.  
+	- On Linux, install with your package manager (e.g., `sudo apt install libosmesa6-dev` on Ubuntu).
+	- On other platforms, ensure you have a compatible version of `mesa` or `osmesa` available.
+- **Note:** If you encounter build issues related to OpenGL or `osmesa`, check your system's `mesa` version and consider downgrading if necessary.
 
 ## Build and Run
 
@@ -76,5 +79,4 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 - Thanks to [@tnqzh123](https://github.com/tnqzh123) for project feature design and some technical support.
 - Thanks to [@beanflame](https://github.com/beanflame) for opengl technical support.
 - Thanks to [@sunjunnan79](https://github.com/sunjunnan79) for deleting `.DS_Store`. (Seriously)
-
-
+- Thanks to players who provided skins for testing.
