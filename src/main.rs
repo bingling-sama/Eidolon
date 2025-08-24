@@ -6,7 +6,8 @@ use eidolon::{
 };
 use std::path::PathBuf;
 
-mod converter;
+mod utils;
+use utils::converter;
 
 /// Minecraft皮肤工具
 #[derive(Parser, Debug)]
@@ -145,17 +146,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         }
-        Command::Convert { input, output } => {
-            match converter::convert_to_double_layer(&input, &output) {
-                Ok(_) => {
-                    println!("转换成功！双层皮肤已保存到: {:?}", output);
-                    Ok(())
-                }
-                Err(e) => {
-                    eprintln!("转换失败: {}", e);
-                    Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))
-                }
+        Command::Convert { input, output } => match converter::single2double(&input, &output) {
+            Ok(_) => {
+                println!("转换成功！双层皮肤已保存到: {:?}", output);
+                Ok(())
             }
-        }
+            Err(e) => {
+                eprintln!("转换失败: {}", e);
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))
+            }
+        },
     }
 }

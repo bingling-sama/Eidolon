@@ -5,9 +5,10 @@
 
 use glium::backend::glutin::headless::Headless;
 use glium::texture::{RawImage2d, Texture2d};
-use image::ImageFormat;
+use image::{DynamicImage, GenericImageView, ImageBuffer, ImageFormat};
 use std::fs::File;
 use std::io::BufReader;
+use crate::utils::converter::single2double_image;
 
 /// 纹理结构体
 ///
@@ -51,21 +52,43 @@ impl Texture {
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         println!("Loading texture: {}", path);
-
         // 加载图像
-        let image = image::load(BufReader::new(File::open(path)?), ImageFormat::Png)?.to_rgba8();
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
+        match Self::load_texture(display, &DynamicImage::ImageRgba8(image)) {
+            Ok(texture) => Ok(texture),
+            Err(e) => Err(e),
+        }
+    }
 
-        let image_dimensions = image.dimensions();
+    fn load_texture(
+        display: &Headless,
+        image: &DynamicImage,
+    ) -> Result<Texture, Box<dyn std::error::Error>> {
+        let (width, height) = image.dimensions();
         println!(
             "Texture dimensions: {}x{}",
-            image_dimensions.0, image_dimensions.1
+            width, height
         );
 
+        // 判断是否为单层皮肤（宽=高×2），如是则转换为双层
+        let image = if width == height * 2 {
+            println!("Single-layer skin detected, converting to double-layer...");
+            match single2double_image(image) {
+                Ok(img) => img,
+                Err(e) => return Err(format!("Failed to convert single-layer to double-layer: {}", e).into()),
+            }
+        } else {
+            image.clone()
+        };
+
+        let image_dimensions = image.dimensions();
         // 创建 OpenGL 纹理
-        let image = RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dimensions);
+        let image_rgba = image.to_rgba8();
+        let image = RawImage2d::from_raw_rgba_reversed(image_rgba.as_raw(), image_dimensions);
         let texture = Texture2d::new(display, image)?;
         println!("Texture loaded into GPU");
-
         Ok(Texture { texture })
     }
 }
