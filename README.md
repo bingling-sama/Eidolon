@@ -43,7 +43,7 @@ cargo run -- render [OPTIONS]
 - `--width <WIDTH>`: Output image width (default: `800`)
 - `--height <HEIGHT>`: Output image height (default: `600`)
 - `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
-- `--skin-type <SkinType>`: Skin type (`Steve` or `Alex`), required
+- `--skin-type <SkinType>`: Skin type (`classic` or `slim`), required
 - `--yaw <YAW>`: Camera yaw (default: `180.0`)
 - `--pitch <PITCH>`: Camera pitch (default: `90.0`)
 - `--scale <SCALE>`: Camera scale (default: `1.0`)

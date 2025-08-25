@@ -3,12 +3,12 @@
 //! 这个模块负责加载和处理 Minecraft 皮肤纹理。
 //! 支持从 PNG 文件加载纹理，并创建 OpenGL 纹理对象。
 
+use crate::utils::converter::single2double;
 use glium::backend::glutin::headless::Headless;
 use glium::texture::{RawImage2d, Texture2d};
-use image::{DynamicImage, GenericImageView, ImageBuffer, ImageFormat};
+use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::fs::File;
 use std::io::BufReader;
-use crate::utils::converter::single2double_image;
 
 /// 纹理结构体
 ///
@@ -62,17 +62,18 @@ impl Texture {
         image: &DynamicImage,
     ) -> Result<Texture, Box<dyn std::error::Error>> {
         let (width, height) = image.dimensions();
-        println!(
-            "Texture dimensions: {}x{}",
-            width, height
-        );
+        println!("Texture dimensions: {}x{}", width, height);
 
         // 判断是否为单层皮肤（宽=高×2），如是则转换为双层
         let image = if width == height * 2 {
             println!("Single-layer skin detected, converting to double-layer...");
-            match single2double_image(image) {
+            match single2double(image) {
                 Ok(img) => img,
-                Err(e) => return Err(format!("Failed to convert single-layer to double-layer: {}", e).into()),
+                Err(e) => {
+                    return Err(
+                        format!("Failed to convert single-layer to double-layer: {}", e).into(),
+                    )
+                }
             }
         } else {
             image.clone()
