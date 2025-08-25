@@ -267,3 +267,39 @@ pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, String> {
 
     Ok(DynamicImage::ImageRgba8(output_img))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{DynamicImage, Rgba};
+
+    #[test]
+    fn test_single2double_success() {
+        // 建立一個 64x32 單層皮膚（全白）
+        // let img = DynamicImage::ImageRgba8(
+        //     image::ImageBuffer::from_pixel(64, 32, Rgba([255, 255, 255, 255]))
+        // );
+        let img = image::open("/resources/SSSSSteven.png").unwrap();
+        let result = single2double(&img);
+        assert!(result.is_ok());
+        let out = result.unwrap();
+        // 輸出應為 64x64
+        assert_eq!(out.width(), 64);
+        assert_eq!(out.height(), 64);
+        // 上半部應與原圖一致
+        for y in 0..32 {
+            for x in 0..64 {
+                assert_eq!(out.get_pixel(x, y), img.get_pixel(x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn test_single2double_invalid_size() {
+        // 建立一個 64x31 非法尺寸
+        let img =
+            DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 31, Rgba([0, 0, 0, 255])));
+        let result = single2double(&img);
+        assert!(result.is_err());
+    }
+}
