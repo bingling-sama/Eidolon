@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use eidolon::{camera::Camera, character::Character, renderer::Renderer};
+use eidolon::{camera::Camera, character::Character, renderer::{Renderer, OutputFormat}};
 use std::fs;
 
 fn performance_benchmark(c: &mut Criterion) {
@@ -31,7 +31,7 @@ fn performance_benchmark(c: &mut Criterion) {
                 
                 // 渲染图片
                 renderer
-                    .render_to_image(&character, &camera, &filename, (800, 600))
+                    .render_to_image(&character, &camera, &filename, (800, 600), OutputFormat::Png)
                     .unwrap();
             }
         })

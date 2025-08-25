@@ -41,6 +41,10 @@ enum Command {
         #[arg(long, value_enum)]
         skin_type: SkinType,
 
+        /// 输出图片格式，png 或 webp，默认 png
+        #[arg(long, default_value = "png")]
+        format: String,
+
         /// 摄像机视角绕角色旋转角度（XZ 平面绕 Y 轴旋转），0~360，0 是正前，90 是正右，180 是正后，270 是正左
         #[arg(long, default_value_t = 180.0)]
         yaw: f32,
@@ -98,6 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             height,
             texture,
             skin_type,
+            format,
             yaw,
             pitch,
             scale,
@@ -142,7 +147,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 渲染并保存图片
             println!("正在渲染图片...");
-            renderer.render_to_image(&character, &camera, &filename, (width, height))?;
+
+            // 解析输出格式
+            let output_format = match format.to_lowercase().as_str() {
+                "png" => eidolon::renderer::OutputFormat::Png,
+                "webp" => eidolon::renderer::OutputFormat::WebP,
+                other => {
+                    eprintln!("不支持的输出格式: {}，仅支持 png 或 webp", other);
+                    return Err(Box::from("不支持的输出格式"));
+                }
+            };
+
+            renderer.render_to_image(&character, &camera, &filename, (width, height), output_format)?;
             println!("渲染完成！图片已保存到: {}", filename);
 
             Ok(())

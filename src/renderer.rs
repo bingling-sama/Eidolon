@@ -22,6 +22,15 @@ pub enum OutputFormat {
     WebP,
 }
 
+impl OutputFormat {
+    pub fn as_image_format(&self) -> ImageFormat {
+        match self {
+            OutputFormat::Png => ImageFormat::Png,
+            OutputFormat::WebP => ImageFormat::WebP,
+        }
+    }
+}
+
 pub struct Renderer {
     /// OpenGL 显示上下文
     display: Headless,
@@ -289,9 +298,10 @@ impl Renderer {
         camera: &Camera,
         filename: &str,
         size: (u32, u32),
+        format: OutputFormat,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let image_buffer = self.render(character, camera, size.0, size.1)?;
-        image_buffer.save_with_format(filename, ImageFormat::Png)?;
+        image_buffer.save_with_format(filename, format.as_image_format())?;
         Ok(())
     }
 }
