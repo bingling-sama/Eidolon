@@ -6,7 +6,7 @@ pub struct Camera {
     pub yaw: f32,
     /// 摄像机视角绕角色俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是脚下，180 是头顶
     pub pitch: f32,
-    /// 缩放比例，0~1
+    /// 缩放比例，>=0
     pub scale: f32,
 }
 

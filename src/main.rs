@@ -37,44 +37,44 @@ enum Command {
         #[arg(long, default_value = "resources/bingling_sama.png")]
         texture: String,
 
-        /// 皮肤类型
+        /// 皮肤类型，`classic` 或 `slim`
         #[arg(long, value_enum)]
         skin_type: SkinType,
 
-        /// 摄像机Yaw
+        /// 摄像机视角绕角色旋转角度（XZ 平面绕 Y 轴旋转），0~360，0 是正前，90 是正右，180 是正后，270 是正左
         #[arg(long, default_value_t = 180.0)]
         yaw: f32,
 
-        /// 摄像机Pitch
+        /// 摄像机视角绕角色俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是脚下，180 是头顶
         #[arg(long, default_value_t = 90.0)]
         pitch: f32,
 
-        /// 摄像机Scale
+        /// 缩放比例，>=0
         #[arg(long, default_value_t = 1.0)]
         scale: f32,
 
-        /// 角色头部摇头角度
+        /// 角色头部摇头角度（XZ 平面绕 Y 轴旋转），0~180，90 是正前，0 是正左，180 是正右
         #[arg(long, default_value_t = 90.0)]
         head_yaw: f32,
-        /// 角色头部俯仰角度
+        /// 角色头部俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是垂直向下看，180 是垂直向上看
         #[arg(long, default_value_t = 90.0)]
         head_pitch: f32,
-        /// 左手侧举角度
+        /// 左手侧举角度（XY 平面绕 Z 轴旋转），0~180，90 是向右侧平举，0 是垂直向下，180 是垂直向上抬起
         #[arg(long, default_value_t = 90.0)]
         left_arm_roll: f32,
-        /// 左手摆臂角度
+        /// 左手摆臂角度（YZ 平面绕 X 轴旋转），0~360，0 是垂直向下，90 是水平前摆，180 是垂直向上，270 是水平向后
         #[arg(long, default_value_t = 0.0)]
         left_arm_pitch: f32,
-        /// 右手侧举角度
+        /// 右手侧举角度（XY 平面绕 Z 轴旋转），0~180，90 是向右侧平举，0 是垂直向下，180 是垂直向上抬起
         #[arg(long, default_value_t = 90.0)]
         right_arm_roll: f32,
-        /// 右手摆臂角度
+        /// 右手摆臂角度（YZ 平面绕 X 轴旋转），0~360，0 是垂直向下，90 是水平前摆，180 是垂直向上，270 是水平向后
         #[arg(long, default_value_t = 0.0)]
         right_arm_pitch: f32,
-        /// 左腿抬腿角度
+        /// 左腿抬腿角度（YZ 平面绕 X 轴旋转），0~180，90 是垂直于地面，0 是水平前摆，180 是水平后摆
         #[arg(long, default_value_t = 90.0)]
         left_leg_pitch: f32,
-        /// 右腿抬腿角度
+        /// 右腿抬腿角度（YZ 平面绕 X 轴旋转），0~180，90 是垂直于地面，0 是水平前摆，180 是水平后摆
         #[arg(long, default_value_t = 90.0)]
         right_leg_pitch: f32,
     },
@@ -83,6 +83,7 @@ enum Command {
         /// 输入的单层皮肤图片文件路径
         input: PathBuf,
         /// 转换后的双层皮肤图片输出路径
+        #[arg(default_value = "output.png")]
         output: PathBuf,
     },
 }
