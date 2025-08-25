@@ -158,6 +158,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
+            // 自动调整默认文件名后缀
+            let mut filename = filename;
+            if filename == "output.png" {
+                filename = match format.to_lowercase().as_str() {
+                    "png" => "output.png".to_string(),
+                    "webp" => "output.webp".to_string(),
+                    _ => filename,
+                };
+            }
+
             renderer.render_to_image(&character, &camera, &filename, (width, height), output_format)?;
             println!("渲染完成！图片已保存到: {}", filename);
 

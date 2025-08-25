@@ -1,4 +1,5 @@
 /target
 .idea
 *.png
+*.webp
 !resources/*
