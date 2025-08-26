@@ -161,7 +161,7 @@ impl Renderer {
         };
 
         // --- Transformation Matrices ---
-        let translation = Matrix4::from_translation([0.0, 0.0, 0.0].into());
+        let translation = Matrix4::from_translation(character.position);
         let scale = Matrix4::from_scale(camera.scale);
         let base_model_matrix = translation * scale;
 

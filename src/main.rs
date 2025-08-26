@@ -81,6 +81,16 @@ enum Command {
         /// 右腿抬腿角度（YZ 平面绕 X 轴旋转），0~180，90 是垂直于地面，0 是水平前摆，180 是水平后摆
         #[arg(long, default_value_t = 90.0)]
         right_leg_pitch: f32,
+
+        /// 角色位置 X 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_x: f32,
+        /// 角色位置 Y 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_y: f32,
+        /// 角色位置 Z 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_z: f32,
     },
     /// 将单层皮肤转换为双层皮肤
     Convert {
@@ -114,6 +124,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             right_arm_pitch,
             left_leg_pitch,
             right_leg_pitch,
+            position_x,
+            position_y,
+            position_z,
         } => {
             println!("Minecraft皮肤渲染器");
             println!("文件名: {}", filename);
@@ -139,6 +152,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             character.posture.right_arm_pitch = right_arm_pitch;
             character.posture.left_leg_pitch = left_leg_pitch;
             character.posture.right_leg_pitch = right_leg_pitch;
+
+            // 设置角色位置
+            character.position = cgmath::Vector3::new(position_x, position_y, position_z);
 
             // 设置皮肤文件
             println!("正在加载皮肤文件: {}", texture);

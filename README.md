@@ -43,19 +43,9 @@ cargo run -- render [OPTIONS]
 - `--filename <FILENAME>`: Output image filename (default: `output.png`)
 - `--width <WIDTH>`: Output image width (default: `800`)
 - `--height <HEIGHT>`: Output image height (default: `600`)
-- `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
 - `--skin-type <SkinType>`: Skin type (`classic` or `slim`), required
-- `--yaw <YAW>`: Camera yaw (default: `180.0`)
-- `--pitch <PITCH>`: Camera pitch (default: `90.0`)
-- `--scale <SCALE>`: Camera scale (default: `1.0`)
-- `--head-yaw <ANGLE>`: Head yaw (default: `90.0`)
-- `--head-pitch <ANGLE>`: Head pitch (default: `90.0`)
-- `--left-arm-roll <ANGLE>`: Left arm roll (default: `90.0`)
-- `--left-arm-pitch <ANGLE>`: Left arm pitch (default: `0.0`)
-- `--right-arm-roll <ANGLE>`: Right arm roll (default: `90.0`)
-- `--right-arm-pitch <ANGLE>`: Right arm pitch (default: `0.0`)
-- `--left-leg-pitch <ANGLE>`: Left leg pitch (default: `90.0`)
-- `--right-leg-pitch <ANGLE>`: Right leg pitch (default: `90.0`)
+- `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
+- More options see `cargo run -- render --help`
 
 **Example:**
 ```bash

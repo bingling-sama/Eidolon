@@ -1,6 +1,7 @@
 use crate::texture::Texture;
 use clap::ValueEnum;
 use glium::backend::glutin::headless::Headless;
+use cgmath::Vector3;
 
 /// Minecraft 皮肤类型
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -63,6 +64,8 @@ pub struct Character {
     pub nametag: Option<String>,
     /// 当前姿势
     pub posture: Posture,
+    /// 角色在世界中的位置
+    pub position: Vector3<f32>,
 }
 
 impl Character {
@@ -73,6 +76,7 @@ impl Character {
             cape: None,
             nametag: None,
             posture: DefaultPostures::STAND,
+            position: Vector3::new(0.0, 0.0, 0.0),
         }
     }
 
