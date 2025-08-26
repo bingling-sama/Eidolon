@@ -66,6 +66,8 @@ pub struct Character {
     pub posture: Posture,
     /// 角色在世界中的位置
     pub position: Vector3<f32>,
+    /// 角色全局旋轉（度），x/y/z 軸
+    pub rotation: Vector3<f32>,
 }
 
 impl Character {
@@ -77,6 +79,7 @@ impl Character {
             nametag: None,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
+            rotation: Vector3::new(0.0, 0.0, 0.0),
         }
     }
 

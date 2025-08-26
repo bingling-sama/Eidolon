@@ -162,8 +162,12 @@ impl Renderer {
 
         // --- Transformation Matrices ---
         let translation = Matrix4::from_translation(character.position);
+        let rotation_matrix =
+            Matrix4::from_angle_x(Rad(character.rotation.x.to_radians())) *
+            Matrix4::from_angle_y(Rad(character.rotation.y.to_radians())) *
+            Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
         let scale = Matrix4::from_scale(camera.scale);
-        let base_model_matrix = translation * scale;
+        let base_model_matrix = translation * rotation_matrix * scale;
 
         // --- Draw each body part using posture data with pivot points ---
         let posture = &character.posture;

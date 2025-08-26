@@ -91,6 +91,16 @@ enum Command {
         /// 角色位置 Z 坐标
         #[arg(long, default_value_t = 0.0)]
         position_z: f32,
+
+        /// 角色旋轉 X（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_x: f32,
+        /// 角色旋轉 Y（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_y: f32,
+        /// 角色旋轉 Z（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_z: f32,
     },
     /// 将单层皮肤转换为双层皮肤
     Convert {
@@ -127,6 +137,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             position_x,
             position_y,
             position_z,
+            rotation_x,
+            rotation_y,
+            rotation_z,
         } => {
             println!("Minecraft皮肤渲染器");
             println!("文件名: {}", filename);
@@ -155,6 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 设置角色位置
             character.position = cgmath::Vector3::new(position_x, position_y, position_z);
+
+            // 设置角色旋轉
+            character.rotation = cgmath::Vector3::new(rotation_x, rotation_y, rotation_z);
 
             // 设置皮肤文件
             println!("正在加载皮肤文件: {}", texture);
