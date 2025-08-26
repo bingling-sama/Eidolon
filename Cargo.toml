@@ -3,13 +3,15 @@ name = "eidolonmc"
 version = "0.0.1-alpha"
 description = "A Minecraft skin off-screen renderer written in Rust"
 edition = "2021"
-license-file = "LICENSE"
+license = "GPL-3.0"
+# license-file = "LICENSE"
 homepage = "https://github.com/bingling-sama/eidolon"
 repository = "https://github.com/bingling-sama/eidolon"
 
 [lib]
 name = "eidolon"
 path = "src/lib.rs"
+crate-type = ["lib", "rlib", "cdylib"]
 
 [[bin]]
 name = "eidolon"
@@ -26,6 +28,7 @@ image = "0.25.5"
 cgmath = "0.18.0"
 tobj = "4.0.2"
 clap = { version = "4.5", features = ["derive"] }
+pyo3 = { version = "0.25.1", features = ["extension-module"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
