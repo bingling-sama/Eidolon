@@ -9,6 +9,7 @@ use glium::texture::{RawImage2d, Texture2d};
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::fs::File;
 use std::io::BufReader;
+use log::info;
 
 /// 纹理结构体
 ///
@@ -46,7 +47,7 @@ impl Texture {
         display: &Headless,
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        println!("Loading texture: {}", path);
+        info!("Loading texture: {}", path);
         // 加载图像
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -62,11 +63,11 @@ impl Texture {
         image: &DynamicImage,
     ) -> Result<Texture, Box<dyn std::error::Error>> {
         let (width, height) = image.dimensions();
-        println!("Texture dimensions: {}x{}", width, height);
+        info!("Texture dimensions: {}x{}", width, height);
 
         // 判断是否为单层皮肤（宽=高×2），如是则转换为双层
         let image = if width == height * 2 {
-            println!("Single-layer skin detected, converting to double-layer...");
+            info!("Single-layer skin detected, converting to double-layer...");
             match single2double(image) {
                 Ok(img) => img,
                 Err(e) => {
@@ -84,7 +85,7 @@ impl Texture {
         let image_rgba = image.to_rgba8();
         let image = RawImage2d::from_raw_rgba_reversed(image_rgba.as_raw(), image_dimensions);
         let texture = Texture2d::new(display, image)?;
-        println!("Texture loaded into GPU");
+        info!("Texture loaded into GPU");
         Ok(Texture { texture })
     }
 }

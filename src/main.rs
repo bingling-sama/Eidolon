@@ -113,8 +113,10 @@ enum Command {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let args = Args::parse();
 
+    use log::{info, error};
     match args.command {
         Command::Render {
             filename,
@@ -141,15 +143,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rotation_y,
             rotation_z,
         } => {
-            println!("Minecraft皮肤渲染器");
-            println!("文件名: {}", filename);
-            println!("尺寸: {}x{}", width, height);
-            println!("材质文件: {}", texture);
+            info!("Minecraft皮肤渲染器");
+            info!("文件名: {}", filename);
+            info!("尺寸: {}x{}", width, height);
+            info!("材质文件: {}", texture);
 
             // 创建渲染器
-            println!("正在创建渲染器...");
+            info!("正在创建渲染器...");
             let renderer = Renderer::new();
-            println!("渲染器创建成功");
+            info!("渲染器创建成功");
 
             // 创建角色和相机
             let mut character = Character::new();
@@ -173,19 +175,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             character.rotation = cgmath::Vector3::new(rotation_x, rotation_y, rotation_z);
 
             // 设置皮肤文件
-            println!("正在加载皮肤文件: {}", texture);
+            info!("正在加载皮肤文件: {}", texture);
             character.load_skin_from_file(&texture, renderer.get_display())?;
-            println!("皮肤文件加载成功");
+            info!("皮肤文件加载成功");
 
             // 渲染并保存图片
-            println!("正在渲染图片...");
+            info!("正在渲染图片...");
 
             // 解析输出格式
             let output_format = match format.to_lowercase().as_str() {
                 "png" => eidolon::renderer::OutputFormat::Png,
                 "webp" => eidolon::renderer::OutputFormat::WebP,
                 other => {
-                    eprintln!("不支持的输出格式: {}，仅支持 png 或 webp", other);
+                    error!("不支持的输出格式: {}，仅支持 png 或 webp", other);
                     return Err(Box::from("不支持的输出格式"));
                 }
             };
@@ -201,7 +203,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             renderer.render_to_image(&character, &camera, &filename, (width, height), output_format)?;
-            println!("渲染完成！图片已保存到: {}", filename);
+            info!("渲染完成！图片已保存到: {}", filename);
 
             Ok(())
         }
@@ -211,14 +213,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match converter::single2double(&img) {
                 Ok(result) => {
-                    println!("转换成功！双层皮肤已保存到: {:?}", output);
+                    info!("转换成功！双层皮肤已保存到: {:?}", output);
                     result
                         .save(output)
                         .map_err(|e| format!("Failed to save output image: {}", e))?;
                     Ok(())
                 }
                 Err(e) => {
-                    eprintln!("转换失败: {}", e);
+                    error!("转换失败: {}", e);
                     Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))
                 }
             }

@@ -7,6 +7,7 @@ use glium::backend::glutin::headless::Headless;
 use glium::{implement_vertex, VertexBuffer};
 use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
+use log::info;
 
 /// 带纹理的顶点结构体
 ///
@@ -59,9 +60,9 @@ impl Model {
         display: &Headless,
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        println!("Loading OBJ file: {}", path);
+        info!("Loading OBJ file: {}", path);
         let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)?;
-        println!("OBJ file loaded with {} objects", models.len());
+        info!("OBJ file loaded with {} objects", models.len());
 
         let mut parts: HashMap<String, ModelPart> = HashMap::new();
 
@@ -118,7 +119,7 @@ impl Model {
             let model_part = ModelPart {
                 vertices: vertex_buffer,
             };
-            println!("Loaded part: {}", model.name);
+            info!("Loaded part: {}", model.name);
             parts.insert(model.name, model_part);
         }
 
