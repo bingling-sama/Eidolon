@@ -7,6 +7,7 @@ mod uniforms;
 
 pub use output::OutputFormat;
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use image::{ImageBuffer, Rgba};
@@ -34,6 +35,8 @@ pub struct Renderer {
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
+    /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
+    cached_depth_texture: RefCell<Option<(wgpu::Texture, u32, u32)>>,
 }
 
 impl Renderer {
@@ -242,6 +245,7 @@ impl Renderer {
             surface,
             surface_config,
             surface_pipeline,
+            cached_depth_texture: RefCell::new(None),
         }
     }
 
@@ -282,21 +286,35 @@ impl Renderer {
                 .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(uniform));
         }
 
-        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Depth Texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = {
+            let mut cache = self.cached_depth_texture.borrow_mut();
+            let need_new = match cache.as_ref() {
+                None => true,
+                Some((_, w, h)) => *w != width || *h != height,
+            };
+            if need_new {
+                let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("Depth Texture"),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: DEPTH_FORMAT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                });
+                *cache = Some((texture, width, height));
+            }
+            cache
+                .as_ref()
+                .unwrap()
+                .0
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        };
 
         let body_parts = [
             &model.head,
