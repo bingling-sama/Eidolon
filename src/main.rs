@@ -37,6 +37,15 @@ impl From<SkinTypeCli> for SkinType {
     }
 }
 
+fn parse_positive_scale(s: &str) -> Result<f32, String> {
+    let value: f32 = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
+    if value > 0.0 {
+        Ok(value)
+    } else {
+        Err(format!("scale must be greater than 0, got {}", value))
+    }
+}
+
 #[derive(Parser, Debug)]
 struct ViewportArgs {
     /// 图片或窗口宽度
@@ -65,8 +74,8 @@ struct SceneArgs {
     #[arg(long, default_value_t = 90.0)]
     pitch: f32,
 
-    /// 缩放比例，>=0
-    #[arg(long, default_value_t = 1.0)]
+    /// 缩放比例，>0
+    #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     scale: f32,
 
     /// 角色头部摇头角度（XZ 平面绕 Y 轴旋转），0~180，90 是正前，0 是正左，180 是正右
