@@ -2,7 +2,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use eidolon::{
     camera::Camera,
     character::Character,
-    renderer::{OutputFormat, Renderer},
+    renderer::Renderer,
+    OutputFormat,
 };
 use std::fs;
 

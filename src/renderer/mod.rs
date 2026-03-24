@@ -1,45 +1,24 @@
+//! 离屏与窗口渲染：wgpu 管线、姿势矩阵与读回。
+
+mod output;
+mod pipeline;
+mod readback;
+mod uniforms;
+
+pub use output::OutputFormat;
+
 use std::sync::Arc;
 
-use cgmath::{Matrix4, Rad, Vector3};
-use image::{ImageBuffer, ImageFormat, Rgba};
+use image::{ImageBuffer, Rgba};
 use winit::window::Window;
 
 use crate::camera::Camera;
 use crate::character::{Character, SkinType};
-use crate::constants::SHADER;
-use crate::model::{Model, TexturedVertex};
+use crate::model::Model;
 use crate::texture::Texture;
 
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
-const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
-
-/// 输出图片格式
-#[derive(Debug, Clone, Copy)]
-pub enum OutputFormat {
-    /// PNG 格式
-    Png,
-    /// WebP 格式
-    WebP,
-}
-
-impl OutputFormat {
-    pub fn as_image_format(&self) -> ImageFormat {
-        match self {
-            OutputFormat::Png => ImageFormat::Png,
-            OutputFormat::WebP => ImageFormat::WebP,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    perspective: [[f32; 4]; 4],
-    view: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
-    offset: f32,
-    _padding: [f32; 3],
-}
+use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
+use uniforms::compute_body_part_uniforms;
 
 pub struct Renderer {
     device: wgpu::Device,
@@ -57,63 +36,9 @@ pub struct Renderer {
     surface_pipeline: Option<wgpu::RenderPipeline>,
 }
 
-fn create_pipeline(
-    device: &wgpu::Device,
-    pipeline_layout: &wgpu::PipelineLayout,
-    color_format: wgpu::TextureFormat,
-) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Skin Shader"),
-        source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-    });
-
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Render Pipeline"),
-        layout: Some(pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            compilation_options: Default::default(),
-            buffers: &[TexturedVertex::desc()],
-        },
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: None,
-            unclipped_depth: false,
-            polygon_mode: wgpu::PolygonMode::Fill,
-            conservative: false,
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            compilation_options: Default::default(),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: color_format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        multiview: None,
-        cache: None,
-    })
-}
-
 impl Renderer {
     /// 创建新的 Headless 渲染器实例
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -172,7 +97,6 @@ impl Renderer {
 
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
-        // Prefer non-sRGB surface format to match headless rendering behavior
         let surface_format = surface_caps
             .formats
             .iter()
@@ -214,7 +138,7 @@ impl Renderer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
                         min_binding_size: wgpu::BufferSize::new(
-                            std::mem::size_of::<Uniforms>() as u64,
+                            std::mem::size_of::<uniforms::Uniforms>() as u64,
                         ),
                     },
                     count: None,
@@ -271,10 +195,9 @@ impl Renderer {
             }
         });
 
-        // Dynamic uniform buffer for 6 body parts
         let alignment = device.limits().min_uniform_buffer_offset_alignment;
-        let uniform_size = std::mem::size_of::<Uniforms>() as u32;
-        let aligned_size = ((uniform_size + alignment - 1) / alignment) * alignment;
+        let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
+        let aligned_size = uniform_size.div_ceil(alignment) * alignment;
         let num_body_parts = 6u32;
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -333,98 +256,7 @@ impl Renderer {
         )
     }
 
-    fn compute_body_part_uniforms(
-        character: &Character,
-        camera: &Camera,
-        width: u32,
-        height: u32,
-    ) -> [Uniforms; 6] {
-        let perspective: [[f32; 4]; 4] = camera.get_projection_matrix(width, height);
-        let view: [[f32; 4]; 4] = camera.get_view_matrix();
-
-        let translation = Matrix4::from_translation(character.position);
-        let rotation_matrix = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
-            * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
-            * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
-        let scale = Matrix4::from_scale(camera.scale);
-        let base_model_matrix = translation * rotation_matrix * scale;
-
-        let posture = &character.posture;
-
-        let make_uniforms = |model_matrix: Matrix4<f32>, offset: f32| -> Uniforms {
-            Uniforms {
-                perspective,
-                view,
-                model: model_matrix.into(),
-                offset,
-                _padding: [0.0; 3],
-            }
-        };
-
-        // Head
-        let head_pivot = Vector3::new(0.0, 1.5, 0.0);
-        let head_yaw_rad = (posture.head_yaw - 90.0).to_radians();
-        let head_pitch_rad = (posture.head_pitch - 90.0).to_radians();
-        let head_rotation =
-            Matrix4::from_angle_y(Rad(head_yaw_rad)) * Matrix4::from_angle_x(Rad(head_pitch_rad));
-        let head_transform = base_model_matrix
-            * Matrix4::from_translation(head_pivot)
-            * head_rotation
-            * Matrix4::from_translation(-head_pivot);
-
-        // Right Arm
-        let right_arm_pivot = Vector3::new(0.3125, 1.375, 0.0);
-        let right_arm_roll_rad = posture.right_arm_roll.to_radians();
-        let right_arm_pitch_rad = posture.right_arm_pitch.to_radians();
-        let right_arm_rotation = Matrix4::from_angle_z(Rad(right_arm_roll_rad))
-            * Matrix4::from_angle_x(Rad(right_arm_pitch_rad));
-        let right_arm_transform = base_model_matrix
-            * Matrix4::from_translation(right_arm_pivot)
-            * right_arm_rotation
-            * Matrix4::from_translation(-right_arm_pivot);
-
-        // Left Arm
-        let left_arm_pivot = Vector3::new(-0.3125, 1.375, 0.0);
-        let left_arm_roll_rad = -posture.left_arm_roll.to_radians();
-        let left_arm_pitch_rad = posture.left_arm_pitch.to_radians();
-        let left_arm_rotation = Matrix4::from_angle_z(Rad(left_arm_roll_rad))
-            * Matrix4::from_angle_x(Rad(left_arm_pitch_rad));
-        let left_arm_transform = base_model_matrix
-            * Matrix4::from_translation(left_arm_pivot)
-            * left_arm_rotation
-            * Matrix4::from_translation(-left_arm_pivot);
-
-        // Right Leg
-        let right_leg_pivot = Vector3::new(0.125, 0.75, 0.0);
-        let right_leg_pitch_rad = (posture.right_leg_pitch - 90.0).to_radians();
-        let right_leg_rotation = Matrix4::from_angle_x(Rad(right_leg_pitch_rad));
-        let right_leg_transform = base_model_matrix
-            * Matrix4::from_translation(right_leg_pivot)
-            * right_leg_rotation
-            * Matrix4::from_translation(-right_leg_pivot);
-
-        // Left Leg
-        let left_leg_pivot = Vector3::new(-0.125, 0.75, 0.0);
-        let left_leg_pitch_rad = (posture.left_leg_pitch - 90.0).to_radians();
-        let left_leg_rotation = Matrix4::from_angle_x(Rad(left_leg_pitch_rad));
-        let left_leg_transform = base_model_matrix
-            * Matrix4::from_translation(left_leg_pivot)
-            * left_leg_rotation
-            * Matrix4::from_translation(-left_leg_pivot);
-
-        // Body (no additional rotation)
-        let body_transform = base_model_matrix;
-
-        [
-            make_uniforms(head_transform, 0.0),
-            make_uniforms(right_arm_transform, 0.0),
-            make_uniforms(left_arm_transform, 0.0),
-            make_uniforms(right_leg_transform, 0.0),
-            make_uniforms(left_leg_transform, 0.0),
-            make_uniforms(body_transform, 0.0001),
-        ]
-    }
-
+    #[allow(clippy::too_many_arguments)]
     fn encode_render_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -442,7 +274,7 @@ impl Renderer {
             SkinType::Classic => &self.default_model,
         };
 
-        let uniforms = Self::compute_body_part_uniforms(character, camera, width, height);
+        let uniforms = compute_body_part_uniforms(character, camera, width, height);
 
         for (i, uniform) in uniforms.iter().enumerate() {
             let offset = (i as u64) * (self.uniform_aligned_size as u64);
@@ -466,7 +298,6 @@ impl Renderer {
         });
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Draw order matches original: head, right_arm, left_arm, right_leg, left_leg, body
         let body_parts = [
             &model.head,
             &model.right_arm,
@@ -544,6 +375,9 @@ impl Renderer {
         });
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let (output_buffer, padded_bytes_per_row) =
+            readback::create_output_buffer(&self.device, width, height);
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -560,71 +394,24 @@ impl Renderer {
             height,
         );
 
-        // Copy render texture to a mappable buffer for pixel readback
-        let bytes_per_pixel = 4u32;
-        let unpadded_bytes_per_row = bytes_per_pixel * width;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
-
-        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: (padded_bytes_per_row * height) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &render_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &output_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded_bytes_per_row),
-                    rows_per_image: Some(height),
-                },
-            },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+        readback::copy_render_target_to_buffer(
+            &mut encoder,
+            &render_texture,
+            &output_buffer,
+            width,
+            height,
+            padded_bytes_per_row,
         );
 
         self.queue.submit(Some(encoder.finish()));
 
-        // Map the output buffer and read pixels
-        let buffer_slice = output_buffer.slice(..);
-        let (tx, rx) = std::sync::mpsc::channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
-        });
-        self.device.poll(wgpu::PollType::Wait).ok();
-        rx.recv().unwrap()?;
-
-        let data = buffer_slice.get_mapped_range();
-        let mut img_buf = ImageBuffer::new(width, height);
-
-        for y in 0..height {
-            let row_start = (y * padded_bytes_per_row) as usize;
-            for x in 0..width {
-                let offset = row_start + (x * bytes_per_pixel) as usize;
-                img_buf.put_pixel(
-                    x,
-                    y,
-                    Rgba([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]),
-                );
-            }
-        }
-
-        drop(data);
-        output_buffer.unmap();
-
-        Ok(img_buf)
+        readback::map_output_buffer_to_rgba(
+            &self.device,
+            &output_buffer,
+            width,
+            height,
+            padded_bytes_per_row,
+        )
     }
 
     /// 渲染角色到窗口 Surface（Windowed）
