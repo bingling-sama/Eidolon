@@ -10,13 +10,19 @@ pub struct Camera {
     pub scale: f32,
 }
 
-impl Camera {
-    pub fn new() -> Self {
+impl Default for Camera {
+    fn default() -> Self {
         Self {
             yaw: 210.0,
             pitch: 90.0,
             scale: 1.0,
         }
+    }
+}
+
+impl Camera {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn get_view_matrix(&self) -> [[f32; 4]; 4] {

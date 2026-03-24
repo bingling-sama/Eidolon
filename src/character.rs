@@ -1,9 +1,8 @@
 use crate::texture::Texture;
 use cgmath::Vector3;
-use clap::ValueEnum;
 
 /// Minecraft 皮肤类型
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkinType {
     /// 默认皮肤类型（Steve 样式）
     Classic,
@@ -69,8 +68,8 @@ pub struct Character {
     pub rotation: Vector3<f32>,
 }
 
-impl Character {
-    pub fn new() -> Self {
+impl Default for Character {
+    fn default() -> Self {
         Self {
             skin: None,
             skin_type: SkinType::Classic,
@@ -80,5 +79,11 @@ impl Character {
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
         }
+    }
+}
+
+impl Character {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
