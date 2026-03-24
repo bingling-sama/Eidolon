@@ -40,10 +40,10 @@ impl From<SkinTypeCli> for SkinType {
 #[derive(Parser, Debug)]
 struct ViewportArgs {
     /// 图片或窗口宽度
-    #[arg(long, default_value_t = 800)]
+    #[arg(long, default_value_t = 800, value_parser = clap::value_parser!(u32).range(1..))]
     width: u32,
     /// 图片或窗口高度
-    #[arg(long, default_value_t = 600)]
+    #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u32).range(1..))]
     height: u32,
 }
 

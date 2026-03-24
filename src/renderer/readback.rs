@@ -64,10 +64,18 @@ pub(crate) fn map_output_buffer_to_rgba(
     let buffer_slice = output_buffer.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-        tx.send(result).unwrap();
+        // Avoid panicking if the receiver is dropped; just ignore the error.
+        let _ = tx.send(result);
     });
     device.poll(wgpu::PollType::Wait).ok();
-    rx.recv().unwrap()?;
+    let map_result = rx
+        .recv()
+        .map_err(|e| -> Box<dyn std::error::Error> {
+            format!("Failed to receive buffer map result: {}", e).into()
+        })?;
+    map_result.map_err(|e| -> Box<dyn std::error::Error> {
+        format!("Buffer map failed: {:?}", e).into()
+    })?;
 
     let data = buffer_slice.get_mapped_range();
     let mut img_buf = ImageBuffer::new(width, height);
