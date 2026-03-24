@@ -1,10 +1,8 @@
 use crate::texture::Texture;
-use clap::ValueEnum;
-use glium::backend::glutin::headless::Headless;
 use cgmath::Vector3;
 
 /// Minecraft 皮肤类型
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkinType {
     /// 默认皮肤类型（Steve 样式）
     Classic,
@@ -70,8 +68,8 @@ pub struct Character {
     pub rotation: Vector3<f32>,
 }
 
-impl Character {
-    pub fn new() -> Self {
+impl Default for Character {
+    fn default() -> Self {
         Self {
             skin: None,
             skin_type: SkinType::Classic,
@@ -82,13 +80,10 @@ impl Character {
             rotation: Vector3::new(0.0, 0.0, 0.0),
         }
     }
+}
 
-    pub fn load_skin_from_file(
-        &mut self,
-        path: &str,
-        display: &Headless,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.skin = Some(Texture::load_from_file(display, path)?);
-        Ok(())
+impl Character {
+    pub fn new() -> Self {
+        Self::default()
     }
 }

@@ -1,105 +1,83 @@
 //! 着色器常量模块
 //!
-//! 这个模块包含了用于渲染 Minecraft 皮肤的 OpenGL 着色器代码。
+//! 这个模块包含了用于渲染 Minecraft 皮肤的 WGSL 着色器代码。
 //! 着色器支持纹理映射、光照计算和透明度处理。
 
-/// 顶点着色器
+/// WGSL 着色器
 ///
-/// 处理顶点变换、法线变换和纹理坐标传递。
-/// 使用 GLSL 410 版本，支持现代 OpenGL 特性。
+/// 包含顶点着色器和片段着色器，处理：
+/// - 顶点变换（模型、视图、投影矩阵）
+/// - 法线偏移（用于外层皮肤膨胀）
+/// - 纹理采样（最近邻过滤）
+/// - 双光源漫反射光照
+/// - 透明像素丢弃
 ///
-/// # 输入变量
+/// # Bind Groups
 ///
-/// - `position`: 顶点位置 (vec3)
-/// - `normal`: 顶点法线 (vec3)
-/// - `texture`: 纹理坐标 (vec2)
-///
-/// # 输出变量
-///
-/// - `v_normal`: 传递给片段着色器的法线 (vec3)
-/// - `v_texture`: 传递给片段着色器的纹理坐标 (vec2)
-///
-/// # Uniform 变量
-///
-/// - `perspective`: 透视投影矩阵 (mat4)
-/// - `view`: 视图矩阵 (mat4)
-/// - `model`: 模型变换矩阵 (mat4)
-pub const VERTEX_SHADER: &str = r#"
-    #version 410
+/// - Group 0, Binding 0: Uniforms (perspective, view, model, offset)
+/// - Group 1, Binding 0: 皮肤纹理 (texture_2d)
+/// - Group 1, Binding 1: 纹理采样器 (sampler)
+pub const SHADER: &str = r#"
+struct Uniforms {
+    perspective: mat4x4<f32>,
+    view: mat4x4<f32>,
+    model: mat4x4<f32>,
+    offset: f32,
+}
 
-    in vec3 position;
-    in vec3 normal;
-    in vec2 texture;
-    
-    out vec3 v_normal;
-    out vec2 v_texture;
+@group(0) @binding(0)
+var<uniform> uniforms: Uniforms;
 
-    uniform mat4 perspective;
-    uniform mat4 view;
-    uniform mat4 model;
-    uniform float offset;
+@group(1) @binding(0)
+var t_skin: texture_2d<f32>;
+@group(1) @binding(1)
+var s_skin: sampler;
 
-    void main() {
-        mat4 modelview = view * model;
-        v_texture = texture;
-        v_normal = transpose(inverse(mat3(model))) * normal;
-        vec3 offset_position = position + normal * offset;
-        gl_Position = perspective * modelview * vec4(offset_position, 1.0);
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) normal: vec3<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    let modelview = uniforms.view * uniforms.model;
+    out.tex_coords = in.tex_coords;
+    let normal_matrix = mat3x3<f32>(
+        uniforms.model[0].xyz,
+        uniforms.model[1].xyz,
+        uniforms.model[2].xyz,
+    );
+    out.normal = normal_matrix * in.normal;
+    let offset_position = in.position + in.normal * uniforms.offset;
+    out.clip_position = uniforms.perspective * modelview * vec4<f32>(offset_position, 1.0);
+    return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let tex_color = textureSample(t_skin, s_skin, in.tex_coords);
+
+    if (tex_color.a < 0.01) {
+        discard;
     }
-"#;
 
-/// 片段着色器
-///
-/// 处理纹理采样、光照计算和透明度处理。
-/// 使用 GLSL 330 版本，提供 Minecraft 风格的渲染效果。
-///
-/// # 输入变量
-///
-/// - `v_texture`: 从顶点着色器传来的纹理坐标 (vec2)
-/// - `v_normal`: 从顶点着色器传来的法线 (vec3)
-///
-/// # 输出变量
-///
-/// - `FragColor`: 最终输出的颜色 (vec4)
-///
-/// # Uniform 变量
-///
-/// - `texture1`: 皮肤纹理采样器 (sampler2D)
-///
-/// # 特性
-///
-/// - 支持透明度处理（丢弃完全透明的像素）
-/// - 双光源照明系统（主光源 + 辅助光源）
-/// - 保留原始纹理颜色
-/// - 适合 Minecraft 像素艺术风格
-pub const FRAGMENT_SHADER: &str = r#"
-    #version 330 core
-    in vec2 v_texture;
-    in vec3 v_normal;
-    out vec4 FragColor;
+    let light_dir1 = normalize(vec3<f32>(1.0, 1.0, 1.0));
+    let light_dir2 = normalize(vec3<f32>(-1.0, 0.5, -0.5));
 
-    uniform sampler2D texture1;
+    let ambient = 0.5;
+    let diff1 = max(dot(normalize(in.normal), light_dir1), 0.0);
+    let diff2 = max(dot(normalize(in.normal), light_dir2), 0.0) * 0.3;
 
-    void main()
-    {
-        // Minecraft textures are pixel art, so we want nearest neighbor filtering
-        vec4 texColor = texture(texture1, v_texture);
+    let diffuse = (ambient + diff1 * 0.5 + diff2) * vec3<f32>(1.0, 1.0, 1.0);
 
-        // 只丢弃完全透明的像素，保留半透明像素
-        if(texColor.a < 0.01)
-            discard;
-
-        // Enhanced lighting for Minecraft models
-        vec3 lightDir1 = normalize(vec3(1.0, 1.0, 1.0));
-        vec3 lightDir2 = normalize(vec3(-1.0, 0.5, -0.5)); // Secondary light from opposite direction
-
-        float ambient = 0.5; // Higher ambient for Minecraft-style lighting
-        float diff1 = max(dot(normalize(v_normal), lightDir1), 0.0);
-        float diff2 = max(dot(normalize(v_normal), lightDir2), 0.0) * 0.3; // Secondary light is dimmer
-
-        vec3 diffuse = (ambient + diff1 * 0.5 + diff2) * vec3(1.0, 1.0, 1.0);
-
-        // Apply lighting but preserve original colors
-        FragColor = vec4(texColor.rgb * diffuse, texColor.a);
-    }
+    return vec4<f32>(tex_color.rgb * diffuse, tex_color.a);
+}
 "#;
