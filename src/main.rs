@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::{Parser, Subcommand};
 use eidolon::{
     camera::Camera,
@@ -5,6 +7,11 @@ use eidolon::{
     renderer::Renderer,
 };
 use std::path::PathBuf;
+use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::{Window, WindowId};
 
 mod utils;
 use utils::converter;
@@ -102,6 +109,81 @@ enum Command {
         #[arg(long, default_value_t = 0.0)]
         rotation_z: f32,
     },
+    /// 在窗口中预览皮肤
+    Preview {
+        /// 窗口宽度
+        #[arg(long, default_value_t = 800)]
+        width: u32,
+
+        /// 窗口高度
+        #[arg(long, default_value_t = 600)]
+        height: u32,
+
+        /// PNG材质文件路径
+        #[arg(long, default_value = "resources/bingling_sama.png")]
+        texture: String,
+
+        /// 皮肤类型，`classic` 或 `slim`
+        #[arg(long, value_enum)]
+        skin_type: SkinType,
+
+        /// 摄像机视角绕角色旋转角度
+        #[arg(long, default_value_t = 180.0)]
+        yaw: f32,
+
+        /// 摄像机视角绕角色俯仰角度
+        #[arg(long, default_value_t = 90.0)]
+        pitch: f32,
+
+        /// 缩放比例
+        #[arg(long, default_value_t = 1.0)]
+        scale: f32,
+
+        /// 角色头部摇头角度
+        #[arg(long, default_value_t = 90.0)]
+        head_yaw: f32,
+        /// 角色头部俯仰角度
+        #[arg(long, default_value_t = 90.0)]
+        head_pitch: f32,
+        /// 左手侧举角度
+        #[arg(long, default_value_t = 90.0)]
+        left_arm_roll: f32,
+        /// 左手摆臂角度
+        #[arg(long, default_value_t = 0.0)]
+        left_arm_pitch: f32,
+        /// 右手侧举角度
+        #[arg(long, default_value_t = 90.0)]
+        right_arm_roll: f32,
+        /// 右手摆臂角度
+        #[arg(long, default_value_t = 0.0)]
+        right_arm_pitch: f32,
+        /// 左腿抬腿角度
+        #[arg(long, default_value_t = 90.0)]
+        left_leg_pitch: f32,
+        /// 右腿抬腿角度
+        #[arg(long, default_value_t = 90.0)]
+        right_leg_pitch: f32,
+
+        /// 角色位置 X 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_x: f32,
+        /// 角色位置 Y 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_y: f32,
+        /// 角色位置 Z 坐标
+        #[arg(long, default_value_t = 0.0)]
+        position_z: f32,
+
+        /// 角色旋轉 X（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_x: f32,
+        /// 角色旋轉 Y（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_y: f32,
+        /// 角色旋轉 Z（度）
+        #[arg(long, default_value_t = 0.0)]
+        rotation_z: f32,
+    },
     /// 将单层皮肤转换为双层皮肤
     Convert {
         /// 输入的单层皮肤图片文件路径
@@ -112,11 +194,86 @@ enum Command {
     },
 }
 
+struct PreviewApp {
+    renderer: Option<Renderer>,
+    window: Option<Arc<Window>>,
+    character: Character,
+    camera: Camera,
+    texture_path: String,
+    initial_size: PhysicalSize<u32>,
+}
+
+impl ApplicationHandler for PreviewApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+
+        let window_attrs = Window::default_attributes()
+            .with_title("Eidolon Preview")
+            .with_inner_size(self.initial_size);
+        let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
+
+        let mut renderer = Renderer::new_windowed(window.clone());
+        self.character.skin = Some(renderer.load_texture(&self.texture_path).unwrap());
+        // Trigger initial resize to ensure surface is configured
+        let size = window.inner_size();
+        renderer.resize(size.width, size.height);
+
+        self.renderer = Some(renderer);
+        self.window = Some(window);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            WindowEvent::Resized(physical_size) => {
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(physical_size.width, physical_size.height);
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(renderer) = &self.renderer {
+                    match renderer.render_frame(&self.character, &self.camera) {
+                        Ok(()) => {}
+                        Err(wgpu::SurfaceError::Lost) => {
+                            if let Some(window) = &self.window {
+                                let size = window.inner_size();
+                                if let Some(r) = &mut self.renderer {
+                                    r.resize(size.width, size.height);
+                                }
+                            }
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                            event_loop.exit();
+                        }
+                        Err(e) => log::error!("Render error: {:?}", e),
+                    }
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let args = Args::parse();
 
-    use log::{info, error};
+    use log::{error, info};
     match args.command {
         Command::Render {
             filename,
@@ -148,17 +305,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("尺寸: {}x{}", width, height);
             info!("材质文件: {}", texture);
 
-            // 创建渲染器
             info!("正在创建渲染器...");
             let renderer = Renderer::new();
             info!("渲染器创建成功");
 
-            // 创建角色和相机
             let mut character = Character::new();
             character.skin_type = skin_type;
             let camera = Camera { yaw, pitch, scale };
 
-            // 设置角色姿势
             character.posture.head_yaw = head_yaw;
             character.posture.head_pitch = head_pitch;
             character.posture.left_arm_roll = left_arm_roll;
@@ -168,21 +322,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             character.posture.left_leg_pitch = left_leg_pitch;
             character.posture.right_leg_pitch = right_leg_pitch;
 
-            // 设置角色位置
             character.position = cgmath::Vector3::new(position_x, position_y, position_z);
-
-            // 设置角色旋轉
             character.rotation = cgmath::Vector3::new(rotation_x, rotation_y, rotation_z);
 
-            // 设置皮肤文件
             info!("正在加载皮肤文件: {}", texture);
-            character.load_skin_from_file(&texture, renderer.get_display())?;
+            character.skin = Some(renderer.load_texture(&texture)?);
             info!("皮肤文件加载成功");
 
-            // 渲染并保存图片
             info!("正在渲染图片...");
 
-            // 解析输出格式
             let output_format = match format.to_lowercase().as_str() {
                 "png" => eidolon::renderer::OutputFormat::Png,
                 "webp" => eidolon::renderer::OutputFormat::WebP,
@@ -192,7 +340,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            // 自动调整默认文件名后缀
             let mut filename = filename;
             if filename == "output.png" {
                 filename = match format.to_lowercase().as_str() {
@@ -202,8 +349,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
             }
 
-            renderer.render_to_image(&character, &camera, &filename, (width, height), output_format)?;
+            renderer.render_to_image(
+                &character,
+                &camera,
+                &filename,
+                (width, height),
+                output_format,
+            )?;
             info!("渲染完成！图片已保存到: {}", filename);
+
+            Ok(())
+        }
+        Command::Preview {
+            width,
+            height,
+            texture,
+            skin_type,
+            yaw,
+            pitch,
+            scale,
+            head_yaw,
+            head_pitch,
+            left_arm_roll,
+            left_arm_pitch,
+            right_arm_roll,
+            right_arm_pitch,
+            left_leg_pitch,
+            right_leg_pitch,
+            position_x,
+            position_y,
+            position_z,
+            rotation_x,
+            rotation_y,
+            rotation_z,
+        } => {
+            let mut character = Character::new();
+            character.skin_type = skin_type;
+
+            character.posture.head_yaw = head_yaw;
+            character.posture.head_pitch = head_pitch;
+            character.posture.left_arm_roll = left_arm_roll;
+            character.posture.left_arm_pitch = left_arm_pitch;
+            character.posture.right_arm_roll = right_arm_roll;
+            character.posture.right_arm_pitch = right_arm_pitch;
+            character.posture.left_leg_pitch = left_leg_pitch;
+            character.posture.right_leg_pitch = right_leg_pitch;
+
+            character.position = cgmath::Vector3::new(position_x, position_y, position_z);
+            character.rotation = cgmath::Vector3::new(rotation_x, rotation_y, rotation_z);
+
+            let camera = Camera { yaw, pitch, scale };
+
+            let event_loop = EventLoop::new()?;
+            let mut app = PreviewApp {
+                renderer: None,
+                window: None,
+                character,
+                camera,
+                texture_path: texture,
+                initial_size: PhysicalSize::new(width, height),
+            };
+            event_loop.run_app(&mut app)?;
 
             Ok(())
         }

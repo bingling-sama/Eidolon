@@ -3,27 +3,52 @@
 //! 这个模块负责加载和处理 Minecraft 角色的 3D 模型。
 //! 它将 OBJ 文件中的命名对象解析为独立的、可控制的身体部位。
 
-use glium::backend::glutin::headless::Headless;
-use glium::{implement_vertex, VertexBuffer};
+use log::info;
 use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
-use log::info;
+use wgpu::util::DeviceExt;
 
 /// 带纹理的顶点结构体
 ///
 /// 定义了每个顶点包含的数据：位置、法线和纹理坐标。
-#[derive(Copy, Clone)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TexturedVertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub texture: [f32; 2],
 }
 
-implement_vertex!(TexturedVertex, position, normal, texture);
+impl TexturedVertex {
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<TexturedVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
+        }
+    }
+}
 
 /// 代表模型的一个可渲染部分
 pub struct ModelPart {
-    pub vertices: VertexBuffer<TexturedVertex>,
+    pub vertex_buffer: wgpu::Buffer,
+    pub vertex_count: u32,
 }
 
 /// 代表一个逻辑身体部位，通常包含一个主模型和一个附加层
@@ -50,14 +75,14 @@ impl Model {
     ///
     /// # 参数
     ///
-    /// * `display` - OpenGL 显示上下文
+    /// * `device` - wgpu 设备
     /// * `path` - OBJ 文件路径
     ///
     /// # 返回
     ///
     /// 成功时返回 `Model` 实例，如果 OBJ 文件缺少必要的部件则返回错误。
     pub fn load_from_obj(
-        display: &Headless,
+        device: &wgpu::Device,
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         info!("Loading OBJ file: {}", path);
@@ -77,7 +102,6 @@ impl Model {
             let normals: Vec<_> = mesh.normals.chunks(3).collect();
             let texcoords: Vec<_> = mesh.texcoords.chunks(2).collect();
 
-            // 根据索引构建顶点数据
             for i in 0..mesh.indices.len() {
                 let pos_idx = mesh.indices[i] as usize;
                 let pos = [positions[pos_idx][0], positions[pos_idx][1], positions[pos_idx][2]];
@@ -85,7 +109,7 @@ impl Model {
                 let nml_idx = if !mesh.normal_indices.is_empty() {
                     mesh.normal_indices[i] as usize
                 } else {
-                    pos_idx // Fallback if no specific normal indices
+                    pos_idx
                 };
                 let nml = if nml_idx < normals.len() {
                     [normals[nml_idx][0], normals[nml_idx][1], normals[nml_idx][2]]
@@ -96,10 +120,10 @@ impl Model {
                 let tex_idx = if !mesh.texcoord_indices.is_empty() {
                     mesh.texcoord_indices[i] as usize
                 } else {
-                    pos_idx // Fallback
+                    pos_idx
                 };
                 let tex = if tex_idx < texcoords.len() {
-                    [texcoords[tex_idx][0], texcoords[tex_idx][1]]
+                    [texcoords[tex_idx][0], 1.0 - texcoords[tex_idx][1]]
                 } else {
                     [0.0, 0.0]
                 };
@@ -115,16 +139,20 @@ impl Model {
                 continue;
             }
 
-            let vertex_buffer = VertexBuffer::new(display, &vertices_data)?;
+            let vertex_count = vertices_data.len() as u32;
+            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("Vertex Buffer: {}", model.name)),
+                contents: bytemuck::cast_slice(&vertices_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
             let model_part = ModelPart {
-                vertices: vertex_buffer,
+                vertex_buffer,
+                vertex_count,
             };
             info!("Loaded part: {}", model.name);
             parts.insert(model.name, model_part);
         }
 
-        // 从 HashMap 中提取部件来构建 Model
-        // 我们需要一个辅助函数来避免所有权问题
         fn extract_part(
             parts: &mut HashMap<String, ModelPart>,
             name: &str,

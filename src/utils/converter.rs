@@ -275,11 +275,7 @@ mod tests {
 
     #[test]
     fn test_single2double_success() {
-        // 建立一個 64x32 單層皮膚（全白）
-        // let img = DynamicImage::ImageRgba8(
-        //     image::ImageBuffer::from_pixel(64, 32, Rgba([255, 255, 255, 255]))
-        // );
-        let img = image::open("/resources/SSSSSteven.png").unwrap();
+        let img = image::open("./resources/SSSSSteven.png").unwrap();
         let result = single2double(&img);
         assert!(result.is_ok());
         let out = result.unwrap();

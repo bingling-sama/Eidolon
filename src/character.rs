@@ -1,7 +1,6 @@
 use crate::texture::Texture;
-use clap::ValueEnum;
-use glium::backend::glutin::headless::Headless;
 use cgmath::Vector3;
+use clap::ValueEnum;
 
 /// Minecraft 皮肤类型
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -81,14 +80,5 @@ impl Character {
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
         }
-    }
-
-    pub fn load_skin_from_file(
-        &mut self,
-        path: &str,
-        display: &Headless,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.skin = Some(Texture::load_from_file(display, path)?);
-        Ok(())
     }
 }
