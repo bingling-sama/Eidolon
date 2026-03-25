@@ -46,6 +46,39 @@ impl DefaultPostures {
         left_leg_pitch: 90.0,
         right_leg_pitch: 90.0,
     };
+    /// Wave pose.
+    pub const WAVE: Posture = Posture {
+        head_yaw: 90.0,
+        head_pitch: 90.0,
+        left_arm_roll: -28.65,
+        left_arm_pitch: 180.0,
+        right_arm_roll: 0.0,
+        right_arm_pitch: 0.0,
+        left_leg_pitch: 90.0,
+        right_leg_pitch: 90.0,
+    };
+    /// Walking pose.
+    pub const WALKING: Posture = Posture {
+        head_yaw: 90.0,
+        head_pitch: 90.0,
+        left_arm_roll: 5.32,
+        left_arm_pitch: -28.65,
+        right_arm_roll: -5.32,
+        right_arm_pitch: 28.65,
+        left_leg_pitch: 90.0 + 28.65,
+        right_leg_pitch: 90.0 - 28.65,
+    };
+    /// Running pose.
+    pub const RUNNING: Posture = Posture {
+        head_yaw: 90.0,
+        head_pitch: 90.0,
+        left_arm_roll: 12.27,
+        left_arm_pitch: -85.94,
+        right_arm_roll: -12.27,
+        right_arm_pitch: 85.94,
+        left_leg_pitch: 90.0 + 74.48,
+        right_leg_pitch: 90.0 - 74.48,
+    };
 }
 
 /// Scene object: skin mesh, pose, and transform applied in uniform computation.

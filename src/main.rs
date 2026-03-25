@@ -4,7 +4,7 @@ use std::sync::Arc;
 use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
     camera::Camera,
-    character::{Character, DefaultPostures, SkinType},
+    character::{Character, DefaultPostures, Posture, SkinType},
     renderer::{OutputFormat, Renderer},
     utils::converter,
 };
@@ -37,8 +37,29 @@ impl From<SkinTypeCli> for SkinType {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum PostureCli {
+    Stand,
+    Wave,
+    Walking,
+    Running,
+}
+
+impl From<PostureCli> for Posture {
+    fn from(value: PostureCli) -> Self {
+        match value {
+            PostureCli::Stand => DefaultPostures::STAND,
+            PostureCli::Wave => DefaultPostures::WAVE,
+            PostureCli::Walking => DefaultPostures::WALKING,
+            PostureCli::Running => DefaultPostures::RUNNING,
+        }
+    }
+}
+
 fn parse_positive_scale(s: &str) -> Result<f32, String> {
-    let value: f32 = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
+    let value: f32 = s
+        .parse()
+        .map_err(|_| format!("'{}' is not a valid number", s))?;
     if value > 0.0 {
         Ok(value)
     } else {
@@ -78,30 +99,34 @@ struct SceneArgs {
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     scale: f32,
 
-    /// Head yaw in degrees (`Posture::head_yaw`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.head_yaw)]
-    head_yaw: f32,
-    /// Head pitch in degrees (`Posture::head_pitch`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.head_pitch)]
-    head_pitch: f32,
-    /// Left arm roll in degrees (`Posture::left_arm_roll`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.left_arm_roll)]
-    left_arm_roll: f32,
-    /// Left arm pitch in degrees (`Posture::left_arm_pitch`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.left_arm_pitch)]
-    left_arm_pitch: f32,
-    /// Right arm roll in degrees (`Posture::right_arm_roll`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.right_arm_roll)]
-    right_arm_roll: f32,
-    /// Right arm pitch in degrees (`Posture::right_arm_pitch`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.right_arm_pitch)]
-    right_arm_pitch: f32,
-    /// Left leg pitch in degrees (`Posture::left_leg_pitch`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.left_leg_pitch)]
-    left_leg_pitch: f32,
-    /// Right leg pitch in degrees (`Posture::right_leg_pitch`).
-    #[arg(long, default_value_t = DefaultPostures::STAND.right_leg_pitch)]
-    right_leg_pitch: f32,
+    /// Posture: `stand` (default).
+    #[arg(long, value_enum, default_value_t = PostureCli::Stand)]
+    posture: PostureCli,
+
+    /// Override head yaw in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    head_yaw: Option<f32>,
+    /// Override head pitch in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    head_pitch: Option<f32>,
+    /// Override left arm roll in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    left_arm_roll: Option<f32>,
+    /// Override left arm pitch in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    left_arm_pitch: Option<f32>,
+    /// Override right arm roll in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    right_arm_roll: Option<f32>,
+    /// Override right arm pitch in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    right_arm_pitch: Option<f32>,
+    /// Override left leg pitch in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    left_leg_pitch: Option<f32>,
+    /// Override right leg pitch in degrees; if omitted, uses the `--posture` preset.
+    #[arg(long)]
+    right_leg_pitch: Option<f32>,
 
     /// Character world position X.
     #[arg(long, default_value_t = 0.0)]
@@ -127,14 +152,17 @@ struct SceneArgs {
 fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     let mut character = Character::new();
     character.skin_type = scene.skin_type.into();
-    character.posture.head_yaw = scene.head_yaw;
-    character.posture.head_pitch = scene.head_pitch;
-    character.posture.left_arm_roll = scene.left_arm_roll;
-    character.posture.left_arm_pitch = scene.left_arm_pitch;
-    character.posture.right_arm_roll = scene.right_arm_roll;
-    character.posture.right_arm_pitch = scene.right_arm_pitch;
-    character.posture.left_leg_pitch = scene.left_leg_pitch;
-    character.posture.right_leg_pitch = scene.right_leg_pitch;
+    let base: Posture = scene.posture.into();
+    character.posture = Posture {
+        head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
+        head_pitch: scene.head_pitch.unwrap_or(base.head_pitch),
+        left_arm_roll: scene.left_arm_roll.unwrap_or(base.left_arm_roll),
+        left_arm_pitch: scene.left_arm_pitch.unwrap_or(base.left_arm_pitch),
+        right_arm_roll: scene.right_arm_roll.unwrap_or(base.right_arm_roll),
+        right_arm_pitch: scene.right_arm_pitch.unwrap_or(base.right_arm_pitch),
+        left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
+        right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
+    };
     character.position = cgmath::Vector3::new(scene.position_x, scene.position_y, scene.position_z);
     character.rotation = cgmath::Vector3::new(scene.rotation_x, scene.rotation_y, scene.rotation_z);
 
