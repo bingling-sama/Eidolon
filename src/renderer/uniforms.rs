@@ -1,3 +1,8 @@
+//! Per-body-part [`Uniforms`] for the six-part draw loop (order matches `encode_render_pass`).
+//!
+//! `Camera::scale` is folded into the base model matrix (uniform scale). The body entry uses a small
+//! positive `offset` so the outer layer mesh clears the inner mesh along normals.
+
 use cgmath::{Matrix4, Rad, Vector3};
 
 use crate::camera::Camera;
@@ -92,7 +97,7 @@ pub(crate) fn compute_body_part_uniforms(
         * left_leg_rotation
         * Matrix4::from_translation(-left_leg_pivot);
 
-    // Body (no additional rotation)
+    // Torso: no extra joint rotation; layer pass relies on `offset` for separation.
     let body_transform = base_model_matrix;
 
     [

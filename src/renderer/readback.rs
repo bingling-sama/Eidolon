@@ -1,6 +1,6 @@
 use image::{ImageBuffer, Rgba};
 
-/// 创建用于读回像素的可映射 buffer，并返回 `(buffer, padded_bytes_per_row)`。
+/// Allocates a mappable buffer sized for row-copy alignment; returns `(buffer, padded_bytes_per_row)`.
 pub(crate) fn create_output_buffer(
     device: &wgpu::Device,
     width: u32,

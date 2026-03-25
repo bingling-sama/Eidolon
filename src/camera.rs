@@ -2,11 +2,11 @@ use cgmath::{perspective, Deg, Matrix4, Point3, Vector3};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
-    /// 摄像机视角绕角色旋转角度（XZ 平面绕 Y 轴旋转），0~360，0 是正前，90 是正右，180 是正后，270 是正左
+    /// Orbit yaw around the look-at target (degrees). Used in [`Camera::get_view_matrix`].
     pub yaw: f32,
-    /// 摄像机视角绕角色俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是脚下，180 是头顶
+    /// Orbit pitch (degrees). [`Camera::get_view_matrix`] uses `(pitch - 90°)` as polar angle from horizontal.
     pub pitch: f32,
-    /// 缩放比例，>0
+    /// Positive value moves the eye closer (smaller orbit radius: `4.0 / scale`).
     pub scale: f32,
 }
 
@@ -25,6 +25,7 @@ impl Camera {
         Self::default()
     }
 
+    /// Computes the view matrix from camera parameters.
     pub fn get_view_matrix(&self) -> [[f32; 4]; 4] {
         let distance = 4.0 / self.scale;
         let yaw_rad = self.yaw.to_radians();
@@ -41,6 +42,7 @@ impl Camera {
         Matrix4::look_at_rh(eye, center, up).into()
     }
 
+    /// Computes the projection matrix from camera parameters.
     pub fn get_projection_matrix(&self, width: u32, height: u32) -> [[f32; 4]; 4] {
         let aspect_ratio = width as f32 / height as f32;
         let fovy = Deg(60.0);

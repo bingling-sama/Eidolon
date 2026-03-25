@@ -1,11 +1,9 @@
 use image::ImageFormat;
 
-/// 输出图片格式
+/// Image format for [`crate::renderer::Renderer::render_to_image`].
 #[derive(Debug, Clone, Copy)]
 pub enum OutputFormat {
-    /// PNG 格式
     Png,
-    /// WebP 格式
     WebP,
 }
 

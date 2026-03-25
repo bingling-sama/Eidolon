@@ -14,7 +14,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
-/// Minecraft皮肤工具
+/// Minecraft skin renderer and skin-atlas utilities.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -48,78 +48,78 @@ fn parse_positive_scale(s: &str) -> Result<f32, String> {
 
 #[derive(Parser, Debug)]
 struct ViewportArgs {
-    /// 图片或窗口宽度
+    /// Output image or window width in pixels.
     #[arg(long, default_value_t = 800, value_parser = clap::value_parser!(u32).range(1..))]
     width: u32,
-    /// 图片或窗口高度
+    /// Output image or window height in pixels.
     #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u32).range(1..))]
     height: u32,
 }
 
 #[derive(Parser, Debug)]
 struct SceneArgs {
-    /// PNG材质文件路径
+    /// Path to the skin PNG (decoded as RGBA; single-layer skins are expanded when loaded).
     #[arg(long, default_value = "resources/bingling_sama.png")]
     texture: String,
 
-    /// 皮肤类型，`classic` 或 `slim`
+    /// Arm geometry: `classic` (wide) or `slim`.
     #[arg(long, value_enum)]
     skin_type: SkinTypeCli,
 
-    /// 摄像机视角绕角色旋转角度（XZ 平面绕 Y 轴旋转），0~360，0 是正前，90 是正右，180 是正后，270 是正左
+    /// Camera orbit yaw in degrees (`Camera::yaw`).
     #[arg(long, default_value_t = 180.0)]
     yaw: f32,
 
-    /// 摄像机视角绕角色俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是脚下，180 是头顶
+    /// Camera orbit pitch in degrees (`Camera::pitch`).
     #[arg(long, default_value_t = 90.0)]
     pitch: f32,
 
-    /// 缩放比例，>0
+    /// Camera distance scale; must be > 0 (smaller orbit radius when larger).
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     scale: f32,
 
-    /// 角色头部摇头角度（XZ 平面绕 Y 轴旋转），0~180，90 是正前，0 是正左，180 是正右
+    /// Head yaw in degrees (`Posture::head_yaw`).
     #[arg(long, default_value_t = DefaultPostures::STAND.head_yaw)]
     head_yaw: f32,
-    /// 角色头部俯仰角度（YZ 平面绕 X 轴旋转），0~180，90 是正前，0 是垂直向下看，180 是垂直向上看
+    /// Head pitch in degrees (`Posture::head_pitch`).
     #[arg(long, default_value_t = DefaultPostures::STAND.head_pitch)]
     head_pitch: f32,
-    /// 左手侧举角度（XY 平面绕 Z 轴旋转），0~180，90 是向右侧平举，0 是垂直向下，180 是垂直向上抬起
+    /// Left arm roll in degrees (`Posture::left_arm_roll`).
     #[arg(long, default_value_t = DefaultPostures::STAND.left_arm_roll)]
     left_arm_roll: f32,
-    /// 左手摆臂角度（YZ 平面绕 X 轴旋转），0~360，0 是垂直向下，90 是水平前摆，180 是垂直向上，270 是水平向后
+    /// Left arm pitch in degrees (`Posture::left_arm_pitch`).
     #[arg(long, default_value_t = DefaultPostures::STAND.left_arm_pitch)]
     left_arm_pitch: f32,
-    /// 右手侧举角度（XY 平面绕 Z 轴旋转），0~180，90 是向右侧平举，0 是垂直向下，180 是垂直向上抬起
+    /// Right arm roll in degrees (`Posture::right_arm_roll`).
     #[arg(long, default_value_t = DefaultPostures::STAND.right_arm_roll)]
     right_arm_roll: f32,
-    /// 右手摆臂角度（YZ 平面绕 X 轴旋转），0~360，0 是垂直向下，90 是水平前摆，180 是垂直向上，270 是水平向后
+    /// Right arm pitch in degrees (`Posture::right_arm_pitch`).
     #[arg(long, default_value_t = DefaultPostures::STAND.right_arm_pitch)]
     right_arm_pitch: f32,
-    /// 左腿抬腿角度（YZ 平面绕 X 轴旋转），0~180，90 是垂直于地面，0 是水平前摆，180 是水平后摆
+    /// Left leg pitch in degrees (`Posture::left_leg_pitch`).
     #[arg(long, default_value_t = DefaultPostures::STAND.left_leg_pitch)]
     left_leg_pitch: f32,
-    /// 右腿抬腿角度（YZ 平面绕 X 轴旋转），0~180，90 是垂直于地面，0 是水平前摆，180 是水平后摆
+    /// Right leg pitch in degrees (`Posture::right_leg_pitch`).
     #[arg(long, default_value_t = DefaultPostures::STAND.right_leg_pitch)]
     right_leg_pitch: f32,
 
-    /// 角色位置 X 坐标
+    /// Character world position X.
     #[arg(long, default_value_t = 0.0)]
     position_x: f32,
-    /// 角色位置 Y 坐标
+    /// Character world position Y.
     #[arg(long, default_value_t = 0.0)]
     position_y: f32,
-    /// 角色位置 Z 坐标
+    /// Character world position Z.
     #[arg(long, default_value_t = 0.0)]
     position_z: f32,
 
-    /// 角色旋轉 X（度）
+    /// Character rotation about X in degrees (Euler order X → Y → Z in uniforms).
     #[arg(long, default_value_t = 0.0)]
     rotation_x: f32,
-    /// 角色旋轉 Y（度）
+    /// Character rotation about Y in degrees.
     #[arg(long, default_value_t = 0.0)]
     rotation_y: f32,
-    /// 角色旋轉 Z（度）
+    /// Character rotation about Z in degrees.
     #[arg(long, default_value_t = 0.0)]
     rotation_z: f32,
 }
@@ -148,13 +148,13 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// 渲染皮肤为3D图像
+    /// Render the skin to an image file (headless).
     Render {
-        /// 输出图片文件名
+        /// Output file path.
         #[arg(long, default_value = "output.png")]
         filename: String,
 
-        /// 输出图片格式，png 或 webp，默认 png
+        /// Image format: `png` or `webp`.
         #[arg(long, default_value = "png")]
         format: String,
 
@@ -164,7 +164,7 @@ enum Command {
         #[command(flatten)]
         scene: SceneArgs,
     },
-    /// 在窗口中预览皮肤
+    /// Open a live preview window.
     Preview {
         #[command(flatten)]
         viewport: ViewportArgs,
@@ -172,11 +172,11 @@ enum Command {
         #[command(flatten)]
         scene: SceneArgs,
     },
-    /// 将单层皮肤转换为双层皮肤
+    /// Convert a legacy single-layer skin atlas to a square double-layer atlas.
     Convert {
-        /// 输入的单层皮肤图片文件路径
+        /// Input PNG (width must be twice the height).
         input: PathBuf,
-        /// 转换后的双层皮肤图片输出路径
+        /// Output PNG path.
         #[arg(default_value = "output.png")]
         output: PathBuf,
     },
@@ -268,29 +268,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             viewport,
             scene,
         } => {
-            info!("Minecraft皮肤渲染器");
-            info!("文件名: {}", filename);
-            info!("尺寸: {}x{}", viewport.width, viewport.height);
-            info!("材质文件: {}", scene.texture);
+            info!("Minecraft skin renderer");
+            info!("Output file: {}", filename);
+            info!("Size: {}x{}", viewport.width, viewport.height);
+            info!("Skin: {}", scene.texture);
 
-            info!("正在创建渲染器...");
+            info!("Creating renderer...");
             let renderer = Renderer::new();
-            info!("渲染器创建成功");
+            info!("Renderer ready");
 
             let (mut character, camera) = character_and_camera_from_scene(&scene);
 
-            info!("正在加载皮肤文件: {}", scene.texture);
+            info!("Loading skin: {}", scene.texture);
             character.skin = Some(renderer.load_texture(&scene.texture)?);
-            info!("皮肤文件加载成功");
+            info!("Skin loaded");
 
-            info!("正在渲染图片...");
+            info!("Rendering...");
 
             let output_format = match format.to_lowercase().as_str() {
                 "png" => OutputFormat::Png,
                 "webp" => OutputFormat::WebP,
                 other => {
-                    error!("不支持的输出格式: {}，仅支持 png 或 webp", other);
-                    return Err(Box::from("不支持的输出格式"));
+                    error!("Unsupported output format: {} (use png or webp)", other);
+                    return Err(Box::from("unsupported output format"));
                 }
             };
 
@@ -310,7 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (viewport.width, viewport.height),
                 output_format,
             )?;
-            info!("渲染完成！图片已保存到: {}", filename);
+            info!("Done. Saved: {}", filename);
 
             Ok(())
         }
@@ -336,14 +336,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match converter::single2double(&img) {
                 Ok(result) => {
-                    info!("转换成功！双层皮肤已保存到: {:?}", output);
+                    info!("Conversion OK. Double-layer skin saved to: {:?}", output);
                     result
                         .save(output)
                         .map_err(|e| format!("Failed to save output image: {}", e))?;
                     Ok(())
                 }
                 Err(e) => {
-                    error!("转换失败: {}", e);
+                    error!("Conversion failed: {}", e);
                     Err(Box::new(std::io::Error::other(e)))
                 }
             }

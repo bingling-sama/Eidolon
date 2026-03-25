@@ -1,13 +1,10 @@
 /*!
-Minecraft 皮肤渲染器库
+Eidolon: Minecraft skin rendering library.
 
-这个库提供了一个完整的 Minecraft 皮肤渲染解决方案，支持：
-- 加载和渲染 Minecraft 皮肤
-- 自定义姿势和视角
-- 多种输出格式
-- 离屏渲染
-
-# 示例
+Provides:
+- Loading and rendering Minecraft skins (PNG; single-layer skins are expanded to double-layer when needed)
+- Configurable character posture and camera
+- Headless image output (PNG / WebP) and windowed preview
 */
 
 pub mod utils;

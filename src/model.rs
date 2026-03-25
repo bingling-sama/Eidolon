@@ -1,16 +1,11 @@
-//! 3D 模型模块
-//!
-//! 这个模块负责加载和处理 Minecraft 角色的 3D 模型。
-//! 它将 OBJ 文件中的命名对象解析为独立的、可控制的身体部位。
+//! Loads the rigged Minecraft player mesh from OBJ assets.
 
 use log::info;
 use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
 use wgpu::util::DeviceExt;
 
-/// 带纹理的顶点结构体
-///
-/// 定义了每个顶点包含的数据：位置、法线和纹理坐标。
+/// Vertex layout: position, normal, UV (matches the skin shader `VertexInput`).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TexturedVertex {
@@ -45,19 +40,19 @@ impl TexturedVertex {
     }
 }
 
-/// 代表模型的一个可渲染部分
+/// Indexed triangle mesh uploaded as a single vertex buffer.
 pub struct ModelPart {
     pub vertex_buffer: wgpu::Buffer,
     pub vertex_count: u32,
 }
 
-/// 代表一个逻辑身体部位，通常包含一个主模型和一个附加层
+/// One body region: opaque `main` mesh plus `layer` overlay (hat/body/armor layer).
 pub struct BodyPart {
     pub main: ModelPart,
     pub layer: ModelPart,
 }
 
-/// 包含所有命名身体部件的角色模型
+/// Full player model: six body parts, each with main + layer geometry.
 pub struct Model {
     pub head: BodyPart,
     pub body: BodyPart,
@@ -68,19 +63,11 @@ pub struct Model {
 }
 
 impl Model {
-    /// 从 OBJ 文件加载 3D 模型
+    /// Load an OBJ where each object name maps to a fixed body part (see `extract_part` calls).
     ///
-    /// 加载指定路径的 OBJ 文件，并将其中的命名对象解析到
-    /// `Model` 结构对应的身体部位中。
-    ///
-    /// # 参数
-    ///
-    /// * `device` - wgpu 设备
-    /// * `path` - OBJ 文件路径
-    ///
-    /// # 返回
-    ///
-    /// 成功时返回 `Model` 实例，如果 OBJ 文件缺少必要的部件则返回错误。
+    /// Required object names: `Head`, `Hat Layer`, `Body`, `Body Layer`, `Right Arm`, `Right Arm Layer`,
+    /// `Left Arm`, `Left Arm Layer`, `Right Leg`, `Right Leg Layer`, `Left Leg`, `Left Leg Layer`.
+    /// Texture V flips from OBJ space to OpenGL-style UVs (`1.0 - v`).
     pub fn load_from_obj(
         device: &wgpu::Device,
         path: &str,

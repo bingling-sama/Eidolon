@@ -1,20 +1,20 @@
 use image::{imageops, DynamicImage, GenericImageView, ImageBuffer};
 
-// 64px 右腿 OFIB (Outside, Front, Inside, Back) - source regions
+// 64×32 right leg: source rects on the upper half (OFIB face order) in pixel coords (x0, y0, x1, y1).
 const RIGHT_LEG_OUTSIDE_RANGE: (u32, u32, u32, u32) = (0, 20, 4, 32);
 const RIGHT_LEG_TOP_FRONT_RANGE: (u32, u32, u32, u32) = (4, 16, 8, 32);
 const RIGHT_LEG_BUTTOM_RANGE: (u32, u32, u32, u32) = (8, 16, 12, 20);
 const RIGHT_LEG_INSIDE_RANGE: (u32, u32, u32, u32) = (8, 20, 12, 32);
 const RIGHT_LEG_BACK_RANGE: (u32, u32, u32, u32) = (12, 20, 16, 32);
 
-// 64px 左腿 IFOB (Inside, Front, Outside, Back) - destination regions
+// 64×64 double-layer layout: left leg destination rects on the lower half (mirrored layout).
 const LEFT_LEG_OUTSIDE_RANGE: (u32, u32, u32, u32) = (24, 52, 28, 64);
 const LEFT_LEG_TOP_FRONT_RANGE: (u32, u32, u32, u32) = (20, 48, 24, 64);
 const LEFT_LEG_BUTTOM_RANGE: (u32, u32, u32, u32) = (24, 48, 28, 52);
 const LEFT_LEG_INSIDE_RANGE: (u32, u32, u32, u32) = (16, 52, 20, 64);
 const LEFT_LEG_BACK_RANGE: (u32, u32, u32, u32) = (28, 52, 32, 64);
 
-// 64px 右臂 OFIB - source regions
+// Right arm source rects on the upper half.
 const RIGHT_ARM_OUTSIDE_RANGE: (u32, u32, u32, u32) = (40, 20, 44, 32);
 const RIGHT_ARM_TOP_RANGE: (u32, u32, u32, u32) = (44, 16, 48, 20);
 const RIGHT_ARM_FRONT_RANGE: (u32, u32, u32, u32) = (44, 20, 48, 32);
@@ -22,7 +22,7 @@ const RIGHT_ARM_BUTTOM_RANGE: (u32, u32, u32, u32) = (48, 16, 52, 20);
 const RIGHT_ARM_INSIDE_RANGE: (u32, u32, u32, u32) = (48, 20, 52, 32);
 const RIGHT_ARM_BACK_RANGE: (u32, u32, u32, u32) = (52, 20, 56, 32);
 
-// 64px 左臂 IFOB - destination regions
+// Left arm destination rects on the lower half.
 const LEFT_ARM_INSIDE_RANGE: (u32, u32, u32, u32) = (32, 52, 36, 64);
 const LEFT_ARM_TOP_RANGE: (u32, u32, u32, u32) = (36, 48, 40, 52);
 const LEFT_ARM_FRONT_RANGE: (u32, u32, u32, u32) = (36, 52, 40, 64);
@@ -38,7 +38,8 @@ fn scale_rect(rect: (u32, u32, u32, u32), hd_ratio: f32) -> (u32, u32, u32, u32)
         (rect.3 as f32 * hd_ratio) as u32,
     )
 }
-/// 将单层皮肤的DynamicImage转换为双层DynamicImage
+/// Expand a legacy single-layer skin (`width == 2 * height`) to a square double-layer atlas by
+/// copying the top half and synthesizing mirrored left limbs in the bottom half.
 pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, String> {
     // Check if the image is single-layer (width is twice the height)
     if img.width() != img.height() * 2 {
@@ -279,10 +280,10 @@ mod tests {
         let result = single2double(&img);
         assert!(result.is_ok());
         let out = result.unwrap();
-        // 輸出應為 64x64
+        // Output atlas is 64×64 for a 64×32 input.
         assert_eq!(out.width(), 64);
         assert_eq!(out.height(), 64);
-        // 上半部應與原圖一致
+        // Top half must match the original strip.
         for y in 0..32 {
             for x in 0..64 {
                 assert_eq!(out.get_pixel(x, y), img.get_pixel(x, y));
@@ -292,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_single2double_invalid_size() {
-        // 建立一個 64x31 非法尺寸
+        // Invalid dimensions: not 2:1 single-layer layout.
         let img =
             DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 31, Rgba([0, 0, 0, 255])));
         let result = single2double(&img);

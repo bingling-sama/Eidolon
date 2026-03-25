@@ -1,22 +1,18 @@
-//! 着色器常量模块
-//!
-//! 这个模块包含了用于渲染 Minecraft 皮肤的 WGSL 着色器代码。
-//! 着色器支持纹理映射、光照计算和透明度处理。
+//! Embedded WGSL for the Minecraft skin mesh.
 
-/// WGSL 着色器
+/// Skin mesh shader (vertex + fragment).
 ///
-/// 包含顶点着色器和片段着色器，处理：
-/// - 顶点变换（模型、视图、投影矩阵）
-/// - 法线偏移（用于外层皮肤膨胀）
-/// - 纹理采样（最近邻过滤）
-/// - 双光源漫反射光照
-/// - 透明像素丢弃
+/// Vertex stage: applies `uniforms.perspective`, `view`, `model`, and displaces vertices along
+/// the normal by `uniforms.offset` (small positive values push the overlay layer outward).
 ///
-/// # Bind Groups
+/// Fragment stage: nearest-neighbor sampling via `s_skin`, discards near-transparent texels,
+/// then two directional lights plus ambient on the shaded normal.
 ///
-/// - Group 0, Binding 0: Uniforms (perspective, view, model, offset)
-/// - Group 1, Binding 0: 皮肤纹理 (texture_2d)
-/// - Group 1, Binding 1: 纹理采样器 (sampler)
+/// # Bind groups
+///
+/// - Group 0, binding 0: uniform buffer (`Uniforms`: projection, view, model, offset).
+/// - Group 1, binding 0: skin `texture_2d`.
+/// - Group 1, binding 1: sampler (configured as nearest in the render pipeline).
 pub const SHADER: &str = r#"
 struct Uniforms {
     perspective: mat4x4<f32>,

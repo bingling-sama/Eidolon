@@ -1,4 +1,4 @@
-//! 离屏与窗口渲染：wgpu 管线、姿势矩阵与读回。
+//! WGPU renderer: headless RGBA readback and windowed surface preview, shared skin pipeline.
 
 mod output;
 mod pipeline;
@@ -40,7 +40,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// 创建新的 Headless 渲染器实例
+    /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -69,7 +69,7 @@ impl Renderer {
         Self::init_with_device(device, queue, None)
     }
 
-    /// 创建新的 Windowed 渲染器实例
+    /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
     pub fn new_windowed(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -249,7 +249,7 @@ impl Renderer {
         }
     }
 
-    /// 加载皮肤纹理
+    /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
     pub fn load_texture(&self, path: &str) -> Result<Texture, Box<dyn std::error::Error>> {
         Texture::load_from_file(
             &self.device,
@@ -369,7 +369,7 @@ impl Renderer {
         }
     }
 
-    /// 渲染角色到图像缓冲区（Headless）
+    /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (blocking map readback).
     pub fn render(
         &self,
         character: &Character,
@@ -432,7 +432,7 @@ impl Renderer {
         )
     }
 
-    /// 渲染角色到窗口 Surface（Windowed）
+    /// Present one frame to the window surface (expects `new_windowed`).
     pub fn render_frame(
         &self,
         character: &Character,
@@ -470,7 +470,7 @@ impl Renderer {
         Ok(())
     }
 
-    /// 调整窗口大小时重新配置 Surface
+    /// Update surface extent after a resize; no-op if not windowed or size is zero.
     pub fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
@@ -482,7 +482,7 @@ impl Renderer {
         }
     }
 
-    /// 渲染角色并保存为图片文件
+    /// Calls [`Renderer::render`], then saves using [`OutputFormat`].
     pub fn render_to_image(
         &self,
         character: &Character,

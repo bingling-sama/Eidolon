@@ -1,7 +1,8 @@
-//! 纹理模块
+//! Skin texture loading for GPU rendering.
 //!
-//! 这个模块负责加载和处理 Minecraft 皮肤纹理。
-//! 支持从 PNG 文件加载纹理，并创建 wgpu 纹理对象。
+//! Loads a PNG from disk, uploads RGBA8 data to a `wgpu` texture, and builds a bind group.
+//! If the image has single-layer layout (width = 2 × height), it is converted to a
+//! double-layer skin via [`crate::utils::converter::single2double`] before upload.
 
 use crate::utils::converter::single2double;
 use image::{DynamicImage, GenericImageView, ImageFormat};
@@ -9,10 +10,7 @@ use log::info;
 use std::fs::File;
 use std::io::BufReader;
 
-/// 纹理结构体
-///
-/// 封装了 wgpu 纹理对象及其视图和绑定组，提供了纹理加载和管理功能。
-/// 支持从文件加载 PNG 格式的纹理。
+/// GPU skin texture: [`wgpu::Texture`], view, and bind group for the skin shader.
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -20,18 +18,8 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// 从文件加载纹理
-    ///
-    /// 从指定路径加载 PNG 格式的纹理文件，创建 wgpu 纹理对象。
-    /// 支持 RGBA 格式的图像，自动处理图像格式转换。
-    ///
-    /// # 参数
-    ///
-    /// * `device` - wgpu 设备
-    /// * `queue` - wgpu 命令队列
-    /// * `bind_group_layout` - 纹理绑定组布局
-    /// * `sampler` - 纹理采样器
-    /// * `path` - 纹理文件路径
+    /// Load a skin from a PNG file path, decode as RGBA, optionally convert single-layer skins,
+    /// then create the GPU texture and bind group.
     pub fn load_from_file(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
