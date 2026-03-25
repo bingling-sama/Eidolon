@@ -39,14 +39,14 @@ pub struct DefaultPostures;
 impl DefaultPostures {
     /// 站立姿势 - 所有角度为 0
     pub const STAND: Posture = Posture {
-        head_yaw: 0.0,
-        head_pitch: 0.0,
+        head_yaw: 90.0,
+        head_pitch: 90.0,
         left_arm_roll: 0.0,
         left_arm_pitch: 0.0,
         right_arm_roll: 0.0,
         right_arm_pitch: 0.0,
-        left_leg_pitch: 0.0,
-        right_leg_pitch: 0.0,
+        left_leg_pitch: 90.0,
+        right_leg_pitch: 90.0,
     };
 }
 
