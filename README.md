@@ -2,140 +2,85 @@
 
 [![Language](https://img.shields.io/badge/language-Rust-orange.svg)](https://www.rust-lang.org/)
 
-Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model of a player skin and save it as a PNG image, or preview it in a window.
+Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model of a player skin to an image, or preview it in a window.
 
 ## Features
 
 - Load and render Minecraft player models
 - Texture mapping support
 - 3D rendering with wgpu (Vulkan / Metal / DX12)
-- Save rendering result as PNG or WebP image
+- Save rendering result as PNG or WebP
 - Configurable camera, poses, and output size
-- Headless off-screen rendering (no window system required)
-- Windowed preview mode with real-time rendering
+- Headless off-screen rendering and windowed preview
 - Cross-platform: Windows, macOS, Linux
 
-## Prerequisites
+## Documentation
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable recommended)
-- A GPU with Vulkan, Metal, or DX12 support (most modern GPUs)
-- No additional system dependencies required
+Full documentation lives in `docs/`.
 
-## Build and Run
+## Quick Start
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/bingling-sama/eidolon.git
-    cd eidolon
-    ```
+### Prerequisites
 
-2. Run with CLI subcommands:
+- Rust (latest stable recommended)
+- A GPU with Vulkan, Metal, or DX12 support
+- Or an avaliable version of libOSMesa installed
 
-### Render 3D Skin Image
-
-Render a Minecraft skin as a 3D image (headless, no window needed).
+### Build
 
 ```bash
-cargo run -- render [OPTIONS]
+cargo build
 ```
 
-**Options:**
-- `--filename <FILENAME>`: Output image filename (default: `output.png`)
-- `--width <WIDTH>`: Output image width (default: `800`)
-- `--height <HEIGHT>`: Output image height (default: `600`)
-- `--skin-type <SkinType>`: Skin type (`classic` or `slim`), required
-- `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
-- More options see `cargo run -- render --help`
-
-**Example:**
-```bash
-cargo run -- render --filename my_skin.png --texture resources/bingling_sama.png --skin-type classic --width 1024 --height 768 --yaw 180 --pitch 90 --scale 1.2
-```
-
-### Preview Skin in Window
-
-Open a window to preview the skin rendering in real-time.
+### Render an Image
 
 ```bash
-cargo run -- preview [OPTIONS]
+cargo run -- render --skin-type classic
 ```
 
-**Options:**
-- `--width <WIDTH>`: Window width (default: `800`)
-- `--height <HEIGHT>`: Window height (default: `600`)
-- `--skin-type <SkinType>`: Skin type (`classic` or `slim`), required
-- `--texture <TEXTURE>`: PNG skin file path (default: `resources/bingling_sama.png`)
-- Camera, pose, and position options are the same as the `render` command
-
-**Example:**
-```bash
-cargo run -- preview --texture resources/bingling_sama.png --skin-type classic --yaw 210 --pitch 90
-```
-
-### Convert Single-layer Skin to Double-layer
-
-Convert a classic single-layer Minecraft skin to double-layer format.
+### Preview in a Window
 
 ```bash
-cargo run -- convert <INPUT> <OUTPUT>
+cargo run -- preview --skin-type classic
 ```
-- `<INPUT>`: Path to the single-layer skin PNG file
-- `<OUTPUT>`: Path to save the converted double-layer PNG file
 
-**Example:**
-```bash
-cargo run -- convert old_skin.png new_skin.png
-```
+More CLI options are documented in `docs/cli.md`.
 
 ## Library Usage
 
-Eidolon can also be used as a Rust library for Minecraft skin rendering and image generation.
-
-### Example
+Eidolon can be used as a Rust library. Minimal example:
 
 ```rust
-use eidolon::{renderer::Renderer, character::Character, camera::Camera};
+use eidolon::{camera::Camera, character::Character, renderer::{OutputFormat, Renderer}};
 
-let renderer = Renderer::new();
-let mut character = Character::new();
-character.skin = Some(renderer.load_texture("path/to/skin.png").unwrap());
-let camera = Camera::new();
-renderer.render_to_image(
-    &character,
-    &camera,
-    "output.png",
-    (800, 600),
-    eidolon::renderer::OutputFormat::Png,
-).unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = Renderer::new();
+    let mut character = Character::new();
+    character.skin = Some(renderer.load_texture("resources/bingling_sama.png")?);
+
+    let camera = Camera::new();
+    renderer.render_to_image(
+        &character,
+        &camera,
+        "output.png",
+        (800, 600),
+        OutputFormat::Png,
+    )?;
+
+    Ok(())
+}
 ```
 
-### Main Components
-
-- `Renderer`: Handles the rendering process and output. Supports both headless and windowed modes.
-- `Character`: Represents the Minecraft player model and skin.
-- `Camera`: Controls the viewpoint, yaw, pitch, and scale.
-
-See the source code and module docs for advanced usage, such as custom poses, camera settings, and texture loading.
-
-## Dependencies
-
-This project uses the following main crates:
-
-- `wgpu`: For cross-platform GPU rendering (Vulkan, Metal, DX12).
-- `winit`: For window creation (preview mode).
-- `image`: For image processing.
-- `cgmath`: For 3D math.
-- `tobj`: For loading `.obj` files.
-- `clap`: For command-line argument parsing.
+More details are in `docs/library.md`.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue.
+Contributions are welcome. See `docs/contributing.md`.
 
-## Thanks
+## License
 
-- Thanks to [@tnqzh123](https://github.com/tnqzh123) for project feature design and some technical support.
-- Thanks to [@beanflame](https://github.com/beanflame) for opengl technical support.
-- Thanks to [@sunjunnan79](https://github.com/sunjunnan79) for deleting `.DS_Store`. (Seriously)
-- Thanks to [Blockbench](https://www.blockbench.net/) for providing the player model.
-- Thanks to players who provided skins for testing.
+See `LICENSE`.
+
+## Credits
+
+See `docs/credits.md` and `docs/resources.md`.
