@@ -9,6 +9,7 @@ use image::{DynamicImage, GenericImageView, ImageFormat};
 use log::info;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 
 /// GPU skin texture: [`wgpu::Texture`], view, and bind group for the skin shader.
 pub struct Texture {
@@ -20,6 +21,9 @@ pub struct Texture {
 impl Texture {
     /// Load a skin from a PNG file path, decode as RGBA, optionally convert single-layer skins,
     /// then create the GPU texture and bind group.
+    ///
+    /// The path is canonicalized before use to resolve symlinks and `..` components.
+    /// Returns an error if the path contains null bytes or cannot be resolved.
     pub fn load_from_file(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -28,7 +32,13 @@ impl Texture {
         path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         info!("Loading texture: {}", path);
-        let file = File::open(path)?;
+        if path.contains('\0') {
+            return Err("Texture path contains null bytes".into());
+        }
+        let canonical = Path::new(path).canonicalize().map_err(|e| {
+            format!("Failed to resolve texture path '{}': {}", path, e)
+        })?;
+        let file = File::open(&canonical)?;
         let reader = BufReader::new(file);
         let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
         Self::load_texture(

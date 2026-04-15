@@ -1,24 +1,34 @@
 use image::{ImageBuffer, Rgba};
 
 /// Allocates a mappable buffer sized for row-copy alignment; returns `(buffer, padded_bytes_per_row)`.
+///
+/// Returns an error if the requested dimensions would overflow the buffer size calculation.
 pub(crate) fn create_output_buffer(
     device: &wgpu::Device,
     width: u32,
     height: u32,
-) -> (wgpu::Buffer, u32) {
+) -> Result<(wgpu::Buffer, u32), Box<dyn std::error::Error>> {
     let bytes_per_pixel = 4u32;
-    let unpadded_bytes_per_row = bytes_per_pixel * width;
+    let unpadded_bytes_per_row = bytes_per_pixel
+        .checked_mul(width)
+        .ok_or("Buffer size overflow: width too large")?;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+    let padded_bytes_per_row = unpadded_bytes_per_row
+        .checked_next_multiple_of(align)
+        .ok_or("Buffer size overflow: padded row size too large")?;
+
+    let buffer_size = (padded_bytes_per_row as u64)
+        .checked_mul(height as u64)
+        .ok_or("Buffer size overflow: dimensions too large")?;
 
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Output Buffer"),
-        size: (padded_bytes_per_row * height) as u64,
+        size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
 
-    (output_buffer, padded_bytes_per_row)
+    Ok((output_buffer, padded_bytes_per_row))
 }
 
 pub(crate) fn copy_render_target_to_buffer(
