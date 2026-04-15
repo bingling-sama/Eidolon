@@ -6,7 +6,7 @@ This guide helps you build Eidolon, render your first image, and preview a skin 
 
 - Rust (latest stable recommended)
 - A GPU with Vulkan, Metal, or DX12 support
-- No extra system dependencies are required
+- Or an available version of libOSMesa installed for headless environments without a GPU
 
 ## Build
 
