@@ -6,7 +6,7 @@
 
 - Rust（建议使用最新稳定版）
 - 支持 Vulkan、Metal 或 DX12 的 GPU
-- 无需额外系统依赖
+- 或安装可用版本的 libOSMesa（用于无 GPU 的无头环境）
 
 ## 构建
 

@@ -24,7 +24,7 @@ Full documentation lives in `docs/`.
 
 - Rust (latest stable recommended)
 - A GPU with Vulkan, Metal, or DX12 support
-- Or an avaliable version of libOSMesa installed
+- Or an available version of libOSMesa installed
 
 ### Build
 
