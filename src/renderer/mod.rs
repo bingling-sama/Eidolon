@@ -41,8 +41,7 @@ pub struct Renderer {
 
 impl Renderer {
     /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -53,7 +52,7 @@ impl Renderer {
             compatible_surface: None,
             force_fallback_adapter: false,
         }))
-        .expect("Failed to find a suitable GPU adapter");
+        ?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -63,29 +62,27 @@ impl Renderer {
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             },
-        ))
-        .expect("Failed to create device");
+        ))?;
 
         Self::init_with_device(device, queue, None)
     }
 
     /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
-    pub fn new_windowed(window: Arc<Window>) -> Self {
+    pub fn new_windowed(window: Arc<Window>) -> Result<Self, Box<dyn std::error::Error>> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
 
         let surface = instance
-            .create_surface(window.clone())
-            .expect("Failed to create surface");
+            .create_surface(window.clone())?;
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .expect("Failed to find a suitable GPU adapter");
+        ?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -95,8 +92,7 @@ impl Renderer {
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             },
-        ))
-        .expect("Failed to create device");
+        ))?;
 
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
@@ -130,7 +126,7 @@ impl Renderer {
             wgpu::SurfaceConfiguration,
             wgpu::TextureFormat,
         )>,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Uniform Bind Group Layout"),
@@ -223,15 +219,15 @@ impl Renderer {
             }],
         });
 
-        let slim_model = Model::load_from_obj(&device, "resources/slim.obj").unwrap();
-        let default_model = Model::load_from_obj(&device, "resources/classic.obj").unwrap();
+        let slim_model = Model::load_from_obj(&device, "resources/slim.obj")?;
+        let default_model = Model::load_from_obj(&device, "resources/classic.obj")?;
 
         let (surface, surface_config) = match surface_info {
             Some((s, c, _)) => (Some(s), Some(c)),
             None => (None, None),
         };
 
-        Self {
+        Ok(Self {
             device,
             queue,
             pipeline,
@@ -246,7 +242,7 @@ impl Renderer {
             surface_config,
             surface_pipeline,
             cached_depth_texture: RefCell::new(None),
-        }
+        })
     }
 
     /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
