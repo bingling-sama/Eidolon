@@ -394,7 +394,7 @@ impl Renderer {
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let (output_buffer, padded_bytes_per_row) =
-            readback::create_output_buffer(&self.device, width, height);
+            readback::create_output_buffer(&self.device, width, height)?;
 
         let mut encoder = self
             .device
@@ -483,6 +483,8 @@ impl Renderer {
     }
 
     /// Calls [`Renderer::render`], then saves using [`OutputFormat`].
+    ///
+    /// The output path is validated to reject null bytes before writing.
     pub fn render_to_image(
         &self,
         character: &Character,
@@ -491,6 +493,9 @@ impl Renderer {
         size: (u32, u32),
         format: OutputFormat,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if filename.contains('\0') {
+            return Err("Output filename contains null bytes".into());
+        }
         let image_buffer = self.render(character, camera, size.0, size.1)?;
         image_buffer.save_with_format(filename, format.as_image_format())?;
         Ok(())
