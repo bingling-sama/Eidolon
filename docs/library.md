@@ -19,7 +19,7 @@ Then import the library crate as `eidolon`.
 use eidolon::{camera::Camera, character::Character, renderer::{OutputFormat, Renderer}};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let renderer = Renderer::new();
+    let renderer = Renderer::new()?;
 
     let mut character = Character::new();
     character.skin = Some(renderer.load_texture("resources/bingling_sama.png")?);

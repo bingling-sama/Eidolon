@@ -230,8 +230,8 @@ impl ApplicationHandler for PreviewApp {
             .with_inner_size(self.initial_size);
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
-        let mut renderer = Renderer::new_windowed(window.clone());
-        self.character.skin = Some(renderer.load_texture(&self.texture_path).unwrap());
+        let mut renderer = Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
+        self.character.skin = Some(renderer.load_texture(&self.texture_path).expect("Failed to load skin texture"));
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
 
@@ -296,13 +296,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             viewport,
             scene,
         } => {
+            // Reject output paths that attempt directory traversal.
+            if std::path::Path::new(&filename)
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                error!("Output path must not contain '..' components");
+                return Err(Box::from(
+                    "output path must not contain '..' (directory traversal)",
+                ));
+            }
+
             info!("Minecraft skin renderer");
             info!("Output file: {}", filename);
             info!("Size: {}x{}", viewport.width, viewport.height);
             info!("Skin: {}", scene.texture);
 
             info!("Creating renderer...");
-            let renderer = Renderer::new();
+            let renderer = Renderer::new()?;
             info!("Renderer ready");
 
             let (mut character, camera) = character_and_camera_from_scene(&scene);

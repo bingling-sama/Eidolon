@@ -11,12 +11,12 @@ fn performance_benchmark(c: &mut Criterion) {
     let output_dir = ".bench";
     fs::create_dir_all(output_dir).expect("Failed to create output directory");
 
-    let renderer = Renderer::new();
+    let renderer = Renderer::new().expect("Failed to create renderer");
     let mut character = Character::new();
     character.skin = Some(
         renderer
             .load_texture("resources/bingling_sama.png")
-            .unwrap(),
+            .expect("Failed to load skin texture"),
     );
 
     let mut camera = Camera {
