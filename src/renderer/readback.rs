@@ -13,7 +13,9 @@ pub(crate) fn create_output_buffer(
         .checked_mul(width)
         .ok_or("Buffer size overflow: width too large")?;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+    let padded_bytes_per_row = unpadded_bytes_per_row
+        .checked_next_multiple_of(align)
+        .ok_or("Buffer size overflow: padded row size too large")?;
 
     let buffer_size = (padded_bytes_per_row as u64)
         .checked_mul(height as u64)
