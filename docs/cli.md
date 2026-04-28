@@ -44,6 +44,12 @@ cargo run -- render --skin-type classic --texture resources/bingling_sama.png \
   --width 1024 --height 768 --yaw 210 --pitch 90 --scale 1.2 --format png
 ```
 
+If `--format webp` is used with the default `--filename output.png`, the CLI changes the output path
+to `output.webp`. Custom filenames are used as provided.
+
+`--filename` must not contain `..` path components. This prevents render output from escaping the
+intended directory by directory traversal.
+
 ## Preview
 
 Open a live preview window.
@@ -82,3 +88,11 @@ cargo run -- convert old_skin.png new_skin.png
 ## Help
 
 Use `--help` on any command for the most up-to-date option list.
+
+Enable logs with `RUST_LOG=info` when diagnosing rendering or asset-loading problems:
+
+```bash
+RUST_LOG=info cargo run -- render --skin-type classic
+```
+
+See `troubleshooting.md` for common errors.
