@@ -51,3 +51,67 @@ impl Camera {
         perspective(fovy, aspect_ratio, znear, zfar).into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn view_matrix_default_looks_at_center() {
+        // yaw=180, pitch=90, scale=1.0 — default render view
+        let camera = Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 1.0,
+        };
+        let view = camera.get_view_matrix();
+        // view matrix should be non-identity and finite
+        for row in &view {
+            for &val in row {
+                assert!(val.is_finite(), "view matrix contains non-finite value");
+            }
+        }
+    }
+
+    #[test]
+    fn view_matrix_scale_doubles_distance() {
+        // distance = 4.0 / scale; at scale=0.5, distance=8.0 (twice default)
+        let cam_half = Camera {
+            yaw: 0.0,
+            pitch: 90.0,
+            scale: 0.5,
+        };
+        let cam_full = Camera {
+            yaw: 0.0,
+            pitch: 90.0,
+            scale: 1.0,
+        };
+        let view_half = cam_half.get_view_matrix();
+        let view_full = cam_full.get_view_matrix();
+        // different distance → different matrices
+        assert_ne!(view_half, view_full);
+    }
+
+    #[test]
+    fn projection_matrix_valid_aspect() {
+        let camera = Camera::new();
+        let proj = camera.get_projection_matrix(800, 600);
+        // projection matrix should be finite
+        for row in &proj {
+            for &val in row {
+                assert!(val.is_finite(), "projection matrix contains non-finite value");
+            }
+        }
+        // last row should be [0, 0, -1, 0] for perspective projection
+        assert!(proj[3][2] < 0.0, "expected negative z-component in projection");
+    }
+
+    #[test]
+    fn projection_matrix_square_aspect() {
+        let camera = Camera::new();
+        let proj_square = camera.get_projection_matrix(600, 600);
+        let proj_wide = camera.get_projection_matrix(800, 600);
+        // different aspect ratios produce different matrices
+        assert_ne!(proj_square, proj_wide);
+    }
+}

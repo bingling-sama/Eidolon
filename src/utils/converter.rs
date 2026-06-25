@@ -62,209 +62,33 @@ pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, String> {
         }
     }
 
-    // Scale all regions
-    let right_leg_outside_area = scale(RIGHT_LEG_OUTSIDE_RANGE);
-    let right_leg_top_front_area = scale(RIGHT_LEG_TOP_FRONT_RANGE);
-    let right_leg_buttom_area = scale(RIGHT_LEG_BUTTOM_RANGE);
-    let right_leg_inside_area = scale(RIGHT_LEG_INSIDE_RANGE);
-    let right_leg_back_area = scale(RIGHT_LEG_BACK_RANGE);
+    // Map each right-side source region (top half) to its left-side
+    // destination (bottom half): crop → flip horizontally → overlay
+    const REGION_PAIRS: &[((u32, u32, u32, u32), (u32, u32, u32, u32))] = &[
+        // Right leg parts → left leg positions
+        (RIGHT_LEG_OUTSIDE_RANGE, LEFT_LEG_OUTSIDE_RANGE),
+        (RIGHT_LEG_TOP_FRONT_RANGE, LEFT_LEG_TOP_FRONT_RANGE),
+        (RIGHT_LEG_BUTTOM_RANGE, LEFT_LEG_BUTTOM_RANGE),
+        (RIGHT_LEG_INSIDE_RANGE, LEFT_LEG_INSIDE_RANGE),
+        (RIGHT_LEG_BACK_RANGE, LEFT_LEG_BACK_RANGE),
+        // Right arm parts → left arm positions
+        (RIGHT_ARM_OUTSIDE_RANGE, LEFT_ARM_OUTSIDE_RANGE),
+        (RIGHT_ARM_TOP_RANGE, LEFT_ARM_TOP_RANGE),
+        (RIGHT_ARM_FRONT_RANGE, LEFT_ARM_FRONT_RANGE),
+        (RIGHT_ARM_BUTTOM_RANGE, LEFT_ARM_BUTTOM_RANGE),
+        (RIGHT_ARM_INSIDE_RANGE, LEFT_ARM_INSIDE_RANGE),
+        (RIGHT_ARM_BACK_RANGE, LEFT_ARM_BACK_RANGE),
+    ];
 
-    let right_arm_outside_area = scale(RIGHT_ARM_OUTSIDE_RANGE);
-    let right_arm_top_area = scale(RIGHT_ARM_TOP_RANGE);
-    let right_arm_front_area = scale(RIGHT_ARM_FRONT_RANGE);
-    let right_arm_buttom_area = scale(RIGHT_ARM_BUTTOM_RANGE);
-    let right_arm_inside_area = scale(RIGHT_ARM_INSIDE_RANGE);
-    let right_arm_back_area = scale(RIGHT_ARM_BACK_RANGE);
-
-    let left_leg_outside_area = scale(LEFT_LEG_OUTSIDE_RANGE);
-    let left_leg_top_front_area = scale(LEFT_LEG_TOP_FRONT_RANGE);
-    let left_leg_buttom_area = scale(LEFT_LEG_BUTTOM_RANGE);
-    let left_leg_inside_area = scale(LEFT_LEG_INSIDE_RANGE);
-    let left_leg_back_area = scale(LEFT_LEG_BACK_RANGE);
-
-    let left_arm_outside_area = scale(LEFT_ARM_OUTSIDE_RANGE);
-    let left_arm_top_area = scale(LEFT_ARM_TOP_RANGE);
-    let left_arm_front_area = scale(LEFT_ARM_FRONT_RANGE);
-    let left_arm_buttom_area = scale(LEFT_ARM_BUTTOM_RANGE);
-    let left_arm_inside_area = scale(LEFT_ARM_INSIDE_RANGE);
-    let left_arm_back_area = scale(LEFT_ARM_BACK_RANGE);
-
-    // Crop right leg parts
-    let right_leg_top_front = img
-        .view(
-            right_leg_top_front_area.0,
-            right_leg_top_front_area.1,
-            right_leg_top_front_area.2 - right_leg_top_front_area.0,
-            right_leg_top_front_area.3 - right_leg_top_front_area.1,
-        )
-        .to_image();
-    let right_leg_buttom = img
-        .view(
-            right_leg_buttom_area.0,
-            right_leg_buttom_area.1,
-            right_leg_buttom_area.2 - right_leg_buttom_area.0,
-            right_leg_buttom_area.3 - right_leg_buttom_area.1,
-        )
-        .to_image();
-    let right_leg_inside = img
-        .view(
-            right_leg_inside_area.0,
-            right_leg_inside_area.1,
-            right_leg_inside_area.2 - right_leg_inside_area.0,
-            right_leg_inside_area.3 - right_leg_inside_area.1,
-        )
-        .to_image();
-    let right_leg_back = img
-        .view(
-            right_leg_back_area.0,
-            right_leg_back_area.1,
-            right_leg_back_area.2 - right_leg_back_area.0,
-            right_leg_back_area.3 - right_leg_back_area.1,
-        )
-        .to_image();
-    let right_leg_outside = img
-        .view(
-            right_leg_outside_area.0,
-            right_leg_outside_area.1,
-            right_leg_outside_area.2 - right_leg_outside_area.0,
-            right_leg_outside_area.3 - right_leg_outside_area.1,
-        )
-        .to_image();
-
-    // Crop right arm parts
-    let right_arm_top = img
-        .view(
-            right_arm_top_area.0,
-            right_arm_top_area.1,
-            right_arm_top_area.2 - right_arm_top_area.0,
-            right_arm_top_area.3 - right_arm_top_area.1,
-        )
-        .to_image();
-    let right_arm_front = img
-        .view(
-            right_arm_front_area.0,
-            right_arm_front_area.1,
-            right_arm_front_area.2 - right_arm_front_area.0,
-            right_arm_front_area.3 - right_arm_front_area.1,
-        )
-        .to_image();
-    let right_arm_buttom = img
-        .view(
-            right_arm_buttom_area.0,
-            right_arm_buttom_area.1,
-            right_arm_buttom_area.2 - right_arm_buttom_area.0,
-            right_arm_buttom_area.3 - right_arm_buttom_area.1,
-        )
-        .to_image();
-    let right_arm_inside = img
-        .view(
-            right_arm_inside_area.0,
-            right_arm_inside_area.1,
-            right_arm_inside_area.2 - right_arm_inside_area.0,
-            right_arm_inside_area.3 - right_arm_inside_area.1,
-        )
-        .to_image();
-    let right_arm_back = img
-        .view(
-            right_arm_back_area.0,
-            right_arm_back_area.1,
-            right_arm_back_area.2 - right_arm_back_area.0,
-            right_arm_back_area.3 - right_arm_back_area.1,
-        )
-        .to_image();
-    let right_arm_outside = img
-        .view(
-            right_arm_outside_area.0,
-            right_arm_outside_area.1,
-            right_arm_outside_area.2 - right_arm_outside_area.0,
-            right_arm_outside_area.3 - right_arm_outside_area.1,
-        )
-        .to_image();
-
-    // Flip right arm to create left arm (horizontal flip)
-    let left_arm_outside = imageops::flip_horizontal(&right_arm_outside);
-    let left_arm_top = imageops::flip_horizontal(&right_arm_top);
-    let left_arm_front = imageops::flip_horizontal(&right_arm_front);
-    let left_arm_buttom = imageops::flip_horizontal(&right_arm_buttom);
-    let left_arm_inside = imageops::flip_horizontal(&right_arm_inside);
-    let left_arm_back = imageops::flip_horizontal(&right_arm_back);
-
-    // Flip right leg to create left leg (horizontal flip)
-    let left_leg_outside = imageops::flip_horizontal(&right_leg_outside);
-    let left_leg_top_front = imageops::flip_horizontal(&right_leg_top_front);
-    let left_leg_buttom = imageops::flip_horizontal(&right_leg_buttom);
-    let left_leg_inside = imageops::flip_horizontal(&right_leg_inside);
-    let left_leg_back = imageops::flip_horizontal(&right_leg_back);
-
-    // Paste left arm parts
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_outside,
-        left_arm_outside_area.0 as i64,
-        left_arm_outside_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_top,
-        left_arm_top_area.0 as i64,
-        left_arm_top_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_front,
-        left_arm_front_area.0 as i64,
-        left_arm_front_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_buttom,
-        left_arm_buttom_area.0 as i64,
-        left_arm_buttom_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_inside,
-        left_arm_inside_area.0 as i64,
-        left_arm_inside_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_arm_back,
-        left_arm_back_area.0 as i64,
-        left_arm_back_area.1 as i64,
-    );
-
-    // Paste left leg parts
-    imageops::overlay(
-        &mut output_img,
-        &left_leg_top_front,
-        left_leg_top_front_area.0 as i64,
-        left_leg_top_front_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_leg_buttom,
-        left_leg_buttom_area.0 as i64,
-        left_leg_buttom_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_leg_inside,
-        left_leg_inside_area.0 as i64,
-        left_leg_inside_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_leg_back,
-        left_leg_back_area.0 as i64,
-        left_leg_back_area.1 as i64,
-    );
-    imageops::overlay(
-        &mut output_img,
-        &left_leg_outside,
-        left_leg_outside_area.0 as i64,
-        left_leg_outside_area.1 as i64,
-    );
+    for (src_rect, dst_rect) in REGION_PAIRS {
+        let src = scale(*src_rect);
+        let dst = scale(*dst_rect);
+        let cropped = img
+            .view(src.0, src.1, src.2 - src.0, src.3 - src.1)
+            .to_image();
+        let flipped = imageops::flip_horizontal(&cropped);
+        imageops::overlay(&mut output_img, &flipped, dst.0 as i64, dst.1 as i64);
+    }
 
     Ok(DynamicImage::ImageRgba8(output_img))
 }
@@ -276,9 +100,10 @@ mod tests {
 
     #[test]
     fn test_single2double_success() {
-        let img = image::open("./resources/SSSSSteven.png").unwrap();
+        let img = image::open("resources/SSSSSteven.png")
+            .expect("SSSSSteven.png not found — run from project root");
         let result = single2double(&img);
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "conversion failed: {:?}", result.err());
         let out = result.unwrap();
         // Output atlas is 64×64 for a 64×32 input.
         assert_eq!(out.width(), 64);
@@ -292,11 +117,43 @@ mod tests {
     }
 
     #[test]
-    fn test_single2double_invalid_size() {
-        // Invalid dimensions: not 2:1 single-layer layout.
+    #[test]
+    fn test_single2double_success_synthetic() {
+        // 64x32 synthetic single-layer skin
+        let img =
+            DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 32, Rgba([255, 0, 0, 255])));
+        let result = single2double(&img);
+        assert!(result.is_ok());
+        let out = result.unwrap();
+        assert_eq!(out.width(), 64);
+        assert_eq!(out.height(), 64);
+    }
+
+    #[test]
+    fn test_single2double_invalid_aspect_ratio() {
+        // width != 2 * height — should error
         let img =
             DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 31, Rgba([0, 0, 0, 255])));
-        let result = single2double(&img);
-        assert!(result.is_err());
+        assert!(single2double(&img).is_err());
+
+        // square image is also invalid
+        let img2 =
+            DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 64, Rgba([0, 0, 0, 255])));
+        assert!(single2double(&img2).is_err());
+    }
+
+    #[test]
+    fn test_scale_rect_identity() {
+        // hd_ratio=1.0 → no scaling
+        let rect = (10, 20, 30, 40);
+        let scaled = scale_rect(rect, 1.0);
+        assert_eq!(scaled, rect);
+    }
+
+    #[test]
+    fn test_scale_rect_hd_doubling() {
+        // hd_ratio=2.0 for 128px wide skin
+        let scaled = scale_rect((10, 20, 30, 40), 2.0);
+        assert_eq!(scaled, (20, 40, 60, 80));
     }
 }

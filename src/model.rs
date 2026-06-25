@@ -177,3 +177,56 @@ impl Model {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_device() -> (wgpu::Device, wgpu::Queue) {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .expect("No wgpu adapter");
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("No wgpu device")
+    }
+
+    #[test]
+    #[ignore]
+    fn load_slim_model_has_all_parts() {
+        let (device, _queue) = make_device();
+        let model = Model::load_from_obj(&device, "resources/slim.obj")
+            .expect("Failed to load slim model");
+        let _ = &model.head;
+        let _ = &model.body;
+        let _ = &model.right_arm;
+        let _ = &model.left_arm;
+        let _ = &model.right_leg;
+        let _ = &model.left_leg;
+    }
+
+    #[test]
+    #[ignore]
+    fn load_classic_model_has_all_parts() {
+        let (device, _queue) = make_device();
+        let model = Model::load_from_obj(&device, "resources/classic.obj")
+            .expect("Failed to load classic model");
+        let _ = &model.head;
+        let _ = &model.body;
+        let _ = &model.right_arm;
+        let _ = &model.left_arm;
+        let _ = &model.right_leg;
+        let _ = &model.left_leg;
+    }
+
+    #[test]
+    #[ignore]
+    fn load_nonexistent_model_returns_error() {
+        let (device, _queue) = make_device();
+        let result = Model::load_from_obj(&device, "nonexistent_file.obj");
+        assert!(result.is_err());
+    }
+}

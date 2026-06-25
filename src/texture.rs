@@ -50,6 +50,39 @@ impl Texture {
         )
     }
 
+    /// Load a skin without auto-converting single-layer to double-layer.
+    ///
+    /// Use when the raw texture layout must be preserved as-is.
+    pub fn load_from_file_raw(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        path: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        info!("Loading texture (raw, no conversion): {}", path);
+        if path.contains('\0') {
+            return Err("Texture path contains null bytes".into());
+        }
+        let canonical = Path::new(path).canonicalize().map_err(|e| {
+            format!("Failed to resolve texture path '{}': {}", path, e)
+        })?;
+        let file = File::open(&canonical)?;
+        let reader = BufReader::new(file);
+        let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
+        let dimensions = image.dimensions();
+        let image_rgba = image.to_rgba8();
+        Self::upload_raw(
+            device,
+            queue,
+            bind_group_layout,
+            sampler,
+            &image_rgba,
+            dimensions.0,
+            dimensions.1,
+        )
+    }
+
     fn load_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -76,9 +109,29 @@ impl Texture {
 
         let image_dimensions = image.dimensions();
         let image_rgba = image.to_rgba8();
+        Self::upload_raw(
+            device,
+            queue,
+            bind_group_layout,
+            sampler,
+            &image_rgba,
+            image_dimensions.0,
+            image_dimensions.1,
+        )
+    }
+
+    fn upload_raw(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<Texture, Box<dyn std::error::Error>> {
         let size = wgpu::Extent3d {
-            width: image_dimensions.0,
-            height: image_dimensions.1,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -100,11 +153,11 @@ impl Texture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &image_rgba,
+            rgba,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * image_dimensions.0),
-                rows_per_image: Some(image_dimensions.1),
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
             },
             size,
         );
