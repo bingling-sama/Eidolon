@@ -1,12 +1,18 @@
-//! Per-body-part [`Uniforms`] for the six-part draw loop (order matches `encode_render_pass`).
+//! Per-body-part [`Uniforms`] for the six-part draw loop.
 //!
-//! `Camera::scale` is folded into the base model matrix (uniform scale). The body entry uses a small
-//! positive `offset` so the outer layer mesh clears the inner mesh along normals.
+//! `Camera::scale` is folded into the base model matrix (uniform scale).
+//! The body entry uses a small positive `offset` so the outer layer mesh
+//! clears the inner mesh along normals.
+//!
+//! [`PART_CONFIGS`] defines the canonical body part order; both
+//! [`compute_body_part_uniforms`] and [`body_part_ref`] consume it,
+//! guaranteeing the draw loop and uniform upload stay in sync.
 
 use cgmath::{Matrix4, Rad, Vector3};
 
 use crate::camera::Camera;
 use crate::character::Character;
+use crate::model::{BodyPart, Model};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -16,6 +22,50 @@ pub(crate) struct Uniforms {
     pub model: [[f32; 4]; 4],
     pub offset: f32,
     pub _padding: [f32; 3],
+}
+
+/// Canonical body part order. Both uniforms computation and render pass
+/// draw loop consume this array, guaranteeing they stay in sync.
+///
+/// Each entry: (pivot_point, layer_offset).
+/// Pivot points are joint positions from the Blockbench OBJ model.
+/// Coordinate system: Y-up, character centered at X=0 Z=0, feet at Y≈0,
+/// head top at Y≈2.
+/// - Head pivot: neck joint (bottom-center of head mesh)
+/// - Arm/leg pivots: shoulder/hip joint (top-center of limb mesh)
+/// - Body pivot: (0,0,0) — root, no rotation applied
+///
+/// The -90° offsets in uniform computation convert from CLI angle space
+/// (90° = "facing forward") to model bind-pose space (0° = facing +Z).
+pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32); 6] = &[
+    // Head: pivot at neck joint
+    (Vector3::new(0.0, 1.5, 0.0), 0.0),
+    // Right Arm: pivot at right shoulder joint
+    (Vector3::new(0.3125, 1.375, 0.0), 0.0),
+    // Left Arm: pivot at left shoulder joint (X mirror)
+    (Vector3::new(-0.3125, 1.375, 0.0), 0.0),
+    // Right Leg: pivot at right hip joint
+    (Vector3::new(0.125, 0.75, 0.0), 0.0),
+    // Left Leg: pivot at left hip joint (X mirror)
+    (Vector3::new(-0.125, 0.75, 0.0), 0.0),
+    // Body: root — no pivot. Offset 0.0001 prevents Z-fighting with jacket layer.
+    (Vector3::new(0.0, 0.0, 0.0), 0.0001),
+];
+
+/// Map a PART_CONFIGS index to the corresponding body part in the model.
+///
+/// Co-located with [`PART_CONFIGS`] so the order definition and its
+/// consumers stay in one file.
+pub(crate) fn body_part_ref<'a>(i: usize, model: &'a Model) -> &'a BodyPart {
+    match i {
+        0 => &model.head,
+        1 => &model.right_arm,
+        2 => &model.left_arm,
+        3 => &model.right_leg,
+        4 => &model.left_leg,
+        5 => &model.body,
+        _ => unreachable!(),
+    }
 }
 
 pub(crate) fn compute_body_part_uniforms(
@@ -46,76 +96,37 @@ pub(crate) fn compute_body_part_uniforms(
         }
     };
 
-    // Pivot points are joint positions from the Blockbench OBJ model.
-    // Coordinate system: Y-up, character centered at X=0 Z=0, feet at Y≈0,
-    // head top at Y≈2. Head pivot = neck joint (bottom-center of head mesh).
-    // Arm/leg pivots = shoulder/hip joint (top-center of limb mesh).
-    // Body has no pivot rotation — it's the root of the skeleton.
-    //
-    // The -90° offsets convert from CLI angle space (90° = "facing forward")
-    // to model bind-pose space (0° = facing +Z).
+    std::array::from_fn(|i| {
+        let (pivot, offset) = PART_CONFIGS[i];
+        let rotation = match i {
+            0 => // Head: yaw(Y) then pitch(X)
+                Matrix4::from_angle_y(Rad((posture.head_yaw - 90.0).to_radians()))
+                    * Matrix4::from_angle_x(Rad((posture.head_pitch - 90.0).to_radians())),
+            1 => // Right Arm: roll(Z) then pitch(X)
+                Matrix4::from_angle_z(Rad(posture.right_arm_roll.to_radians()))
+                    * Matrix4::from_angle_x(Rad(posture.right_arm_pitch.to_radians())),
+            2 => // Left Arm: -roll(Z) then pitch(X)
+                Matrix4::from_angle_z(Rad(-posture.left_arm_roll.to_radians()))
+                    * Matrix4::from_angle_x(Rad(posture.left_arm_pitch.to_radians())),
+            3 => // Right Leg: pitch(X) only
+                Matrix4::from_angle_x(Rad((posture.right_leg_pitch - 90.0).to_radians())),
+            4 => // Left Leg: pitch(X) only
+                Matrix4::from_angle_x(Rad((posture.left_leg_pitch - 90.0).to_radians())),
+            5 => // Body: no rotation
+                Matrix4::from_scale(1.0),
+            _ => unreachable!(),
+        };
 
-    // Head: pivot at neck joint (bottom-center of head mesh)
-    let head_pivot = Vector3::new(0.0, 1.5, 0.0);
-    let head_yaw_rad = (posture.head_yaw - 90.0).to_radians();
-    let head_pitch_rad = (posture.head_pitch - 90.0).to_radians();
-    let head_rotation =
-        Matrix4::from_angle_y(Rad(head_yaw_rad)) * Matrix4::from_angle_x(Rad(head_pitch_rad));
-    let head_transform = base_model_matrix
-        * Matrix4::from_translation(head_pivot)
-        * head_rotation
-        * Matrix4::from_translation(-head_pivot);
+        // Body (index 5) has no pivot — applies base transform directly
+        let transform = if i == 5 {
+            base_model_matrix
+        } else {
+            base_model_matrix
+                * Matrix4::from_translation(pivot)
+                * rotation
+                * Matrix4::from_translation(-pivot)
+        };
 
-    // Right Arm: pivot at right shoulder joint (top-center of arm mesh)
-    let right_arm_pivot = Vector3::new(0.3125, 1.375, 0.0);
-    let right_arm_roll_rad = posture.right_arm_roll.to_radians();
-    let right_arm_pitch_rad = posture.right_arm_pitch.to_radians();
-    let right_arm_rotation = Matrix4::from_angle_z(Rad(right_arm_roll_rad))
-        * Matrix4::from_angle_x(Rad(right_arm_pitch_rad));
-    let right_arm_transform = base_model_matrix
-        * Matrix4::from_translation(right_arm_pivot)
-        * right_arm_rotation
-        * Matrix4::from_translation(-right_arm_pivot);
-
-    // Left Arm: pivot at left shoulder joint (X mirror of right arm)
-    let left_arm_pivot = Vector3::new(-0.3125, 1.375, 0.0);
-    let left_arm_roll_rad = -posture.left_arm_roll.to_radians();
-    let left_arm_pitch_rad = posture.left_arm_pitch.to_radians();
-    let left_arm_rotation = Matrix4::from_angle_z(Rad(left_arm_roll_rad))
-        * Matrix4::from_angle_x(Rad(left_arm_pitch_rad));
-    let left_arm_transform = base_model_matrix
-        * Matrix4::from_translation(left_arm_pivot)
-        * left_arm_rotation
-        * Matrix4::from_translation(-left_arm_pivot);
-
-    // Right Leg: pivot at right hip joint (top-center of leg mesh)
-    let right_leg_pivot = Vector3::new(0.125, 0.75, 0.0);
-    let right_leg_pitch_rad = (posture.right_leg_pitch - 90.0).to_radians();
-    let right_leg_rotation = Matrix4::from_angle_x(Rad(right_leg_pitch_rad));
-    let right_leg_transform = base_model_matrix
-        * Matrix4::from_translation(right_leg_pivot)
-        * right_leg_rotation
-        * Matrix4::from_translation(-right_leg_pivot);
-
-    // Left Leg: pivot at left hip joint (X mirror of right leg)
-    let left_leg_pivot = Vector3::new(-0.125, 0.75, 0.0);
-    let left_leg_pitch_rad = (posture.left_leg_pitch - 90.0).to_radians();
-    let left_leg_rotation = Matrix4::from_angle_x(Rad(left_leg_pitch_rad));
-    let left_leg_transform = base_model_matrix
-        * Matrix4::from_translation(left_leg_pivot)
-        * left_leg_rotation
-        * Matrix4::from_translation(-left_leg_pivot);
-
-    // Body: root of skeleton, no pivot rotation. Layer offset (0.0001) prevents
-    // Z-fighting between body mesh and jacket layer.
-    let body_transform = base_model_matrix;
-
-    [
-        make_uniforms(head_transform, 0.0),
-        make_uniforms(right_arm_transform, 0.0),
-        make_uniforms(left_arm_transform, 0.0),
-        make_uniforms(right_leg_transform, 0.0),
-        make_uniforms(left_leg_transform, 0.0),
-        make_uniforms(body_transform, 0.0001),
-    ]
+        make_uniforms(transform, offset)
+    })
 }

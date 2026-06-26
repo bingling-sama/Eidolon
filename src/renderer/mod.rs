@@ -1,16 +1,13 @@
 //! WGPU renderer: headless RGBA readback and windowed surface preview, shared skin pipeline.
 
-mod output;
 mod pipeline;
 mod readback;
 mod uniforms;
 
-pub use output::OutputFormat;
-
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use image::{ImageBuffer, Rgba};
+use image::{ImageBuffer, ImageFormat, Rgba};
 use winit::window::Window;
 
 use crate::camera::Camera;
@@ -19,7 +16,23 @@ use crate::model::Model;
 use crate::texture::Texture;
 
 use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
-use uniforms::compute_body_part_uniforms;
+use uniforms::{body_part_ref, compute_body_part_uniforms, PART_CONFIGS};
+
+/// Image format for [`Renderer::render_to_image`].
+#[derive(Debug, Clone, Copy)]
+pub enum OutputFormat {
+    Png,
+    WebP,
+}
+
+impl OutputFormat {
+    pub fn as_image_format(&self) -> ImageFormat {
+        match self {
+            OutputFormat::Png => ImageFormat::Png,
+            OutputFormat::WebP => ImageFormat::WebP,
+        }
+    }
+}
 
 pub struct Renderer {
     device: wgpu::Device,
@@ -40,20 +53,16 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-
+    /// Shared wgpu bootstrap: adapter + device + queue from an existing Instance.
+    fn create_wgpu_device(
+        instance: &wgpu::Instance,
+        compatible_surface: Option<&wgpu::Surface>,
+    ) -> Result<(wgpu::Device, wgpu::Queue, wgpu::Adapter), Box<dyn std::error::Error>> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
+            compatible_surface,
             force_fallback_adapter: false,
-        }))
-        ?;
-
+        }))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("Eidolon Device"),
@@ -63,7 +72,16 @@ impl Renderer {
                 trace: wgpu::Trace::Off,
             },
         ))?;
+        Ok((device, queue, adapter))
+    }
 
+    /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        let (device, queue, _) = Self::create_wgpu_device(&instance, None)?;
         Self::init_with_device(device, queue, None)
     }
 
@@ -73,26 +91,8 @@ impl Renderer {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
-
-        let surface = instance
-            .create_surface(window.clone())?;
-
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        }))
-        ?;
-
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("Eidolon Device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: Default::default(),
-                trace: wgpu::Trace::Off,
-            },
-        ))?;
+        let surface = instance.create_surface(window.clone())?;
+        let (device, queue, adapter) = Self::create_wgpu_device(&instance, Some(&surface))?;
 
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
@@ -127,6 +127,12 @@ impl Renderer {
             wgpu::TextureFormat,
         )>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Log wgpu errors (shader compilation, pipeline creation, etc.)
+        // instead of letting them silently drop on the GPU error queue.
+        device.on_uncaptured_error(Box::new(|error| {
+            log::error!("wgpu error: {:?}", error);
+        }));
+
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Uniform Bind Group Layout"),
@@ -312,15 +318,6 @@ impl Renderer {
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
 
-        let body_parts = [
-            &model.head,
-            &model.right_arm,
-            &model.left_arm,
-            &model.right_leg,
-            &model.left_leg,
-            &model.body,
-        ];
-
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -352,7 +349,8 @@ impl Renderer {
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(1, &skin_texture.bind_group, &[]);
 
-            for (i, body_part) in body_parts.iter().enumerate() {
+            for i in 0..PART_CONFIGS.len() {
+                let body_part = body_part_ref(i, model);
                 let dynamic_offset = (i as u32) * self.uniform_aligned_size;
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[dynamic_offset]);
 

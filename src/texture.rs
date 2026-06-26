@@ -71,13 +71,12 @@ impl Texture {
         let reader = BufReader::new(file);
         let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
         let dimensions = image.dimensions();
-        let image_rgba = image.to_rgba8();
         Self::upload_raw(
             device,
             queue,
             bind_group_layout,
             sampler,
-            &image_rgba,
+            image.as_raw(),
             dimensions.0,
             dimensions.1,
         )
