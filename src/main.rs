@@ -7,7 +7,6 @@ use eidolon::{
     character::{Character, DefaultPostures, Posture, SkinType},
     converter,
     renderer::{OutputFormat, Renderer},
-    texture::Texture,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -17,25 +16,17 @@ use winit::window::{Window, WindowId};
 
 /// Minecraft skin renderer and skin-atlas utilities.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author, version, about, long_about = None,
+    after_help = "EXAMPLES:\n  \
+                  eidolon render skin.png\n  \
+                  eidolon render skin.png out.webp --slim --posture wave\n  \
+                  eidolon preview skin.png --cam-zoom 2.0\n  \
+                  eidolon convert old_skin.png new_skin.png"
+)]
 struct Args {
     #[command(subcommand)]
     command: Command,
-}
-
-#[derive(Clone, Copy, ValueEnum, Debug)]
-enum SkinTypeCli {
-    Classic,
-    Slim,
-}
-
-impl From<SkinTypeCli> for SkinType {
-    fn from(value: SkinTypeCli) -> Self {
-        match value {
-            SkinTypeCli::Classic => SkinType::Classic,
-            SkinTypeCli::Slim => SkinType::Slim,
-        }
-    }
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -78,81 +69,70 @@ struct ViewportArgs {
     height: u32,
 }
 
+/// Shared scene parameters for render and preview.
 #[derive(Parser, Debug)]
 struct SceneArgs {
-    /// Path to the skin PNG (decoded as RGBA; single-layer skins are expanded when loaded).
-    #[arg(long, default_value = "resources/bingling_sama.png")]
-    texture: String,
+    /// Use slim arm geometry (Alex-style, 3px arms). Default is classic (Steve, 4px).
+    #[arg(long)]
+    slim: bool,
 
-    /// Arm geometry: `classic` (wide) or `slim`.
-    #[arg(long, value_enum)]
-    skin_type: SkinTypeCli,
-
-    /// Camera orbit yaw in degrees (`Camera::yaw`).
+    /// Camera orbit yaw in degrees.
     #[arg(long, default_value_t = 180.0)]
-    yaw: f32,
+    cam_yaw: f32,
 
-    /// Camera orbit pitch in degrees (`Camera::pitch`).
+    /// Camera orbit pitch in degrees.
     #[arg(long, default_value_t = 90.0)]
-    pitch: f32,
+    cam_pitch: f32,
 
-    /// Camera distance scale; must be > 0 (smaller orbit radius when larger).
+    /// Camera zoom; higher = closer (orbit radius: 4.0 / zoom).
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
-    scale: f32,
+    cam_zoom: f32,
 
-    /// Posture: `stand` (default). 0° = neutral for all joints.
+    /// Posture preset: stand, wave, walking, running.
     #[arg(long, value_enum, default_value_t = PostureCli::Stand)]
     posture: PostureCli,
 
-    /// Override head yaw in degrees (0° = forward); if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    // ── per-joint overrides (power-user; shown in --help --long) ──
+    #[arg(long, hide_short_help = true)]
     head_yaw: Option<f32>,
-    /// Override head pitch in degrees (0° = level); if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     head_pitch: Option<f32>,
-    /// Override left arm roll in degrees; if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     left_arm_roll: Option<f32>,
-    /// Override left arm pitch in degrees; if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     left_arm_pitch: Option<f32>,
-    /// Override right arm roll in degrees; if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     right_arm_roll: Option<f32>,
-    /// Override right arm pitch in degrees; if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     right_arm_pitch: Option<f32>,
-    /// Override left leg pitch in degrees (0° = straight down); if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     left_leg_pitch: Option<f32>,
-    /// Override right leg pitch in degrees (0° = straight down); if omitted, uses the `--posture` preset.
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     right_leg_pitch: Option<f32>,
 
-    /// Character world position X.
-    #[arg(long, default_value_t = 0.0)]
-    position_x: f32,
-    /// Character world position Y.
-    #[arg(long, default_value_t = 0.0)]
-    position_y: f32,
-    /// Character world position Z.
-    #[arg(long, default_value_t = 0.0)]
-    position_z: f32,
+    // ── world-space transform (power-user) ──
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    pos_x: f32,
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    pos_y: f32,
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    pos_z: f32,
 
-    /// Character rotation about X in degrees (Euler order X → Y → Z in uniforms).
-    #[arg(long, default_value_t = 0.0)]
-    rotation_x: f32,
-    /// Character rotation about Y in degrees.
-    #[arg(long, default_value_t = 0.0)]
-    rotation_y: f32,
-    /// Character rotation about Z in degrees.
-    #[arg(long, default_value_t = 0.0)]
-    rotation_z: f32,
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    rot_x: f32,
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    rot_y: f32,
+    #[arg(long, hide_short_help = true, default_value_t = 0.0)]
+    rot_z: f32,
 }
 
 fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     let mut character = Character::new();
-    character.skin_type = scene.skin_type.into();
+    character.skin_type = if scene.slim {
+        SkinType::Slim
+    } else {
+        SkinType::Classic
+    };
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
@@ -164,28 +144,43 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
         left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
         right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
     };
-    character.position = cgmath::Vector3::new(scene.position_x, scene.position_y, scene.position_z);
-    character.rotation = cgmath::Vector3::new(scene.rotation_x, scene.rotation_y, scene.rotation_z);
+    character.position =
+        cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z);
+    character.rotation =
+        cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z);
 
     let camera = Camera {
-        yaw: scene.yaw,
-        pitch: scene.pitch,
-        scale: scene.scale,
+        yaw: scene.cam_yaw,
+        pitch: scene.cam_pitch,
+        scale: scene.cam_zoom,
     };
     (character, camera)
+}
+
+/// Infer OutputFormat from filename extension. Unknown / missing → Png.
+fn format_from_filename(filename: &str) -> OutputFormat {
+    match std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+    {
+        Some("webp") => OutputFormat::WebP,
+        _ => OutputFormat::Png,
+    }
 }
 
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Render the skin to an image file (headless).
+    ///
+    /// Format is inferred from the output filename extension
+    /// (.png or .webp). Defaults to PNG.
     Render {
-        /// Output file path.
-        #[arg(long, default_value = "output.png")]
-        filename: String,
+        /// Path to the skin PNG file.
+        skin: String,
 
-        /// Image format: `png` or `webp`.
-        #[arg(long, default_value = "png")]
-        format: String,
+        /// Output image path. Extension determines format (.png or .webp).
+        #[arg(default_value = "output.png")]
+        output: String,
 
         #[command(flatten)]
         viewport: ViewportArgs,
@@ -195,6 +190,9 @@ enum Command {
     },
     /// Open a live preview window.
     Preview {
+        /// Path to the skin PNG file.
+        skin: String,
+
         #[command(flatten)]
         viewport: ViewportArgs,
 
@@ -215,7 +213,7 @@ struct PreviewApp {
     renderer: Option<Renderer>,
     window: Option<Arc<Window>>,
     character: Character,
-    skin: Option<Texture>,
+    skin: Option<eidolon::texture::Texture>,
     camera: Camera,
     texture_path: String,
     initial_size: PhysicalSize<u32>,
@@ -232,8 +230,13 @@ impl ApplicationHandler for PreviewApp {
             .with_inner_size(self.initial_size);
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
-        let mut renderer = Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
-        self.skin = Some(renderer.load_texture(&self.texture_path).expect("Failed to load skin texture"));
+        let mut renderer =
+            Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
+        self.skin = Some(
+            renderer
+                .load_texture(&self.texture_path)
+                .expect("Failed to load skin texture"),
+        );
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
 
@@ -293,13 +296,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use log::{error, info};
     match args.command {
         Command::Render {
-            filename,
-            format,
+            skin,
+            output,
             viewport,
             scene,
         } => {
             // Reject output paths that attempt directory traversal.
-            if std::path::Path::new(&filename)
+            if std::path::Path::new(&output)
                 .components()
                 .any(|c| matches!(c, std::path::Component::ParentDir))
             {
@@ -310,9 +313,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             info!("Minecraft skin renderer");
-            info!("Output file: {}", filename);
-            info!("Size: {}x{}", viewport.width, viewport.height);
-            info!("Skin: {}", scene.texture);
+            info!("Skin: {}", skin);
+            info!("Output: {} ({}x{})", output, viewport.width, viewport.height);
 
             info!("Creating renderer...");
             let renderer = Renderer::new()?;
@@ -320,34 +322,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let (character, camera) = character_and_camera_from_scene(&scene);
 
-            info!("Loading skin: {}", scene.texture);
-            let skin = renderer.load_texture(&scene.texture)?;
+            info!("Loading skin: {}", skin);
+            let skin_texture = renderer.load_texture(&skin)?;
             info!("Skin loaded");
 
             info!("Rendering...");
-
-            let output_format = match format.to_lowercase().as_str() {
-                "png" => OutputFormat::Png,
-                "webp" => OutputFormat::WebP,
-                other => {
-                    error!("Unsupported output format: {} (use png or webp)", other);
-                    return Err(Box::from("unsupported output format"));
-                }
-            };
-
+            let output_format = format_from_filename(&output);
             renderer.render_to_image(
                 &character,
-                &skin,
+                &skin_texture,
                 &camera,
-                &filename,
+                &output,
                 (viewport.width, viewport.height),
                 output_format,
             )?;
-            info!("Done. Saved: {}", filename);
+            info!("Done. Saved: {}", output);
 
             Ok(())
         }
-        Command::Preview { viewport, scene } => {
+        Command::Preview {
+            skin,
+            viewport,
+            scene,
+        } => {
             let (character, camera) = character_and_camera_from_scene(&scene);
 
             let event_loop = EventLoop::new()?;
@@ -357,7 +354,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 character,
                 skin: None,
                 camera,
-                texture_path: scene.texture,
+                texture_path: skin,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
             };
             event_loop.run_app(&mut app)?;
