@@ -220,7 +220,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn load_slim_model_has_all_parts() {
         let (device, _queue) = make_device();
         let model = Model::load_from_obj(&device, "resources/slim.obj")
@@ -234,7 +233,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn load_classic_model_has_all_parts() {
         let (device, _queue) = make_device();
         let model = Model::load_from_obj(&device, "resources/classic.obj")
@@ -248,10 +246,81 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn load_nonexistent_model_returns_error() {
         let (device, _queue) = make_device();
         let result = Model::load_from_obj(&device, "nonexistent_file.obj");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_from_obj_bytes_missing_head_part_errors() {
+        let (device, _queue) = make_device();
+        // OBJ with "Hat Layer" but missing "Head" — extract_part("Head") fails
+        let obj_data = b"o Hat Layer\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+        let result = Model::load_from_obj_bytes(&device, obj_data, "no_head.obj");
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("Missing model part: Head"),
+            "Expected 'Missing model part: Head', got: {msg}"
+        );
+    }
+
+    #[test]
+    fn load_from_obj_bytes_missing_layer_part_errors() {
+        let (device, _queue) = make_device();
+        // OBJ with "Head" but missing "Hat Layer"
+        let obj_data = b"o Head\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+        let result = Model::load_from_obj_bytes(&device, obj_data, "no_hat_layer.obj");
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("Missing model part: Hat Layer"),
+            "Expected 'Missing model part: Hat Layer', got: {msg}"
+        );
+    }
+
+    #[test]
+    fn load_from_obj_bytes_invalid_obj_syntax_errors() {
+        let (device, _queue) = make_device();
+        // Garbage bytes — tobj::load_obj_buf parse fails
+        let result = Model::load_from_obj_bytes(&device, b"this is not an obj file at all", "junk.obj");
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("Model error"),
+            "Expected Model error for invalid OBJ, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn load_from_obj_bytes_empty_mesh_skipped() {
+        let (device, _queue) = make_device();
+        // OBJ with named objects but zero vertices — mesh.positions is empty, skipped
+        // Only "Head" and "Hat Layer" defined with empty geometry leads to missing-part error
+        let obj_data = b"o Head\n# no vertices\n";
+        let result = Model::load_from_obj_bytes(&device, obj_data, "empty.obj");
+        assert!(result.is_err());
+        let msg = result.err().unwrap().to_string();
+        assert!(
+            msg.contains("Missing model part"),
+            "Expected missing-part error for empty-mesh OBJ, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn textured_vertex_desc_layout_is_valid() {
+        let desc = TexturedVertex::desc();
+        assert_eq!(desc.step_mode, wgpu::VertexStepMode::Vertex);
+        assert_eq!(desc.attributes.len(), 3);
+        // Position: Float32x3 at offset 0
+        assert_eq!(desc.attributes[0].format, wgpu::VertexFormat::Float32x3);
+        assert_eq!(desc.attributes[0].shader_location, 0);
+        // Normal: Float32x3 at size_of<[f32;3]>()
+        assert_eq!(desc.attributes[1].format, wgpu::VertexFormat::Float32x3);
+        assert_eq!(desc.attributes[1].shader_location, 1);
+        // UV: Float32x2 at size_of<[f32;6]>()
+        assert_eq!(desc.attributes[2].format, wgpu::VertexFormat::Float32x2);
+        assert_eq!(desc.attributes[2].shader_location, 2);
     }
 }

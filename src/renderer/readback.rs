@@ -103,3 +103,50 @@ pub(crate) fn map_output_buffer_to_rgba(
 
     Ok(img_buf)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_device() -> (wgpu::Device, wgpu::Queue) {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .expect("No wgpu adapter");
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("No wgpu device")
+    }
+
+    #[test]
+    fn create_output_buffer_normal_dimensions() {
+        let (device, _queue) = make_device();
+        let (buf, padded_bytes_per_row) = create_output_buffer(&device, 256, 256).unwrap();
+        // padded_bytes_per_row must be a multiple of COPY_BYTES_PER_ROW_ALIGNMENT (256)
+        assert_eq!(padded_bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT, 0);
+        assert!(padded_bytes_per_row >= 256 * 4);
+        assert_eq!(buf.size(), padded_bytes_per_row as u64 * 256);
+    }
+
+    #[test]
+    fn create_output_buffer_width_overflow() {
+        // 4 * u32::MAX overflows → error before touching device
+        let (device, _queue) = make_device();
+        let result = create_output_buffer(&device, u32::MAX, 100);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("width too large"));
+    }
+
+    #[test]
+    fn create_output_buffer_padded_row_overflow() {
+        // 4*width fits u32 but next_multiple_of(256) overflows u32.
+        // u32::MAX / 4 = 0x3FFFFFFF → 4*0x3FFFFFFF = 0xFFFFFFFC (fits u32).
+        // next_multiple_of(256) = 0x100000000 → overflow u32.
+        let (device, _queue) = make_device();
+        let result = create_output_buffer(&device, 0x3FFFFFFF, 100);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("padded row size too large"));
+    }
+}

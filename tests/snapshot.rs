@@ -3,8 +3,6 @@
 //! Renders a known character+camera config and compares the pixel hash against
 //! a golden constant. Catches silent rendering changes (shader, matrix, model).
 //!
-//! Run with: `cargo test -- --ignored`
-//!
 //! To update the golden hash after an intentional rendering change:
 //! run this test, copy the actual hash from the panic message, paste into
 //! the GOLDEN_HASH constant below.
@@ -17,7 +15,7 @@ use eidolon::renderer::Renderer;
 ///
 /// Config: classic skin, bingling_sama.png, yaw=180 pitch=90 scale=1,
 /// standing posture (all defaults), 800×600.
-const GOLDEN_HASH: u64 = 0; // placeholder — first wgpu run sets this
+const GOLDEN_HASH: u64 = 5599923306021208352;
 
 fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
     let mut h: u64 = 0;
@@ -30,7 +28,6 @@ fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
 }
 
 #[test]
-#[ignore]
 fn snapshot_classic_standing_front() {
     let renderer = Renderer::new().expect("Failed to create Renderer");
 

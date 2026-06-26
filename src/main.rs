@@ -289,6 +289,343 @@ impl ApplicationHandler for PreviewApp {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    // ── parse_positive_scale ──
+
+    #[test]
+    fn parse_scale_valid() {
+        assert_eq!(parse_positive_scale("1.0").unwrap(), 1.0);
+        assert_eq!(parse_positive_scale("0.5").unwrap(), 0.5);
+        assert_eq!(parse_positive_scale("42").unwrap(), 42.0);
+    }
+
+    #[test]
+    fn parse_scale_zero_fails() {
+        assert!(parse_positive_scale("0").is_err());
+        assert!(parse_positive_scale("0.0").is_err());
+    }
+
+    #[test]
+    fn parse_scale_negative_fails() {
+        assert!(parse_positive_scale("-1.0").is_err());
+    }
+
+    #[test]
+    fn parse_scale_not_a_number_fails() {
+        assert!(parse_positive_scale("abc").is_err());
+        assert!(parse_positive_scale("").is_err());
+    }
+
+    // ── format_from_filename ──
+
+    #[test]
+    fn format_from_filename_webp() {
+        assert!(matches!(format_from_filename("out.webp"), OutputFormat::WebP));
+        assert!(matches!(format_from_filename("/tmp/x.webp"), OutputFormat::WebP));
+    }
+
+    #[test]
+    fn format_from_filename_png() {
+        assert!(matches!(format_from_filename("out.png"), OutputFormat::Png));
+    }
+
+    #[test]
+    fn format_from_filename_no_extension_defaults_png() {
+        assert!(matches!(format_from_filename("output"), OutputFormat::Png));
+        assert!(matches!(format_from_filename("/tmp/noext"), OutputFormat::Png));
+        assert!(matches!(format_from_filename(""), OutputFormat::Png));
+    }
+
+    #[test]
+    fn format_from_filename_unknown_extension_defaults_png() {
+        assert!(matches!(format_from_filename("out.jpg"), OutputFormat::Png));
+        assert!(matches!(format_from_filename("out.bmp"), OutputFormat::Png));
+    }
+
+    // ── PostureCli → Posture ──
+
+    #[test]
+    fn posture_cli_to_posture() {
+        let p: Posture = PostureCli::Stand.into();
+        assert_eq!(p.head_yaw, 0.0);
+        assert_eq!(p.left_leg_pitch, 0.0);
+    }
+
+    #[test]
+    fn posture_cli_wave_arms_raised() {
+        let p: Posture = PostureCli::Wave.into();
+        assert!(p.left_arm_pitch > 0.0);
+    }
+
+    #[test]
+    fn posture_cli_walking_alternating() {
+        let p: Posture = PostureCli::Walking.into();
+        assert!(p.left_arm_pitch < 0.0);
+        assert!(p.right_arm_pitch > 0.0);
+        assert!(p.left_leg_pitch > 0.0);
+        assert!(p.right_leg_pitch < 0.0);
+    }
+
+    #[test]
+    fn posture_cli_running_larger_than_walking() {
+        let w: Posture = PostureCli::Walking.into();
+        let r: Posture = PostureCli::Running.into();
+        assert!(r.left_arm_pitch.abs() > w.left_arm_pitch.abs());
+        assert!(r.left_leg_pitch.abs() > w.left_leg_pitch.abs());
+    }
+
+    // ── character_and_camera_from_scene ──
+
+    fn default_scene() -> SceneArgs {
+        SceneArgs {
+            slim: false,
+            cam_yaw: 180.0,
+            cam_pitch: 90.0,
+            cam_zoom: 1.0,
+            posture: PostureCli::Stand,
+            head_yaw: None,
+            head_pitch: None,
+            left_arm_roll: None,
+            left_arm_pitch: None,
+            right_arm_roll: None,
+            right_arm_pitch: None,
+            left_leg_pitch: None,
+            right_leg_pitch: None,
+            pos_x: 0.0,
+            pos_y: 0.0,
+            pos_z: 0.0,
+            rot_x: 0.0,
+            rot_y: 0.0,
+            rot_z: 0.0,
+        }
+    }
+
+    #[test]
+    fn scene_defaults_classic_stand() {
+        let (c, cam) = character_and_camera_from_scene(&default_scene());
+        assert_eq!(c.skin_type, SkinType::Classic);
+        assert_eq!(c.posture.head_yaw, 0.0);
+        assert_eq!(c.posture.head_pitch, 0.0);
+        assert_eq!(cam.yaw, 180.0);
+        assert_eq!(cam.pitch, 90.0);
+        assert_eq!(cam.scale, 1.0);
+    }
+
+    #[test]
+    fn scene_slim_skin_type() {
+        let mut scene = default_scene();
+        scene.slim = true;
+        let (c, _) = character_and_camera_from_scene(&scene);
+        assert_eq!(c.skin_type, SkinType::Slim);
+    }
+
+    #[test]
+    fn scene_camera_values_passed_through() {
+        let mut scene = default_scene();
+        scene.cam_yaw = 45.0;
+        scene.cam_pitch = 30.0;
+        scene.cam_zoom = 2.5;
+        let (_, cam) = character_and_camera_from_scene(&scene);
+        assert_eq!(cam.yaw, 45.0);
+        assert_eq!(cam.pitch, 30.0);
+        assert_eq!(cam.scale, 2.5);
+    }
+
+    #[test]
+    fn scene_posture_wave_overrides_base() {
+        let mut scene = default_scene();
+        scene.posture = PostureCli::Wave;
+        let (c, _) = character_and_camera_from_scene(&scene);
+        assert!(c.posture.left_arm_pitch > 0.0, "Wave posture: left arm raised");
+        assert_eq!(c.posture.right_arm_pitch, 0.0, "Wave posture: right arm still");
+    }
+
+    #[test]
+    fn scene_joint_override_overrides_posture() {
+        let mut scene = default_scene();
+        scene.posture = PostureCli::Stand;
+        scene.head_yaw = Some(42.0);
+        scene.left_leg_pitch = Some(-15.0);
+        let (c, _) = character_and_camera_from_scene(&scene);
+        assert_eq!(c.posture.head_yaw, 42.0);
+        assert_eq!(c.posture.left_leg_pitch, -15.0);
+        assert_eq!(c.posture.head_pitch, 0.0); // not overridden
+    }
+
+    #[test]
+    fn scene_world_position_and_rotation() {
+        let mut scene = default_scene();
+        scene.pos_x = 1.0;
+        scene.pos_y = 2.0;
+        scene.pos_z = 3.0;
+        scene.rot_x = 10.0;
+        scene.rot_y = 20.0;
+        scene.rot_z = 30.0;
+        let (c, _) = character_and_camera_from_scene(&scene);
+        assert_eq!(c.position.x, 1.0);
+        assert_eq!(c.position.y, 2.0);
+        assert_eq!(c.position.z, 3.0);
+        assert_eq!(c.rotation.x, 10.0);
+        assert_eq!(c.rotation.y, 20.0);
+        assert_eq!(c.rotation.z, 30.0);
+    }
+
+    // ── CLI arg parsing ──
+
+    #[test]
+    fn cli_render_minimal() {
+        let args = Args::try_parse_from(["eidolon", "render", "skin.png"])
+            .expect("minimal render parse");
+        match args.command {
+            Command::Render { skin, output, viewport, scene } => {
+                assert_eq!(skin, "skin.png");
+                assert_eq!(output, "output.png");
+                assert_eq!(viewport.width, 800);
+                assert_eq!(viewport.height, 600);
+                assert_eq!(scene.cam_yaw, 180.0);
+                assert!(matches!(scene.posture, PostureCli::Stand));
+            }
+            _ => panic!("Expected Render"),
+        }
+    }
+
+    #[test]
+    fn cli_render_all_options() {
+        let args = Args::try_parse_from([
+            "eidolon", "render", "skin.png", "out.webp",
+            "--width", "400", "--height", "300",
+            "--slim", "--cam-yaw", "90", "--cam-pitch", "45", "--cam-zoom", "2.0",
+            "--posture", "wave",
+            "--head-yaw", "15", "--left-arm-pitch", "45",
+            "--pos-x", "1", "--rot-y", "180",
+        ])
+        .expect("full render parse");
+        match args.command {
+            Command::Render { skin, output, viewport, scene } => {
+                assert_eq!(skin, "skin.png");
+                assert_eq!(output, "out.webp");
+                assert_eq!(viewport.width, 400);
+                assert_eq!(viewport.height, 300);
+                assert!(scene.slim);
+                assert_eq!(scene.cam_yaw, 90.0);
+                assert_eq!(scene.cam_pitch, 45.0);
+                assert_eq!(scene.cam_zoom, 2.0);
+                assert!(matches!(scene.posture, PostureCli::Wave));
+                assert_eq!(scene.head_yaw, Some(15.0));
+                assert_eq!(scene.left_arm_pitch, Some(45.0));
+                assert_eq!(scene.pos_x, 1.0);
+                assert_eq!(scene.rot_y, 180.0);
+            }
+            _ => panic!("Expected Render"),
+        }
+    }
+
+    #[test]
+    fn cli_render_invalid_width_rejected() {
+        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--width", "0"]).is_err());
+    }
+
+    #[test]
+    fn cli_render_invalid_zoom_zero_rejected() {
+        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "0"]).is_err());
+    }
+
+    #[test]
+    fn cli_render_invalid_zoom_negative_rejected() {
+        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "-1"]).is_err());
+    }
+
+    #[test]
+    fn cli_render_invalid_posture_rejected() {
+        assert!(
+            Args::try_parse_from(["eidolon", "render", "skin.png", "--posture", "unknown"]).is_err()
+        );
+    }
+
+    #[test]
+    fn cli_preview_minimal() {
+        let args = Args::try_parse_from(["eidolon", "preview", "skin.png"])
+            .expect("minimal preview parse");
+        match args.command {
+            Command::Preview { skin, viewport, scene } => {
+                assert_eq!(skin, "skin.png");
+                assert_eq!(viewport.width, 800);
+                assert_eq!(viewport.height, 600);
+                assert!(!scene.slim);
+            }
+            _ => panic!("Expected Preview"),
+        }
+    }
+
+    #[test]
+    fn cli_preview_with_options() {
+        let args = Args::try_parse_from([
+            "eidolon", "preview", "skin.png",
+            "--width", "1024", "--height", "768",
+            "--slim", "--posture", "running", "--cam-zoom", "1.5",
+        ])
+        .expect("preview with options parse");
+        match args.command {
+            Command::Preview { skin, viewport, scene } => {
+                assert_eq!(skin, "skin.png");
+                assert_eq!(viewport.width, 1024);
+                assert_eq!(viewport.height, 768);
+                assert!(scene.slim);
+                assert!(matches!(scene.posture, PostureCli::Running));
+                assert_eq!(scene.cam_zoom, 1.5);
+            }
+            _ => panic!("Expected Preview"),
+        }
+    }
+
+    #[test]
+    fn cli_convert_minimal() {
+        let args = Args::try_parse_from(["eidolon", "convert", "old.png", "new.png"])
+            .expect("minimal convert parse");
+        match args.command {
+            Command::Convert { input, output } => {
+                assert_eq!(input, PathBuf::from("old.png"));
+                assert_eq!(output, PathBuf::from("new.png"));
+            }
+            _ => panic!("Expected Convert"),
+        }
+    }
+
+    #[test]
+    fn cli_convert_default_output() {
+        let args = Args::try_parse_from(["eidolon", "convert", "old.png"])
+            .expect("convert with default output");
+        match args.command {
+            Command::Convert { input, output } => {
+                assert_eq!(input, PathBuf::from("old.png"));
+                assert_eq!(output, PathBuf::from("output.png"));
+            }
+            _ => panic!("Expected Convert"),
+        }
+    }
+
+    #[test]
+    fn cli_missing_subcommand_rejected() {
+        assert!(Args::try_parse_from(["eidolon"]).is_err());
+    }
+
+    #[test]
+    fn cli_render_missing_skin_rejected() {
+        assert!(Args::try_parse_from(["eidolon", "render"]).is_err());
+    }
+
+    #[test]
+    fn cli_render_help_accepted() {
+        // --help should print and exit
+        let result = Args::try_parse_from(["eidolon", "render", "--help"]);
+        assert!(result.is_err()); // clap exits on help by default
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let args = Args::parse();

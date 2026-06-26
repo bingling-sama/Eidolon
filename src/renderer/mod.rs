@@ -44,6 +44,37 @@ impl OutputFormat {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_format_png_as_image_format() {
+        assert_eq!(OutputFormat::Png.as_image_format(), ImageFormat::Png);
+    }
+
+    #[test]
+    fn output_format_webp_as_image_format() {
+        assert_eq!(OutputFormat::WebP.as_image_format(), ImageFormat::WebP);
+    }
+
+    #[test]
+    fn output_format_png_extension() {
+        assert_eq!(OutputFormat::Png.extension(), "png");
+    }
+
+    #[test]
+    fn output_format_webp_extension() {
+        assert_eq!(OutputFormat::WebP.extension(), "webp");
+    }
+
+    #[test]
+    fn output_format_debug() {
+        assert!(format!("{:?}", OutputFormat::Png).contains("Png"));
+        assert!(format!("{:?}", OutputFormat::WebP).contains("WebP"));
+    }
+}
+
 pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -268,6 +299,17 @@ impl Renderer {
     /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
     pub fn load_texture(&self, path: &str) -> Result<Texture, EidolonError> {
         Texture::load_from_file(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            path,
+        )
+    }
+
+    /// Load a skin PNG without auto-converting single-layer to double-layer.
+    pub fn load_texture_raw(&self, path: &str) -> Result<Texture, EidolonError> {
+        Texture::load_from_file_raw(
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
