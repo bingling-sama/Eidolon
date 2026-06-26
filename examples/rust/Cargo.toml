@@ -1,0 +1,9 @@
+[package]
+name = "eidolon-example"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+eidolonmc = { path = "../.." }
+env_logger = "0.11"
