@@ -37,20 +37,18 @@ fn snapshot_classic_standing_front() {
     let mut character = Character::new();
     character.skin_type = SkinType::Classic;
     character.posture = Posture {
-        head_yaw: 90.0,
-        head_pitch: 90.0,
+        head_yaw: 0.0,
+        head_pitch: 0.0,
         left_arm_roll: 90.0,
         left_arm_pitch: 0.0,
         right_arm_roll: 90.0,
         right_arm_pitch: 0.0,
-        left_leg_pitch: 90.0,
-        right_leg_pitch: 90.0,
+        left_leg_pitch: 0.0,
+        right_leg_pitch: 0.0,
     };
-    character.skin = Some(
-        renderer
-            .load_texture("resources/bingling_sama.png")
-            .expect("Failed to load skin"),
-    );
+    let skin = renderer
+        .load_texture("resources/bingling_sama.png")
+        .expect("Failed to load skin");
 
     let camera = Camera {
         yaw: 180.0,
@@ -59,7 +57,7 @@ fn snapshot_classic_standing_front() {
     };
 
     let image = renderer
-        .render(&character, &camera, 800, 600)
+        .render(&character, &skin, &camera, 800, 600)
         .expect("Snapshot render failed");
 
     let raw: Vec<u8> = image

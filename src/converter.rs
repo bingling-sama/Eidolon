@@ -1,3 +1,4 @@
+use crate::error::EidolonError;
 use image::{imageops, DynamicImage, GenericImageView, ImageBuffer};
 
 // 64×32 right leg: source rects on the upper half (OFIB face order) in pixel coords (x0, y0, x1, y1).
@@ -38,14 +39,15 @@ fn scale_rect(rect: (u32, u32, u32, u32), hd_ratio: f32) -> (u32, u32, u32, u32)
         (rect.3 as f32 * hd_ratio) as u32,
     )
 }
+
 /// Expand a legacy single-layer skin (`width == 2 * height`) to a square double-layer atlas by
 /// copying the top half and synthesizing mirrored left limbs in the bottom half.
-pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, String> {
+pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, EidolonError> {
     // Check if the image is single-layer (width is twice the height)
     if img.width() != img.height() * 2 {
-        return Err(
-            "Input image is not a single-layer skin (width must be twice the height).".to_string(),
-        );
+        return Err(EidolonError::conversion(
+            "Input image is not a single-layer skin (width must be twice the height)",
+        ));
     }
 
     let hd_ratio = img.width() as f32 / 64.0;
@@ -116,7 +118,6 @@ mod tests {
         }
     }
 
-    #[test]
     #[test]
     fn test_single2double_success_synthetic() {
         // 64x32 synthetic single-layer skin

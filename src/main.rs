@@ -5,8 +5,9 @@ use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
     camera::Camera,
     character::{Character, DefaultPostures, Posture, SkinType},
+    converter,
     renderer::{OutputFormat, Renderer},
-    utils::converter,
+    texture::Texture,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -99,14 +100,14 @@ struct SceneArgs {
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     scale: f32,
 
-    /// Posture: `stand` (default).
+    /// Posture: `stand` (default). 0° = neutral for all joints.
     #[arg(long, value_enum, default_value_t = PostureCli::Stand)]
     posture: PostureCli,
 
-    /// Override head yaw in degrees; if omitted, uses the `--posture` preset.
+    /// Override head yaw in degrees (0° = forward); if omitted, uses the `--posture` preset.
     #[arg(long)]
     head_yaw: Option<f32>,
-    /// Override head pitch in degrees; if omitted, uses the `--posture` preset.
+    /// Override head pitch in degrees (0° = level); if omitted, uses the `--posture` preset.
     #[arg(long)]
     head_pitch: Option<f32>,
     /// Override left arm roll in degrees; if omitted, uses the `--posture` preset.
@@ -121,10 +122,10 @@ struct SceneArgs {
     /// Override right arm pitch in degrees; if omitted, uses the `--posture` preset.
     #[arg(long)]
     right_arm_pitch: Option<f32>,
-    /// Override left leg pitch in degrees; if omitted, uses the `--posture` preset.
+    /// Override left leg pitch in degrees (0° = straight down); if omitted, uses the `--posture` preset.
     #[arg(long)]
     left_leg_pitch: Option<f32>,
-    /// Override right leg pitch in degrees; if omitted, uses the `--posture` preset.
+    /// Override right leg pitch in degrees (0° = straight down); if omitted, uses the `--posture` preset.
     #[arg(long)]
     right_leg_pitch: Option<f32>,
 
@@ -214,6 +215,7 @@ struct PreviewApp {
     renderer: Option<Renderer>,
     window: Option<Arc<Window>>,
     character: Character,
+    skin: Option<Texture>,
     camera: Camera,
     texture_path: String,
     initial_size: PhysicalSize<u32>,
@@ -231,7 +233,7 @@ impl ApplicationHandler for PreviewApp {
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
         let mut renderer = Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
-        self.character.skin = Some(renderer.load_texture(&self.texture_path).expect("Failed to load skin texture"));
+        self.skin = Some(renderer.load_texture(&self.texture_path).expect("Failed to load skin texture"));
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
 
@@ -258,8 +260,8 @@ impl ApplicationHandler for PreviewApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                if let Some(renderer) = &self.renderer {
-                    match renderer.render_frame(&self.character, &self.camera) {
+                if let (Some(renderer), Some(skin)) = (&self.renderer, &self.skin) {
+                    match renderer.render_frame(&self.character, skin, &self.camera) {
                         Ok(()) => {}
                         Err(wgpu::SurfaceError::Lost) => {
                             if let Some(window) = &self.window {
@@ -316,10 +318,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let renderer = Renderer::new()?;
             info!("Renderer ready");
 
-            let (mut character, camera) = character_and_camera_from_scene(&scene);
+            let (character, camera) = character_and_camera_from_scene(&scene);
 
             info!("Loading skin: {}", scene.texture);
-            character.skin = Some(renderer.load_texture(&scene.texture)?);
+            let skin = renderer.load_texture(&scene.texture)?;
             info!("Skin loaded");
 
             info!("Rendering...");
@@ -333,17 +335,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let mut filename = filename;
-            if filename == "output.png" {
-                filename = match format.to_lowercase().as_str() {
-                    "png" => "output.png".to_string(),
-                    "webp" => "output.webp".to_string(),
-                    _ => filename,
-                };
-            }
-
             renderer.render_to_image(
                 &character,
+                &skin,
                 &camera,
                 &filename,
                 (viewport.width, viewport.height),
@@ -361,6 +355,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 renderer: None,
                 window: None,
                 character,
+                skin: None,
                 camera,
                 texture_path: scene.texture,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
@@ -371,7 +366,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Convert { input, output } => {
             let img =
-                image::open(input).map_err(|e| format!("Failed to open input image: {}", e))?;
+                image::open(&input).map_err(|e| format!("Failed to open input image: {}", e))?;
 
             match converter::single2double(&img) {
                 Ok(result) => {
@@ -383,7 +378,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     error!("Conversion failed: {}", e);
-                    Err(Box::new(std::io::Error::other(e)))
+                    Err(Box::new(std::io::Error::other(e.to_string())))
                 }
             }
         }

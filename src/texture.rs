@@ -2,20 +2,26 @@
 //!
 //! Loads a PNG from disk, uploads RGBA8 data to a `wgpu` texture, and builds a bind group.
 //! If the image has single-layer layout (width = 2 × height), it is converted to a
-//! double-layer skin via [`crate::utils::converter::single2double`] before upload.
+//! double-layer skin via [`crate::converter::single2double`] before upload.
 
-use crate::utils::converter::single2double;
+use crate::converter::single2double;
+use crate::error::EidolonError;
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use log::info;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-/// GPU skin texture: [`wgpu::Texture`], view, and bind group for the skin shader.
+/// GPU skin texture.
+///
+/// Wraps wgpu resources; consumed by the renderer via its bind group.
+/// Fields are private — no wgpu types leak to library consumers.
 pub struct Texture {
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
-    pub bind_group: wgpu::BindGroup,
+    #[allow(dead_code)]
+    pub(crate) texture: wgpu::Texture,
+    #[allow(dead_code)]
+    pub(crate) view: wgpu::TextureView,
+    pub(crate) bind_group: wgpu::BindGroup,
 }
 
 impl Texture {
@@ -23,24 +29,25 @@ impl Texture {
     /// then create the GPU texture and bind group.
     ///
     /// The path is canonicalized before use to resolve symlinks and `..` components.
-    /// Returns an error if the path contains null bytes or cannot be resolved.
     pub fn load_from_file(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, EidolonError> {
         info!("Loading texture: {}", path);
         if path.contains('\0') {
-            return Err("Texture path contains null bytes".into());
+            return Err(EidolonError::invalid_path("texture path contains null bytes"));
         }
-        let canonical = Path::new(path).canonicalize().map_err(|e| {
-            format!("Failed to resolve texture path '{}': {}", path, e)
-        })?;
+        let canonical = Path::new(path)
+            .canonicalize()
+            .map_err(|e| EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e)))?;
         let file = File::open(&canonical)?;
         let reader = BufReader::new(file);
-        let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
+        let image = image::load(reader, ImageFormat::Png)
+            .map_err(|e| EidolonError::texture(format!("failed to decode PNG: {e}")))?
+            .to_rgba8();
         Self::load_texture(
             device,
             queue,
@@ -59,17 +66,19 @@ impl Texture {
         bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, EidolonError> {
         info!("Loading texture (raw, no conversion): {}", path);
         if path.contains('\0') {
-            return Err("Texture path contains null bytes".into());
+            return Err(EidolonError::invalid_path("texture path contains null bytes"));
         }
-        let canonical = Path::new(path).canonicalize().map_err(|e| {
-            format!("Failed to resolve texture path '{}': {}", path, e)
-        })?;
+        let canonical = Path::new(path)
+            .canonicalize()
+            .map_err(|e| EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e)))?;
         let file = File::open(&canonical)?;
         let reader = BufReader::new(file);
-        let image = image::load(reader, ImageFormat::Png)?.to_rgba8();
+        let image = image::load(reader, ImageFormat::Png)
+            .map_err(|e| EidolonError::texture(format!("failed to decode PNG: {e}")))?
+            .to_rgba8();
         let dimensions = image.dimensions();
         Self::upload_raw(
             device,
@@ -88,20 +97,13 @@ impl Texture {
         bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         image: &DynamicImage,
-    ) -> Result<Texture, Box<dyn std::error::Error>> {
+    ) -> Result<Texture, EidolonError> {
         let (width, height) = image.dimensions();
         info!("Texture dimensions: {}x{}", width, height);
 
         let image = if width == height * 2 {
             info!("Single-layer skin detected, converting to double-layer...");
-            match single2double(image) {
-                Ok(img) => img,
-                Err(e) => {
-                    return Err(
-                        format!("Failed to convert single-layer to double-layer: {}", e).into(),
-                    )
-                }
-            }
+            single2double(image)?
         } else {
             image.clone()
         };
@@ -127,7 +129,7 @@ impl Texture {
         rgba: &[u8],
         width: u32,
         height: u32,
-    ) -> Result<Texture, Box<dyn std::error::Error>> {
+    ) -> Result<Texture, EidolonError> {
         let size = wgpu::Extent3d {
             width,
             height,

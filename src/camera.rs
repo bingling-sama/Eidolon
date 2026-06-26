@@ -13,7 +13,7 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            yaw: 210.0,
+            yaw: 180.0,
             pitch: 90.0,
             scale: 1.0,
         }

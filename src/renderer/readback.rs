@@ -1,25 +1,24 @@
+use crate::error::EidolonError;
 use image::{ImageBuffer, Rgba};
 
 /// Allocates a mappable buffer sized for row-copy alignment; returns `(buffer, padded_bytes_per_row)`.
-///
-/// Returns an error if the requested dimensions would overflow the buffer size calculation.
 pub(crate) fn create_output_buffer(
     device: &wgpu::Device,
     width: u32,
     height: u32,
-) -> Result<(wgpu::Buffer, u32), Box<dyn std::error::Error>> {
+) -> Result<(wgpu::Buffer, u32), EidolonError> {
     let bytes_per_pixel = 4u32;
     let unpadded_bytes_per_row = bytes_per_pixel
         .checked_mul(width)
-        .ok_or("Buffer size overflow: width too large")?;
+        .ok_or_else(|| EidolonError::gpu("buffer size overflow: width too large"))?;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
     let padded_bytes_per_row = unpadded_bytes_per_row
         .checked_next_multiple_of(align)
-        .ok_or("Buffer size overflow: padded row size too large")?;
+        .ok_or_else(|| EidolonError::gpu("buffer size overflow: padded row size too large"))?;
 
     let buffer_size = (padded_bytes_per_row as u64)
         .checked_mul(height as u64)
-        .ok_or("Buffer size overflow: dimensions too large")?;
+        .ok_or_else(|| EidolonError::gpu("buffer size overflow: dimensions too large"))?;
 
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Output Buffer"),
@@ -68,7 +67,7 @@ pub(crate) fn map_output_buffer_to_rgba(
     width: u32,
     height: u32,
     padded_bytes_per_row: u32,
-) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, Box<dyn std::error::Error>> {
+) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
     let bytes_per_pixel = 4u32;
 
     let buffer_slice = output_buffer.slice(..);
@@ -80,12 +79,9 @@ pub(crate) fn map_output_buffer_to_rgba(
     device.poll(wgpu::PollType::Wait).ok();
     let map_result = rx
         .recv()
-        .map_err(|e| -> Box<dyn std::error::Error> {
-            format!("Failed to receive buffer map result: {}", e).into()
-        })?;
-    map_result.map_err(|e| -> Box<dyn std::error::Error> {
-        format!("Buffer map failed: {:?}", e).into()
-    })?;
+        .map_err(|e| EidolonError::gpu(format!("failed to receive buffer map result: {e}")))?;
+    map_result
+        .map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
     let data = buffer_slice.get_mapped_range();
     let mut img_buf = ImageBuffer::new(width, height);

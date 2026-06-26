@@ -8,26 +8,29 @@
 use eidolon::camera::Camera;
 use eidolon::character::{Character, Posture, SkinType};
 use eidolon::renderer::{OutputFormat, Renderer};
+use eidolon::texture::Texture;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
 }
 
-fn character_with_skin(renderer: &Renderer) -> Character {
+fn character_with_skin(renderer: &Renderer) -> (Character, Texture) {
     let mut c = Character::new();
     c.skin_type = SkinType::Classic;
     c.posture = Posture {
-        head_yaw: 90.0,
-        head_pitch: 90.0,
+        head_yaw: 0.0,
+        head_pitch: 0.0,
         left_arm_roll: 90.0,
         left_arm_pitch: 0.0,
         right_arm_roll: 90.0,
         right_arm_pitch: 0.0,
-        left_leg_pitch: 90.0,
-        right_leg_pitch: 90.0,
+        left_leg_pitch: 0.0,
+        right_leg_pitch: 0.0,
     };
-    c.skin = Some(renderer.load_texture("resources/bingling_sama.png").expect("Failed to load skin"));
-    c
+    let skin = renderer
+        .load_texture("resources/bingling_sama.png")
+        .expect("Failed to load skin");
+    (c, skin)
 }
 
 fn camera_default() -> Camera {
@@ -42,9 +45,9 @@ fn camera_default() -> Camera {
 #[ignore]
 fn render_produces_correct_dimensions() {
     let renderer = make_renderer();
-    let character = character_with_skin(&renderer);
+    let (character, skin) = character_with_skin(&renderer);
     let image = renderer
-        .render(&character, &camera_default(), 800, 600)
+        .render(&character, &skin, &camera_default(), 800, 600)
         .expect("Render failed");
     assert_eq!(image.width(), 800);
     assert_eq!(image.height(), 600);
@@ -54,9 +57,9 @@ fn render_produces_correct_dimensions() {
 #[ignore]
 fn render_output_not_blank() {
     let renderer = make_renderer();
-    let character = character_with_skin(&renderer);
+    let (character, skin) = character_with_skin(&renderer);
     let image = renderer
-        .render(&character, &camera_default(), 800, 600)
+        .render(&character, &skin, &camera_default(), 800, 600)
         .expect("Render failed");
 
     let non_bg: usize = image
@@ -74,13 +77,13 @@ fn render_output_not_blank() {
 #[ignore]
 fn different_camera_angle_produces_different_output() {
     let renderer = make_renderer();
-    let character = character_with_skin(&renderer);
+    let (character, skin) = character_with_skin(&renderer);
 
     let front = renderer
-        .render(&character, &Camera { yaw: 90.0, pitch: 90.0, scale: 1.0 }, 200, 150)
+        .render(&character, &skin, &Camera { yaw: 90.0, pitch: 90.0, scale: 1.0 }, 200, 150)
         .expect("Front render failed");
     let back = renderer
-        .render(&character, &Camera { yaw: 270.0, pitch: 90.0, scale: 1.0 }, 200, 150)
+        .render(&character, &skin, &Camera { yaw: 270.0, pitch: 90.0, scale: 1.0 }, 200, 150)
         .expect("Back render failed");
 
     let px_front: Vec<u8> = front.pixels().flat_map(|p| p.0.to_vec()).collect();
@@ -92,12 +95,12 @@ fn different_camera_angle_produces_different_output() {
 #[ignore]
 fn render_to_image_saves_to_disk() {
     let renderer = make_renderer();
-    let character = character_with_skin(&renderer);
+    let (character, skin) = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.png");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
-        .render_to_image(&character, &camera_default(), tmp_str, (200, 150), OutputFormat::Png)
+        .render_to_image(&character, &skin, &camera_default(), tmp_str, (200, 150), OutputFormat::Png)
         .expect("render_to_image failed");
 
     assert!(tmp.exists(), "Output file not created: {:?}", tmp);
@@ -109,12 +112,12 @@ fn render_to_image_saves_to_disk() {
 #[ignore]
 fn webp_output_format_works() {
     let renderer = make_renderer();
-    let character = character_with_skin(&renderer);
+    let (character, skin) = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.webp");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
-        .render_to_image(&character, &camera_default(), tmp_str, (200, 150), OutputFormat::WebP)
+        .render_to_image(&character, &skin, &camera_default(), tmp_str, (200, 150), OutputFormat::WebP)
         .expect("render_to_image (webp) failed");
 
     assert!(tmp.exists(), "WebP output file not created");
@@ -126,10 +129,10 @@ fn webp_output_format_works() {
 #[ignore]
 fn slim_skin_type_renders() {
     let renderer = make_renderer();
-    let mut character = character_with_skin(&renderer);
+    let (mut character, skin) = character_with_skin(&renderer);
     character.skin_type = SkinType::Slim;
     let image = renderer
-        .render(&character, &camera_default(), 400, 300)
+        .render(&character, &skin, &camera_default(), 400, 300)
         .expect("Slim render failed");
     assert_eq!(image.width(), 400);
     assert_eq!(image.height(), 300);
@@ -137,15 +140,18 @@ fn slim_skin_type_renders() {
 
 #[test]
 #[ignore]
-fn renderer_error_is_descriptive() {
+fn load_texture_invalid_path_returns_error() {
     let renderer = make_renderer();
-    let character = Character::new();
-    let result = renderer.render(&character, &camera_default(), 100, 100);
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("No skin texture"),
-        "Expected 'No skin texture' in error, got: {}",
-        err_msg
-    );
+    let result = renderer.load_texture("nonexistent_skin_xyz.png");
+    match result {
+        Ok(_) => panic!("Expected error for nonexistent path"),
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("failed to resolve"),
+                "Expected path resolution error, got: {}",
+                msg
+            );
+        }
+    }
 }

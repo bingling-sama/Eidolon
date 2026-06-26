@@ -5,6 +5,7 @@ mod readback;
 mod uniforms;
 
 use std::cell::RefCell;
+use std::path::Path;
 use std::sync::Arc;
 
 use image::{ImageBuffer, ImageFormat, Rgba};
@@ -12,11 +13,12 @@ use winit::window::Window;
 
 use crate::camera::Camera;
 use crate::character::{Character, SkinType};
+use crate::error::EidolonError;
 use crate::model::Model;
 use crate::texture::Texture;
 
 use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
-use uniforms::{body_part_ref, compute_body_part_uniforms, PART_CONFIGS};
+use uniforms::{body_part_ref, compute_body_part_uniforms, BODY_PART_COUNT, PART_CONFIGS};
 
 /// Image format for [`Renderer::render_to_image`].
 #[derive(Debug, Clone, Copy)]
@@ -30,6 +32,14 @@ impl OutputFormat {
         match self {
             OutputFormat::Png => ImageFormat::Png,
             OutputFormat::WebP => ImageFormat::WebP,
+        }
+    }
+
+    /// File extension without the dot: `"png"` or `"webp"`.
+    pub fn extension(&self) -> &'static str {
+        match self {
+            OutputFormat::Png => "png",
+            OutputFormat::WebP => "webp",
         }
     }
 }
@@ -57,12 +67,13 @@ impl Renderer {
     fn create_wgpu_device(
         instance: &wgpu::Instance,
         compatible_surface: Option<&wgpu::Surface>,
-    ) -> Result<(wgpu::Device, wgpu::Queue, wgpu::Adapter), Box<dyn std::error::Error>> {
+    ) -> Result<(wgpu::Device, wgpu::Queue, wgpu::Adapter), EidolonError> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface,
             force_fallback_adapter: false,
-        }))?;
+        }))
+        .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("Eidolon Device"),
@@ -71,12 +82,13 @@ impl Renderer {
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             },
-        ))?;
+        ))
+        .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
         Ok((device, queue, adapter))
     }
 
     /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new() -> Result<Self, EidolonError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -86,12 +98,14 @@ impl Renderer {
     }
 
     /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
-    pub fn new_windowed(window: Arc<Window>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new_windowed(window: Arc<Window>) -> Result<Self, EidolonError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
-        let surface = instance.create_surface(window.clone())?;
+        let surface = instance
+            .create_surface(window.clone())
+            .map_err(|e| EidolonError::gpu(format!("failed to create surface: {e}")))?;
         let (device, queue, adapter) = Self::create_wgpu_device(&instance, Some(&surface))?;
 
         let size = window.inner_size();
@@ -126,7 +140,7 @@ impl Renderer {
             wgpu::SurfaceConfiguration,
             wgpu::TextureFormat,
         )>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, EidolonError> {
         // Log wgpu errors (shader compilation, pipeline creation, etc.)
         // instead of letting them silently drop on the GPU error queue.
         device.on_uncaptured_error(Box::new(|error| {
@@ -203,7 +217,7 @@ impl Renderer {
         let alignment = device.limits().min_uniform_buffer_offset_alignment;
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
         let aligned_size = uniform_size.div_ceil(alignment) * alignment;
-        let num_body_parts = 6u32;
+        let num_body_parts = BODY_PART_COUNT as u32;
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Dynamic Uniform Buffer"),
@@ -252,7 +266,7 @@ impl Renderer {
     }
 
     /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
-    pub fn load_texture(&self, path: &str) -> Result<Texture, Box<dyn std::error::Error>> {
+    pub fn load_texture(&self, path: &str) -> Result<Texture, EidolonError> {
         Texture::load_from_file(
             &self.device,
             &self.queue,
@@ -269,12 +283,11 @@ impl Renderer {
         target_view: &wgpu::TextureView,
         pipeline: &wgpu::RenderPipeline,
         character: &Character,
+        skin: &Texture,
         camera: &Camera,
         width: u32,
         height: u32,
     ) {
-        let skin_texture = character.skin.as_ref().expect("No skin texture available");
-
         let model = match character.skin_type {
             SkinType::Slim => &self.slim_model,
             SkinType::Classic => &self.default_model,
@@ -347,7 +360,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(pipeline);
-            render_pass.set_bind_group(1, &skin_texture.bind_group, &[]);
+            render_pass.set_bind_group(1, &skin.bind_group, &[]);
 
             for i in 0..PART_CONFIGS.len() {
                 let body_part = body_part_ref(i, model);
@@ -367,10 +380,11 @@ impl Renderer {
     pub fn render(
         &self,
         character: &Character,
+        skin: &Texture,
         camera: &Camera,
         width: u32,
         height: u32,
-    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, Box<dyn std::error::Error>> {
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
         let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Render Target"),
             size: wgpu::Extent3d {
@@ -401,6 +415,7 @@ impl Renderer {
             &texture_view,
             &self.pipeline,
             character,
+            skin,
             camera,
             width,
             height,
@@ -430,6 +445,7 @@ impl Renderer {
     pub fn render_frame(
         &self,
         character: &Character,
+        skin: &Texture,
         camera: &Camera,
     ) -> Result<(), wgpu::SurfaceError> {
         let surface = self.surface.as_ref().expect("Not in windowed mode");
@@ -453,6 +469,7 @@ impl Renderer {
             &view,
             pipeline,
             character,
+            skin,
             camera,
             config.width,
             config.height,
@@ -478,20 +495,38 @@ impl Renderer {
 
     /// Calls [`Renderer::render`], then saves using [`OutputFormat`].
     ///
+    /// The file extension is automatically adjusted to match the output format
+    /// (e.g. `"skin.png"` with `WebP` becomes `"skin.webp"`).
     /// The output path is validated to reject null bytes before writing.
     pub fn render_to_image(
         &self,
         character: &Character,
+        skin: &Texture,
         camera: &Camera,
         filename: &str,
         size: (u32, u32),
         format: OutputFormat,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), EidolonError> {
         if filename.contains('\0') {
-            return Err("Output filename contains null bytes".into());
+            return Err(EidolonError::invalid_path("output filename contains null bytes"));
         }
-        let image_buffer = self.render(character, camera, size.0, size.1)?;
-        image_buffer.save_with_format(filename, format.as_image_format())?;
+
+        // Auto-adjust extension to match the requested format.
+        let adjusted = match Path::new(filename).extension() {
+            Some(ext) if ext == format.extension() => filename.to_string(),
+            _ => {
+                let stem = Path::new(filename)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy())
+                    .unwrap_or_else(|| filename.into());
+                format!("{}.{}", stem, format.extension())
+            }
+        };
+
+        let image_buffer = self.render(character, skin, camera, size.0, size.1)?;
+        image_buffer
+            .save_with_format(&adjusted, format.as_image_format())
+            .map_err(|e| EidolonError::texture(format!("failed to save image: {e}")))?;
         Ok(())
     }
 }

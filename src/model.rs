@@ -1,5 +1,6 @@
 //! Loads the rigged Minecraft player mesh from OBJ assets.
 
+use crate::error::EidolonError;
 use log::info;
 use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
@@ -63,19 +64,43 @@ pub struct Model {
 }
 
 impl Model {
-    /// Load an OBJ where each object name maps to a fixed body part (see `extract_part` calls).
+    /// Load an OBJ from a file path where each object name maps to a fixed body part.
     ///
-    /// Required object names: `Head`, `Hat Layer`, `Body`, `Body Layer`, `Right Arm`, `Right Arm Layer`,
-    /// `Left Arm`, `Left Arm Layer`, `Right Leg`, `Right Leg Layer`, `Left Leg`, `Left Leg Layer`.
-    /// Texture V flips from OBJ space to OpenGL-style UVs (`1.0 - v`).
+    /// Required object names: `Head`, `Hat Layer`, `Body`, `Body Layer`, `Right Arm`,
+    /// `Right Arm Layer`, `Left Arm`, `Left Arm Layer`, `Right Leg`, `Right Leg Layer`,
+    /// `Left Leg`, `Left Leg Layer`.
     pub fn load_from_obj(
         device: &wgpu::Device,
         path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, EidolonError> {
         info!("Loading OBJ file: {}", path);
-        let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)?;
+        let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)
+            .map_err(|e| EidolonError::model(format!("failed to load OBJ '{}': {}", path, e)))?;
         info!("OBJ file loaded with {} objects", models.len());
+        Self::build_from_tobj(device, models)
+    }
 
+    /// Load an OBJ from in-memory bytes. Same object-name requirements as [`load_from_obj`].
+    pub fn load_from_obj_bytes(
+        device: &wgpu::Device,
+        data: &[u8],
+        name_hint: &str,
+    ) -> Result<Self, EidolonError> {
+        info!("Loading OBJ from bytes ({})", name_hint);
+        let (models, _materials) = tobj::load_obj_buf(
+            &mut std::io::Cursor::new(data),
+            &GPU_LOAD_OPTIONS,
+            |_| unreachable!("no material files when loading from bytes"),
+        )
+        .map_err(|e| EidolonError::model(format!("failed to parse OBJ bytes ({}): {}", name_hint, e)))?;
+        info!("OBJ bytes loaded with {} objects", models.len());
+        Self::build_from_tobj(device, models)
+    }
+
+    fn build_from_tobj(
+        device: &wgpu::Device,
+        models: Vec<tobj::Model>,
+    ) -> Result<Self, EidolonError> {
         let mut parts: HashMap<String, ModelPart> = HashMap::new();
 
         for model in models {
@@ -143,10 +168,10 @@ impl Model {
         fn extract_part(
             parts: &mut HashMap<String, ModelPart>,
             name: &str,
-        ) -> Result<ModelPart, String> {
+        ) -> Result<ModelPart, EidolonError> {
             parts
                 .remove(name)
-                .ok_or_else(|| format!("Missing model part: {}", name))
+                .ok_or_else(|| EidolonError::model(format!("Missing model part: {}", name)))
         }
 
         Ok(Model {

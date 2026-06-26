@@ -12,12 +12,10 @@ fn performance_benchmark(c: &mut Criterion) {
     fs::create_dir_all(output_dir).expect("Failed to create output directory");
 
     let renderer = Renderer::new().expect("Failed to create renderer");
-    let mut character = Character::new();
-    character.skin = Some(
-        renderer
-            .load_texture("resources/bingling_sama.png")
-            .expect("Failed to load skin texture"),
-    );
+    let character = Character::new();
+    let skin = renderer
+        .load_texture("resources/bingling_sama.png")
+        .expect("Failed to load skin texture");
 
     let mut camera = Camera {
         yaw: 180.0,
@@ -38,6 +36,7 @@ fn performance_benchmark(c: &mut Criterion) {
                 renderer
                     .render_to_image(
                         &character,
+                        &skin,
                         &camera,
                         &filename,
                         (800, 600),
