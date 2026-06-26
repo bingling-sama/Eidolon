@@ -1,27 +1,27 @@
 # Troubleshooting
 
-## `--skin-type` Is Required
+## Skin Geometry
 
-Both `render` and `preview` require a skin geometry:
-
-```bash
-cargo run -- render --skin-type classic
-cargo run -- preview --skin-type slim
-```
-
-Use `classic` for wide Steve-style arms and `slim` for Alex-style arms.
-
-## Unsupported Output Format
-
-`render` supports only PNG and WebP:
+The renderer defaults to classic (Steve, 4px) arms. Use `--slim` for Alex-style (3px) skins:
 
 ```bash
-cargo run -- render --skin-type classic --format png
-cargo run -- render --skin-type classic --format webp
+cargo run -- render skin.png
+cargo run -- render skin.png --slim
+cargo run -- preview skin.png --slim
 ```
 
-If `--format webp` is used with the default `--filename output.png`, the CLI writes `output.webp`.
-If you provide a custom filename, make sure the extension matches the format you want.
+The renderer cannot infer arm width from the PNG — you must specify it.
+
+## Output Format
+
+Format is inferred from the output filename extension:
+
+```bash
+cargo run -- render skin.png output.png     # PNG
+cargo run -- render skin.png output.webp    # WebP
+```
+
+Only PNG and WebP are supported. The filename extension is auto-adjusted to match the detected format.
 
 ## Texture Fails To Load
 
@@ -40,13 +40,18 @@ cargo run -- convert resources/SSSSSteven.png converted.png
 
 ## Output Path Is Rejected
 
-The `render` command rejects `--filename` values containing `..` path components:
+The `render` command rejects output paths containing `..` components:
 
 ```bash
-cargo run -- render --skin-type classic --filename ../output.png
+# Rejected:
+cargo run -- render skin.png ../output.png
+
+# OK:
+cargo run -- render skin.png output.png
+cargo run -- render skin.png subdir/output.png
 ```
 
-Choose a path inside the working directory or pass a direct filename such as `output.png`.
+Choose a path inside the working directory or pass a direct filename.
 
 ## No GPU Adapter Or Window Creation Failure
 
@@ -65,16 +70,14 @@ Useful checks:
 Adjust camera and viewport options:
 
 ```bash
-cargo run -- render --skin-type classic --width 1024 --height 1024 --yaw 210 --pitch 90 --scale 1.2
+cargo run -- render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2 --width 1024 --height 1024
 ```
 
-`--scale` must be greater than `0`. Larger values make the character appear closer.
+`--cam-zoom` must be greater than `0`. Larger values make the character appear closer.
 
 ## Skin Arms Look Wrong
 
 Use the geometry that matches the skin:
 
-- `--skin-type classic` for 4-pixel-wide arms.
-- `--skin-type slim` for 3-pixel-wide arms.
-
-The renderer cannot infer this from the PNG.
+- Default (classic) for 4-pixel-wide Steve arms.
+- `--slim` for 3-pixel-wide Alex arms.

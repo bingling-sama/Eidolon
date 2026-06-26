@@ -45,13 +45,21 @@ cargo build
 ### Render an Image
 
 ```bash
-cargo run -- render --skin-type classic
+# Minimal — all defaults (classic arms, stand pose, 800×600 PNG)
+cargo run -- render resources/bingling_sama.png
+
+# Slim arms, wave pose, WebP output
+cargo run -- render resources/bingling_sama.png out.webp --slim --posture wave
+
+# Custom camera angle and zoom
+cargo run -- render resources/bingling_sama.png --cam-yaw 210 --cam-zoom 1.5 --width 1024 --height 1024
 ```
 
 ### Preview in a Window
 
 ```bash
-cargo run -- preview --skin-type classic
+cargo run -- preview resources/bingling_sama.png
+cargo run -- preview resources/bingling_sama.png --slim --cam-zoom 2.0
 ```
 
 More CLI options are documented in `docs/cli.md`.
@@ -69,13 +77,14 @@ use eidolon::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
-    let mut character = Character::new();
-    character.skin_type = SkinType::Classic;
-    character.skin = Some(renderer.load_texture("resources/bingling_sama.png")?);
 
+    let character = Character::new();
+    let skin = renderer.load_texture("skin.png")?;
     let camera = Camera::new();
+
     renderer.render_to_image(
         &character,
+        &skin,
         &camera,
         "output.png",
         (800, 600),

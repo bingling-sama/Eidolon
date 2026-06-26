@@ -19,8 +19,8 @@ root unless you pass absolute paths.
 cargo fmt --check
 cargo clippy --all-targets --all-features
 cargo test
-cargo run -- render --skin-type classic
-cargo run -- preview --skin-type classic
+cargo run -- render resources/bingling_sama.png
+cargo run -- preview resources/bingling_sama.png
 cargo bench
 ```
 
@@ -28,13 +28,16 @@ cargo bench
 
 ## Testing Notes
 
-The current test coverage focuses on the skin atlas converter in `src/utils/converter.rs`. Rendering
-paths initialize a real `wgpu` adapter, so they depend on the machine's graphics stack and may be
-better validated with smoke tests:
+Unit tests cover:
+- Camera matrix computation (`src/camera.rs`) — 4 tests
+- Skin converter (`src/converter.rs`) — 5 tests
+
+Model loading tests are `#[ignore]` — they require a GPU adapter. Rendering integration tests
+are in `tests/` and are also `#[ignore]`. Smoke-test rendering manually:
 
 ```bash
-cargo run -- render --skin-type classic --filename output.png
-cargo run -- render --skin-type slim --texture resources/bingling_sama.png --format webp
+cargo run -- render resources/bingling_sama.png
+cargo run -- render resources/bingling_sama.png out.webp --slim --posture wave
 ```
 
 When changing rendering behavior, compare output images before and after the change. The sample
@@ -47,7 +50,7 @@ For skins:
 - Use PNG files.
 - Use square double-layer skins such as `64x64`, or legacy single-layer skins where
   `width == height * 2`, such as `64x32`.
-- Pass the matching `--skin-type` for the skin's arm geometry.
+- Use `--slim` for 3px arm skins; omit it for classic 4px arm skins.
 
 For OBJ models:
 

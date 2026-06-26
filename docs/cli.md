@@ -7,92 +7,119 @@ Eidolon ships a single binary with three subcommands: `render`, `preview`, and `
 Render a skin to an image file (headless).
 
 ```bash
-cargo run -- render [OPTIONS]
+eidolon render [OPTIONS] <SKIN> [OUTPUT]
 ```
 
-Options:
+**Positional arguments:**
 
-- `--filename <PATH>` Output file path. Default: `output.png`
-- `--format <png|webp>` Output format. Default: `png`
-- `--width <PX>` Output width in pixels. Default: `800`
-- `--height <PX>` Output height in pixels. Default: `600`
-- `--texture <PATH>` Skin PNG path. Default: `resources/bingling_sama.png`
-- `--skin-type <classic|slim>` Required arm geometry
-- `--yaw <DEG>` Camera yaw. Default: `180`
-- `--pitch <DEG>` Camera pitch. Default: `90`
-- `--scale <FLOAT>` Camera distance scale (must be > 0). Default: `1.0`
-- `--posture <stand|wave|walking|running>` Posture preset. Default: `stand`
-- `--head-yaw <DEG>` Override head yaw
-- `--head-pitch <DEG>` Override head pitch
-- `--left-arm-roll <DEG>` Override left arm roll
-- `--left-arm-pitch <DEG>` Override left arm pitch
-- `--right-arm-roll <DEG>` Override right arm roll
-- `--right-arm-pitch <DEG>` Override right arm pitch
-- `--left-leg-pitch <DEG>` Override left leg pitch
-- `--right-leg-pitch <DEG>` Override right leg pitch
-- `--position-x <FLOAT>` Character position X. Default: `0`
-- `--position-y <FLOAT>` Character position Y. Default: `0`
-- `--position-z <FLOAT>` Character position Z. Default: `0`
-- `--rotation-x <DEG>` Character rotation X. Default: `0`
-- `--rotation-y <DEG>` Character rotation Y. Default: `0`
-- `--rotation-z <DEG>` Character rotation Z. Default: `0`
+| Arg | Description | Default |
+|-----|-------------|---------|
+| `<SKIN>` | Path to the skin PNG file | *(required)* |
+| `[OUTPUT]` | Output image path. Extension determines format (`.png` or `.webp`) | `output.png` |
 
-Example:
+**Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--width <PX>` | Output width in pixels | `800` |
+| `--height <PX>` | Output height in pixels | `600` |
+| `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
+| `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
+| `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
+| `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
+| `--posture <PRESET>` | Posture preset: `stand`, `wave`, `walking`, `running` | `stand` |
+
+**Power-user options** (show in `--help` but not `-h`):
+
+| Flag | Description |
+|------|-------------|
+| `--head-yaw <DEG>` | Override head yaw (0° = forward) |
+| `--head-pitch <DEG>` | Override head pitch (0° = level) |
+| `--left-arm-roll <DEG>` | Override left arm roll |
+| `--left-arm-pitch <DEG>` | Override left arm pitch |
+| `--right-arm-roll <DEG>` | Override right arm roll |
+| `--right-arm-pitch <DEG>` | Override right arm pitch |
+| `--left-leg-pitch <DEG>` | Override left leg pitch (0° = straight down) |
+| `--right-leg-pitch <DEG>` | Override right leg pitch (0° = straight down) |
+| `--pos-x <FLOAT>` | Character position X | `0` |
+| `--pos-y <FLOAT>` | Character position Y | `0` |
+| `--pos-z <FLOAT>` | Character position Z | `0` |
+| `--rot-x <DEG>` | Character rotation X | `0` |
+| `--rot-y <DEG>` | Character rotation Y | `0` |
+| `--rot-z <DEG>` | Character rotation Z | `0` |
+
+### Examples
 
 ```bash
-cargo run -- render --skin-type classic --texture resources/bingling_sama.png \
-  --width 1024 --height 768 --yaw 210 --pitch 90 --scale 1.2 --format png
+# Minimal — classic arms, stand pose, 800×600 PNG
+eidolon render skin.png
+
+# Slim arms, WebP output
+eidolon render skin.png out.webp --slim
+
+# Wave pose, zoomed in, 1024×1024
+eidolon render skin.png big.webp --posture wave --cam-zoom 1.5 --width 1024 --height 1024
+
+# Custom camera angle
+eidolon render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2
+
+# Override individual joints on top of a posture preset
+eidolon render skin.png --posture walking --head-pitch 15 --left-arm-roll 30
 ```
 
-If `--format webp` is used with the default `--filename output.png`, the CLI changes the output path
-to `output.webp`. Custom filenames are used as provided.
-
-`--filename` must not contain `..` path components. This prevents render output from escaping the
-intended directory by directory traversal.
+Format is inferred from the output filename extension. `output.png` → PNG, `output.webp` → WebP.
+The output path must not contain `..` components (directory traversal is rejected).
 
 ## Preview
 
 Open a live preview window.
 
 ```bash
-cargo run -- preview [OPTIONS]
+eidolon preview [OPTIONS] <SKIN>
 ```
 
-The `preview` command accepts the same scene, camera, posture, and viewport options as `render`, except for `--filename` and `--format`.
+Accepts the same scene, camera, posture, and viewport options as `render`, plus all power-user overrides. No output path or format argument.
 
-Example:
+### Examples
 
 ```bash
-cargo run -- preview --skin-type slim --texture resources/bingling_sama.png --yaw 200
+eidolon preview skin.png
+eidolon preview skin.png --slim --cam-zoom 2.0
+eidolon preview skin.png --posture running --width 1024 --height 768
 ```
 
 ## Convert
 
-Convert a legacy single-layer skin atlas to a square double-layer atlas.
+Convert a legacy single-layer skin atlas (`width == height × 2`) to a square double-layer atlas.
 
 ```bash
-cargo run -- convert <INPUT> [OUTPUT]
+eidolon convert <INPUT> [OUTPUT]
 ```
 
-Arguments:
+| Arg | Description | Default |
+|-----|-------------|---------|
+| `<INPUT>` | Input PNG (width must be twice the height) | *(required)* |
+| `[OUTPUT]` | Output PNG path | `output.png` |
 
-- `<INPUT>` Input PNG (width must be twice the height)
-- `[OUTPUT]` Output PNG path. Default: `output.png`
-
-Example:
+### Example
 
 ```bash
-cargo run -- convert old_skin.png new_skin.png
+eidolon convert old_skin.png new_skin.png
 ```
 
 ## Help
 
-Use `--help` on any command for the most up-to-date option list.
+Use `-h` for a concise option summary or `--help` for the full list including power-user overrides:
+
+```bash
+eidolon render -h
+eidolon render --help
+```
 
 Enable logs with `RUST_LOG=info` when diagnosing rendering or asset-loading problems:
 
 ```bash
-RUST_LOG=info cargo run -- render --skin-type classic
+RUST_LOG=info eidolon render skin.png
 ```
 
 See `troubleshooting.md` for common errors.

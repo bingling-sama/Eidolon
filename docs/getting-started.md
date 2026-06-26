@@ -17,45 +17,64 @@ cargo build
 
 ## Render an Image (Headless)
 
-You must specify `--skin-type` (`classic` or `slim`). The default texture is `resources/bingling_sama.png`.
+The minimal invocation uses all defaults (classic arms, stand pose, 800×600 PNG):
 
 ```bash
-cargo run -- render --skin-type classic
+cargo run -- render resources/bingling_sama.png
 ```
 
 Output defaults to `output.png`. To render a WebP:
 
 ```bash
-cargo run -- render --skin-type classic --format webp
+cargo run -- render resources/bingling_sama.png out.webp
 ```
 
-If you keep `--filename output.png` with `--format webp`, the output name is auto-adjusted to `output.webp`.
+The format is inferred from the output filename extension — `.png` or `.webp`.
 
-Render a custom skin and camera angle:
+### Slim Arms
+
+Use `--slim` for Alex-style (3px) arm geometry. Default is classic (Steve, 4px):
 
 ```bash
-cargo run -- render \
-  --skin-type slim \
-  --texture resources/bingling_sama.png \
-  --filename preview.png \
-  --width 1024 \
-  --height 1024 \
-  --yaw 210 \
-  --pitch 90 \
-  --scale 1.2
+cargo run -- render resources/bingling_sama.png --slim
 ```
+
+### Posture Presets
+
+Choose from `stand` (default), `wave`, `walking`, `running`:
+
+```bash
+cargo run -- render resources/bingling_sama.png --posture wave
+cargo run -- render resources/bingling_sama.png --posture running --slim
+```
+
+### Camera Control
+
+Adjust the camera angle with `--cam-yaw`, `--cam-pitch`, and `--cam-zoom`:
+
+```bash
+cargo run -- render resources/bingling_sama.png \
+  --cam-yaw 210 \
+  --cam-pitch 80 \
+  --cam-zoom 1.5 \
+  --width 1024 \
+  --height 1024
+```
+
+`--cam-zoom` must be > 0. Larger values move the camera closer (orbit radius: 4.0 / zoom).
 
 ## Preview in a Window
 
 ```bash
-cargo run -- preview --skin-type classic
+cargo run -- preview resources/bingling_sama.png
+cargo run -- preview resources/bingling_sama.png --slim --cam-zoom 2.0
 ```
 
 The preview uses the same scene, camera, posture, and viewport options as `render`.
 
 ## Convert a Legacy Skin
 
-Legacy single-layer skins such as `64x32` can be converted to a square double-layer atlas:
+Legacy single-layer skins such as 64×32 can be converted to a square double-layer atlas:
 
 ```bash
 cargo run -- convert resources/SSSSSteven.png converted.png
@@ -64,5 +83,5 @@ cargo run -- convert resources/SSSSSteven.png converted.png
 ## Notes
 
 - Single-layer skins (width = 2 × height) are automatically expanded to double-layer on load.
-- Use `cargo run -- render --help` and `cargo run -- preview --help` for the full option list.
+- Use `-h` for a concise option list or `--help` for the full list including advanced overrides.
 - See `troubleshooting.md` if the renderer cannot find a GPU adapter or if a skin path fails to load.
