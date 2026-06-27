@@ -3,91 +3,518 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eidolon — Minecraft Skin Renderer (WASM)</title>
+  <title>Eidolon — Minecraft Skin Renderer</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.4/dist/font.min.css">
   <style>
+    /* ---- Geist Design System — Light theme ---- */
+    :root {
+      --bg-100: #ffffff;
+      --bg-200: #fafafa;
+      --gray-100: #f2f2f2;
+      --gray-200: #ebebeb;
+      --gray-400: #00000014;
+      --gray-500: #00000036;
+      --gray-700: #8f8f8f;
+      --gray-900: #4d4d4d;
+      --gray-1000: #171717;
+      --blue-700: #006bff;
+      --blue-800: #0059ec;
+      --red-700: #fc0035;
+      --red-800: #ea001d;
+      --green-700: #28a948;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --shadow-card: 0 2px 2px rgba(0,0,0,0.04);
+      --ease-out: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: system-ui, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
+      font-family: 'Geist Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg-200);
+      color: var(--gray-1000);
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px 64px;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .header h1 {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 26px;
+      letter-spacing: -0.4px;
+      color: var(--gray-1000);
+    }
+    .header p {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: var(--gray-900);
+    }
+
+    /* ---- Card ---- */
+    .card {
+      background: var(--bg-100);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ---- Controls row ---- */
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ---- Config row ---- */
+    .config-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 140px;
+      flex: 1;
+    }
+    .field-label {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 16px;
+      color: var(--gray-900);
+    }
+    .select {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      height: 40px;
+      padding: 0 12px;
+      background: var(--bg-100);
+      color: var(--gray-1000);
+      border: none;
+      border-radius: var(--radius-sm);
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238f8f8f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      transition: box-shadow 150ms var(--ease-out);
+    }
+    .select:hover { box-shadow: inset 0 0 0 1px var(--gray-500); }
+    .input-num {
+      font-family: 'Geist Mono', 'SF Mono', monospace;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      width: 72px;
+      height: 40px;
+      padding: 0 8px;
+      text-align: center;
+      background: var(--bg-100);
+      color: var(--gray-1000);
+      border: none;
+      border-radius: var(--radius-sm);
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+      transition: box-shadow 150ms var(--ease-out);
+      -moz-appearance: textfield;
+    }
+    .input-num::-webkit-inner-spin-button,
+    .input-num::-webkit-outer-spin-button { opacity: 1; }
+    .input-num:hover { box-shadow: inset 0 0 0 1px var(--gray-500); }
+    .input-num:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+    .input-num:disabled {
+      background: var(--bg-200);
+      color: var(--gray-700);
+      cursor: not-allowed;
+    }
+    .size-inputs {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+    .size-presets {
+      display: flex;
+      gap: 4px;
+    }
+    .size-preset {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 16px;
+      height: 24px;
+      padding: 0 8px;
+      border: none;
+      border-radius: 9999px;
+      background: var(--bg-100);
+      color: var(--gray-900);
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+      cursor: pointer;
+      transition: background 150ms var(--ease-out), box-shadow 150ms var(--ease-out), color 150ms var(--ease-out);
+    }
+    .size-preset:hover { box-shadow: inset 0 0 0 1px var(--gray-500); }
+    .size-preset.active {
+      background: var(--gray-1000);
+      color: var(--bg-100);
+      box-shadow: none;
+    }
+
+    .size-sep {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 13px;
+      color: var(--gray-700);
+      margin: 0 2px;
+      user-select: none;
+    }
+
+    .select:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+
+    /* ---- Background controls ---- */
+    .bg-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .bg-presets {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .bg-custom-input {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    .bg-swatch {
+      width: 24px; height: 24px;
+      border-radius: 9999px;
+      border: none;
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-100);
+      color: var(--gray-700);
+      transition: box-shadow 150ms var(--ease-out), transform 150ms var(--ease-out);
+    }
+    .bg-swatch:hover { box-shadow: inset 0 0 0 2px var(--gray-500); }
+    .bg-swatch.active {
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+    .bg-swatch.transparent {
+      background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #ccc 75%),
+                        linear-gradient(-45deg, transparent 75%, #ccc 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    }
+    .bg-swatch.custom { background: var(--bg-100); }
+
+    .alpha-slider {
+      width: 100%;
+      height: 20px;
+      margin: 0;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    .alpha-slider::-webkit-slider-runnable-track {
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(to right, transparent, var(--gray-1000));
+    }
+    .alpha-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 9999px;
+      background: var(--bg-100);
+      box-shadow: inset 0 0 0 1px var(--gray-400), 0 1px 2px rgba(0,0,0,0.08);
+      margin-top: -5px;
+      transition: box-shadow 150ms var(--ease-out);
+    }
+    .alpha-slider:hover::-webkit-slider-thumb { box-shadow: inset 0 0 0 2px var(--gray-500), 0 1px 2px rgba(0,0,0,0.08); }
+    .alpha-slider:focus-visible { outline: none; }
+    .alpha-slider:focus-visible::-webkit-slider-thumb {
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+
+    input[type=file] {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 20px;
+      height: 40px;
+      padding: 0 10px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      transition: background-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+      white-space: nowrap;
+    }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+    .btn:disabled {
+      background: var(--gray-100) !important;
+      color: var(--gray-700) !important;
+      cursor: not-allowed;
+      box-shadow: none !important;
+    }
+
+    /* Primary button */
+    .btn-primary {
+      background: var(--gray-1000);
+      color: var(--bg-100);
+    }
+    .btn-primary:hover:not(:disabled) { background: #333; }
+
+    /* Secondary button */
+    .btn-secondary {
+      background: var(--bg-100);
+      color: var(--gray-1000);
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      box-shadow: inset 0 0 0 1px var(--gray-500);
+    }
+
+    /* ---- File name badge ---- */
+    .file-name {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 16px;
+      color: var(--gray-900);
+      margin-left: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 240px;
+    }
+
+    /* ---- Result area ---- */
+    .result {
+      position: relative;
+      background: var(--bg-200);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+    }
+    .result canvas {
+      display: block;
+      max-width: 100%;
+    }
+    .result-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      transition: opacity 200ms var(--ease-out);
+    }
+    .result-hint.hidden { opacity: 0; }
+
+    /* Empty state */
+    .empty-state {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 2rem;
-      min-height: 100vh;
+      gap: 8px;
+      text-align: center;
+      padding: 32px 24px;
     }
-    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
-    p.sub { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
-
-    .controls {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    input[type=file] { display: none; }
-    .btn {
-      padding: 0.6rem 1.4rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-pick { background: #4e8ef7; color: #fff; }
-    .btn-render { background: #4caf84; color: #fff; }
-
-    .result {
-      position: relative;
-      border-radius: 8px;
-      overflow: hidden;
-      background: #111;
-      min-width: 400px;
-      min-height: 300px;
+    .empty-state .icon {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      background: var(--gray-100);
       display: flex;
       align-items: center;
       justify-content: center;
+      margin-bottom: 4px;
     }
-    .result img { max-width: 100%; display: block; }
-    .result .placeholder { color: #555; font-size: 0.9rem; }
-
-    .status {
-      margin-top: 1rem;
-      font-size: 0.85rem;
-      color: #888;
-      min-height: 1.2em;
+    .empty-state .icon svg {
+      width: 20px; height: 20px;
+      color: var(--gray-700);
     }
-    .status.error { color: #f55; }
+    .empty-state h2 {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 20px;
+      letter-spacing: -0.28px;
+      color: var(--gray-1000);
+    }
+    .empty-state p {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 18px;
+      color: var(--gray-700);
+      max-width: 280px;
+    }
 
+    /* ---- Spinner ---- */
     .spinner {
-      width: 32px; height: 32px;
-      border: 3px solid #333;
-      border-top-color: #4caf84;
-      border-radius: 50%;
+      width: 24px; height: 24px;
+      border: 2px solid var(--gray-200);
+      border-top-color: var(--gray-1000);
+      border-radius: 9999px;
       animation: spin 0.7s linear infinite;
-      margin: 2rem auto;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 600px) {
+      body { padding: 24px 12px 48px; }
+      .card { padding: 16px; gap: 12px; }
+      .result { min-height: 240px; }
+      .file-name { max-width: 140px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn { transition: none; }
+      .spinner { animation: none; opacity: 0.5; }
+    }
   </style>
 </head>
 <body>
-  <h1>Eidolon WASM</h1>
-  <p class="sub">Minecraft skin renderer running in the browser via WebGPU</p>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <h1>Eidolon</h1>
+      <p>Minecraft skin renderer running in the browser via WebGPU</p>
+    </header>
 
-  <div class="controls">
-    <label class="btn btn-pick" for="file-input">Choose Skin PNG</label>
-    <input id="file-input" type="file" accept="image/png">
-    <button id="btn-render" class="btn btn-render" disabled>Render</button>
-  </div>
+    <!-- Main Card -->
+    <div class="card">
+      <!-- Controls -->
+      <div class="controls">
+        <input id="file-input" type="file" accept="image/png">
+        <label class="btn btn-secondary" for="file-input">Choose Skin</label>
+        <span class="file-name" id="file-name"></span>
+        <div style="margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+          <div class="size-presets" id="size-presets">
+            <button class="size-preset active" data-w="800" data-h="600">800×600</button>
+            <button class="size-preset" data-w="1920" data-h="1080">1080p</button>
+            <button class="size-preset" data-w="3840" data-h="2160">4K</button>
+          </div>
+          <div class="size-inputs">
+            <input type="number" id="input-size-w" class="input-num" value="800" min="64" max="4096" step="16" disabled>
+            <span class="size-sep">×</span>
+            <input type="number" id="input-size-h" class="input-num" value="600" min="64" max="4096" step="16" disabled>
+          </div>
+        </div>
+        <button id="btn-export" class="btn btn-secondary" disabled>Export PNG</button>
+      </div>
 
-  <div class="result" id="result">
-    <span class="placeholder">Select a skin PNG, then click Render</span>
-  </div>
-  <div class="status" id="status">Initializing renderer…</div>
+      <!-- Config -->
+      <div class="config-row">
+        <div class="field">
+          <label class="field-label" for="select-posture">Posture</label>
+          <select id="select-posture" class="select">
+            <option value="stand">Stand</option>
+            <option value="wave">Wave</option>
+            <option value="walking">Walking</option>
+            <option value="running">Running</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="select-skin-type">Skin Type</label>
+          <select id="select-skin-type" class="select">
+            <option value="classic">Classic</option>
+            <option value="slim">Slim</option>
+          </select>
+        </div>
+        <div class="field" style="max-width:160px;flex:0 0 auto">
+          <label class="field-label">Background</label>
+          <div class="bg-controls">
+            <div class="bg-presets" id="bg-presets">
+              <button class="bg-swatch transparent" data-color="#000000" data-alpha="0" title="Transparent"></button>
+              <button class="bg-swatch" style="background:#ffffff" data-color="#ffffff" data-alpha="100" title="White"></button>
+              <button class="bg-swatch" style="background:#f2f2f2" data-color="#f2f2f2" data-alpha="100" title="Light gray"></button>
+              <button class="bg-swatch" style="background:#2b2b4b" data-color="#2b2b4b" data-alpha="100" title="Classic"></button>
+              <input type="color" id="input-bg-custom" class="bg-custom-input" value="#2b2b4b" title="Custom color">
+              <label class="bg-swatch custom" for="input-bg-custom" title="Custom color">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 11 11 1M3.5 0 12 8.5 9 11.5.6 3Z" stroke="currentColor" stroke-width="1.2"/></svg>
+              </label>
+            </div>
+            <input type="range" id="input-bg-alpha" class="alpha-slider" min="0" max="100" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="result" id="result">
+        <div class="result-hint" id="result-hint">
+          <div class="empty-state">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+              </svg>
+            </div>
+            <h2>No skin selected</h2>
+            <p>Choose a Minecraft skin PNG to preview it here. Drag to orbit, scroll to zoom.</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
   <script type="module" src="/main.js"></script>
 </body>

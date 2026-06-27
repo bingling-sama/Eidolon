@@ -94,6 +94,8 @@ pub struct Renderer {
     surface_pipeline: Option<wgpu::RenderPipeline>,
     /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
     cached_depth_texture: RefCell<Option<(wgpu::Texture, u32, u32)>>,
+    /// RGBA clear color for the render pass background. Default: transparent black.
+    clear_color: [f64; 4],
 }
 
 impl Renderer {
@@ -160,7 +162,19 @@ impl Renderer {
             width: size.width.max(1),
             height: size.height.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
-            alpha_mode: surface_caps.alpha_modes[0],
+            alpha_mode: surface_caps
+                .alpha_modes
+                .iter()
+                .copied()
+                .find(|m| *m == wgpu::CompositeAlphaMode::PreMultiplied)
+                .or_else(|| {
+                    surface_caps
+                        .alpha_modes
+                        .iter()
+                        .copied()
+                        .find(|m| *m == wgpu::CompositeAlphaMode::PostMultiplied)
+                })
+                .unwrap_or(surface_caps.alpha_modes[0]),
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
@@ -244,7 +258,18 @@ impl Renderer {
             width: 512,
             height: 512,
             present_mode: wgpu::PresentMode::AutoVsync,
-            alpha_mode: caps.alpha_modes[0],
+            alpha_mode: caps
+                .alpha_modes
+                .iter()
+                .copied()
+                .find(|m| *m == wgpu::CompositeAlphaMode::PreMultiplied)
+                .or_else(|| {
+                    caps.alpha_modes
+                        .iter()
+                        .copied()
+                        .find(|m| *m == wgpu::CompositeAlphaMode::PostMultiplied)
+                })
+                .unwrap_or(caps.alpha_modes[0]),
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
@@ -402,6 +427,7 @@ impl Renderer {
             surface_config,
             surface_pipeline,
             cached_depth_texture: RefCell::new(None),
+            clear_color: [0.0, 0.0, 0.0, 0.0],
         })
     }
 
@@ -503,10 +529,10 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.2,
-                            g: 0.2,
-                            b: 0.4,
-                            a: 1.0,
+                            r: self.clear_color[0],
+                            g: self.clear_color[1],
+                            b: self.clear_color[2],
+                            a: self.clear_color[3],
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -714,6 +740,11 @@ impl Renderer {
         output.present();
 
         Ok(())
+    }
+
+    /// Set the render pass clear color (RGBA, 0.0–1.0). Default is transparent black.
+    pub fn set_clear_color(&mut self, r: f64, g: f64, b: f64, a: f64) {
+        self.clear_color = [r, g, b, a];
     }
 
     /// Update surface extent after a resize; no-op if not windowed or size is zero.

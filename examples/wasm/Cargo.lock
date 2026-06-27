@@ -691,6 +691,8 @@ dependencies = [
  "log",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]
