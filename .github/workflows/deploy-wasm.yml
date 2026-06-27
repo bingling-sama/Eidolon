@@ -59,7 +59,7 @@ jobs:
         working-directory: examples/wasm
         run: npm run build
         env:
-          BASE_URL: /eidolon/
+          BASE_URL: /Eidolon/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
