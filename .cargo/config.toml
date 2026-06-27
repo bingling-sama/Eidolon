@@ -1,0 +1,4 @@
+# Enable getrandom wasm_js backend for wasm32-unknown-unknown target.
+# This cfg flag is required by getrandom 0.3+ to select the Web Crypto API backend.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]

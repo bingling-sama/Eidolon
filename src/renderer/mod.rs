@@ -5,10 +5,13 @@ mod readback;
 mod uniforms;
 
 use std::cell::RefCell;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
 use image::{ImageBuffer, ImageFormat, Rgba};
+#[cfg(not(target_arch = "wasm32"))]
 use winit::window::Window;
 
 use crate::camera::Camera;
@@ -95,6 +98,7 @@ pub struct Renderer {
 
 impl Renderer {
     /// Shared wgpu bootstrap: adapter + device + queue from an existing Instance.
+    #[cfg(not(target_arch = "wasm32"))]
     fn create_wgpu_device(
         instance: &wgpu::Instance,
         compatible_surface: Option<&wgpu::Surface>,
@@ -119,6 +123,7 @@ impl Renderer {
     }
 
     /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Result<Self, EidolonError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -129,6 +134,7 @@ impl Renderer {
     }
 
     /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new_windowed(window: Arc<Window>) -> Result<Self, EidolonError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -155,6 +161,90 @@ impl Renderer {
             height: size.height.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &config);
+
+        Self::init_with_device(device, queue, Some((surface, config, surface_format)))
+    }
+
+    /// Headless renderer for WASM: offscreen target with async adapter/device creation.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_async() -> Result<Self, EidolonError> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Eidolon Device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
+        Self::init_with_device(device, queue, None)
+    }
+
+    /// Windowed renderer for WASM: creates a surface from a canvas and configures it.
+    ///
+    /// `canvas` can be any type that converts into a wgpu surface target
+    /// (e.g. `web_sys::HtmlCanvasElement` or `wgpu::SurfaceTarget`).
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_windowed_async(
+        canvas: impl Into<wgpu::SurfaceTarget<'static>>,
+    ) -> Result<Self, EidolonError> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        let surface = instance
+            .create_surface(canvas)
+            .map_err(|e| EidolonError::gpu(format!("failed to create surface: {e}")))?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Eidolon Device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
+
+        let caps = surface.get_capabilities(&adapter);
+        let surface_format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| !f.is_srgb())
+            .unwrap_or(caps.formats[0]);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: 512,
+            height: 512,
+            present_mode: wgpu::PresentMode::AutoVsync,
+            alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
@@ -270,8 +360,27 @@ impl Renderer {
             }],
         });
 
-        let slim_model = Model::load_from_obj(&device, "resources/slim.obj")?;
-        let default_model = Model::load_from_obj(&device, "resources/classic.obj")?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let (slim_model, default_model) = {
+            let slim = Model::load_from_obj(&device, "resources/slim.obj")?;
+            let classic = Model::load_from_obj(&device, "resources/classic.obj")?;
+            (slim, classic)
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let (slim_model, default_model) = {
+            let slim = Model::load_from_obj_bytes(
+                &device,
+                include_bytes!("../../resources/slim.obj"),
+                "slim.obj",
+            )?;
+            let classic = Model::load_from_obj_bytes(
+                &device,
+                include_bytes!("../../resources/classic.obj"),
+                "classic.obj",
+            )?;
+            (slim, classic)
+        };
 
         let (surface, surface_config) = match surface_info {
             Some((s, c, _)) => (Some(s), Some(c)),
@@ -297,6 +406,7 @@ impl Renderer {
     }
 
     /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_texture(&self, path: &str) -> Result<Texture, EidolonError> {
         Texture::load_from_file(
             &self.device,
@@ -308,6 +418,7 @@ impl Renderer {
     }
 
     /// Load a skin PNG without auto-converting single-layer to double-layer.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_texture_raw(&self, path: &str) -> Result<Texture, EidolonError> {
         Texture::load_from_file_raw(
             &self.device,
@@ -315,6 +426,17 @@ impl Renderer {
             &self.texture_bind_group_layout,
             &self.sampler,
             path,
+        )
+    }
+
+    /// Load a skin from in-memory PNG bytes (available on all platforms, required for WASM).
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Result<Texture, EidolonError> {
+        Texture::load_from_memory(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            bytes,
         )
     }
 
@@ -419,6 +541,7 @@ impl Renderer {
     }
 
     /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (blocking map readback).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn render(
         &self,
         character: &Character,
@@ -483,6 +606,76 @@ impl Renderer {
         )
     }
 
+    /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
+    ///
+    /// Available on WASM where blocking buffer-map is not possible.
+    /// Uses [`wasm_bindgen_futures`] under the hood; callers must execute within a WASM async runtime.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn render_async(
+        &self,
+        character: &Character,
+        skin: &Texture,
+        camera: &Camera,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: RENDER_TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let (output_buffer, padded_bytes_per_row) =
+            readback::create_output_buffer(&self.device, width, height)?;
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        self.encode_render_pass(
+            &mut encoder,
+            &texture_view,
+            &self.pipeline,
+            character,
+            skin,
+            camera,
+            width,
+            height,
+        );
+
+        readback::copy_render_target_to_buffer(
+            &mut encoder,
+            &render_texture,
+            &output_buffer,
+            width,
+            height,
+            padded_bytes_per_row,
+        );
+
+        self.queue.submit(Some(encoder.finish()));
+
+        readback::map_output_buffer_to_rgba_async(
+            &self.device,
+            &output_buffer,
+            width,
+            height,
+            padded_bytes_per_row,
+        )
+        .await
+    }
+
     /// Present one frame to the window surface (expects `new_windowed`).
     pub fn render_frame(
         &self,
@@ -540,6 +733,7 @@ impl Renderer {
     /// The file extension is automatically adjusted to match the output format
     /// (e.g. `"skin.png"` with `WebP` becomes `"skin.webp"`).
     /// The output path is validated to reject null bytes before writing.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn render_to_image(
         &self,
         character: &Character,

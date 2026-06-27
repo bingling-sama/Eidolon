@@ -6,4 +6,3 @@
 .agents
 skills-lock.json
 .env
-examples/rust/target

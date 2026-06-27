@@ -1,0 +1,17 @@
+{
+  "name": "eidolon-wasm-example",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:wasm": "wasm-pack build --target bundler --out-dir pkg",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6",
+    "vite-plugin-wasm": "^3",
+    "vite-plugin-top-level-await": "^1"
+  }
+}

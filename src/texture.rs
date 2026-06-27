@@ -6,10 +6,15 @@
 
 use crate::converter::single2double;
 use crate::error::EidolonError;
-use image::{DynamicImage, GenericImageView, ImageFormat};
+use image::{DynamicImage, GenericImageView};
+#[cfg(not(target_arch = "wasm32"))]
+use image::ImageFormat;
 use log::info;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::BufReader;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 /// GPU skin texture.
@@ -25,10 +30,28 @@ pub struct Texture {
 }
 
 impl Texture {
+    /// Load a skin from in-memory PNG bytes, decode as RGBA, optionally convert single-layer
+    /// skins, then create the GPU texture and bind group.
+    ///
+    /// Available on all platforms. Preferred for WASM where file I/O is not available.
+    pub fn load_from_memory(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        bytes: &[u8],
+    ) -> Result<Self, EidolonError> {
+        info!("Loading texture from memory ({} bytes)", bytes.len());
+        let image = image::load_from_memory(bytes)
+            .map_err(|e| EidolonError::texture(format!("failed to decode PNG from memory: {e}")))?;
+        Self::load_texture(device, queue, bind_group_layout, sampler, &image)
+    }
+
     /// Load a skin from a PNG file path, decode as RGBA, optionally convert single-layer skins,
     /// then create the GPU texture and bind group.
     ///
     /// The path is canonicalized before use to resolve symlinks and `..` components.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_from_file(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -60,6 +83,7 @@ impl Texture {
     /// Load a skin without auto-converting single-layer to double-layer.
     ///
     /// Use when the raw texture layout must be preserved as-is.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_from_file_raw(
         device: &wgpu::Device,
         queue: &wgpu::Queue,

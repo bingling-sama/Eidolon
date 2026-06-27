@@ -7,6 +7,8 @@
 //! run this test, copy the actual hash from the panic message, paste into
 //! the GOLDEN_HASH constant below.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use eidolon::camera::Camera;
 use eidolon::character::{Character, Posture, SkinType};
 use eidolon::renderer::Renderer;

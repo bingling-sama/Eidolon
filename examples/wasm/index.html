@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eidolon — Minecraft Skin Renderer (WASM)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p.sub { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    input[type=file] { display: none; }
+    .btn {
+      padding: 0.6rem 1.4rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-pick { background: #4e8ef7; color: #fff; }
+    .btn-render { background: #4caf84; color: #fff; }
+
+    .result {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #111;
+      min-width: 400px;
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .result img { max-width: 100%; display: block; }
+    .result .placeholder { color: #555; font-size: 0.9rem; }
+
+    .status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #888;
+      min-height: 1.2em;
+    }
+    .status.error { color: #f55; }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #333;
+      border-top-color: #4caf84;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 2rem auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>Eidolon WASM</h1>
+  <p class="sub">Minecraft skin renderer running in the browser via WebGPU</p>
+
+  <div class="controls">
+    <label class="btn btn-pick" for="file-input">Choose Skin PNG</label>
+    <input id="file-input" type="file" accept="image/png">
+    <button id="btn-render" class="btn btn-render" disabled>Render</button>
+  </div>
+
+  <div class="result" id="result">
+    <span class="placeholder">Select a skin PNG, then click Render</span>
+  </div>
+  <div class="status" id="status">Initializing renderer…</div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

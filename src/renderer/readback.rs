@@ -61,6 +61,7 @@ pub(crate) fn copy_render_target_to_buffer(
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn map_output_buffer_to_rgba(
     device: &wgpu::Device,
     output_buffer: &wgpu::Buffer,
@@ -104,7 +105,52 @@ pub(crate) fn map_output_buffer_to_rgba(
     Ok(img_buf)
 }
 
-#[cfg(test)]
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn map_output_buffer_to_rgba_async(
+    device: &wgpu::Device,
+    output_buffer: &wgpu::Buffer,
+    width: u32,
+    height: u32,
+    padded_bytes_per_row: u32,
+) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+    let bytes_per_pixel = 4u32;
+
+    let buffer_slice = output_buffer.slice(..);
+    let (tx, rx) = futures_channel::oneshot::channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = tx.send(result);
+    });
+    // On WASM, PollType::Wait yields to the browser event loop via
+    // requestAnimationFrame instead of blocking the thread.
+    let _ = device.poll(wgpu::PollType::Wait);
+    let map_result = rx
+        .await
+        .map_err(|_| EidolonError::gpu("oneshot channel closed"))?;
+    map_result
+        .map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
+
+    let data = buffer_slice.get_mapped_range();
+    let mut img_buf = ImageBuffer::new(width, height);
+
+    for y in 0..height {
+        let row_start = (y * padded_bytes_per_row) as usize;
+        for x in 0..width {
+            let offset = row_start + (x * bytes_per_pixel) as usize;
+            img_buf.put_pixel(
+                x,
+                y,
+                Rgba([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]),
+            );
+        }
+    }
+
+    drop(data);
+    output_buffer.unmap();
+
+    Ok(img_buf)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 

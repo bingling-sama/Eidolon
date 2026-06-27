@@ -1,0 +1,19 @@
+[workspace]
+
+[package]
+name = "eidolon-wasm-example"
+version = "0.1.0"
+edition = "2021"
+description = "WASM bindings for the eidolon Minecraft skin renderer"
+license-file = "../../LICENSE"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+eidolon = { package = "eidolonmc", path = "../..", features = ["wasm"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+image = { version = "0.25.5", default-features = false, features = ["png"] }
+console_log = "1"
+log = "0.4"

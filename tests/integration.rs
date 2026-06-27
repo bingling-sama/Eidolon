@@ -3,6 +3,8 @@
 //! Exercise the full public API: Character → Renderer → ImageBuffer → file.
 //! Headless via OSMesa — no GPU required.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use eidolon::camera::Camera;
 use eidolon::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon::model::Model;
