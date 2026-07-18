@@ -8,6 +8,7 @@ Provides:
 */
 
 pub mod camera;
+pub mod cape;
 pub mod character;
 pub mod constants;
 pub mod converter;

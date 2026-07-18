@@ -47,6 +47,10 @@ pub struct ModelPart {
     pub vertex_count: u32,
 }
 
+pub struct CapePart {
+    pub main: ModelPart,
+}
+
 /// One body region: opaque `main` mesh plus `layer` overlay (hat/body/armor layer).
 pub struct BodyPart {
     pub main: ModelPart,
@@ -69,10 +73,7 @@ impl Model {
     /// Required object names: `Head`, `Hat Layer`, `Body`, `Body Layer`, `Right Arm`,
     /// `Right Arm Layer`, `Left Arm`, `Left Arm Layer`, `Right Leg`, `Right Leg Layer`,
     /// `Left Leg`, `Left Leg Layer`.
-    pub fn load_from_obj(
-        device: &wgpu::Device,
-        path: &str,
-    ) -> Result<Self, EidolonError> {
+    pub fn load_from_obj(device: &wgpu::Device, path: &str) -> Result<Self, EidolonError> {
         info!("Loading OBJ file: {}", path);
         let (models, _materials) = load_obj(path, &GPU_LOAD_OPTIONS)
             .map_err(|e| EidolonError::model(format!("failed to load OBJ '{}': {}", path, e)))?;
@@ -87,12 +88,13 @@ impl Model {
         name_hint: &str,
     ) -> Result<Self, EidolonError> {
         info!("Loading OBJ from bytes ({})", name_hint);
-        let (models, _materials) = tobj::load_obj_buf(
-            &mut std::io::Cursor::new(data),
-            &GPU_LOAD_OPTIONS,
-            |_| unreachable!("no material files when loading from bytes"),
-        )
-        .map_err(|e| EidolonError::model(format!("failed to parse OBJ bytes ({}): {}", name_hint, e)))?;
+        let (models, _materials) =
+            tobj::load_obj_buf(&mut std::io::Cursor::new(data), &GPU_LOAD_OPTIONS, |_| {
+                unreachable!("no material files when loading from bytes")
+            })
+            .map_err(|e| {
+                EidolonError::model(format!("failed to parse OBJ bytes ({}): {}", name_hint, e))
+            })?;
         info!("OBJ bytes loaded with {} objects", models.len());
         Self::build_from_tobj(device, models)
     }
@@ -116,7 +118,11 @@ impl Model {
 
             for i in 0..mesh.indices.len() {
                 let pos_idx = mesh.indices[i] as usize;
-                let pos = [positions[pos_idx][0], positions[pos_idx][1], positions[pos_idx][2]];
+                let pos = [
+                    positions[pos_idx][0],
+                    positions[pos_idx][1],
+                    positions[pos_idx][2],
+                ];
 
                 let nml_idx = if !mesh.normal_indices.is_empty() {
                     mesh.normal_indices[i] as usize
@@ -124,7 +130,11 @@ impl Model {
                     pos_idx
                 };
                 let nml = if nml_idx < normals.len() {
-                    [normals[nml_idx][0], normals[nml_idx][1], normals[nml_idx][2]]
+                    [
+                        normals[nml_idx][0],
+                        normals[nml_idx][1],
+                        normals[nml_idx][2],
+                    ]
                 } else {
                     [0.0, 1.0, 0.0]
                 };
@@ -222,8 +232,8 @@ mod tests {
     #[test]
     fn load_slim_model_has_all_parts() {
         let (device, _queue) = make_device();
-        let model = Model::load_from_obj(&device, "resources/slim.obj")
-            .expect("Failed to load slim model");
+        let model =
+            Model::load_from_obj(&device, "resources/slim.obj").expect("Failed to load slim model");
         let _ = &model.head;
         let _ = &model.body;
         let _ = &model.right_arm;
@@ -284,7 +294,8 @@ mod tests {
     fn load_from_obj_bytes_invalid_obj_syntax_errors() {
         let (device, _queue) = make_device();
         // Garbage bytes — tobj::load_obj_buf parse fails
-        let result = Model::load_from_obj_bytes(&device, b"this is not an obj file at all", "junk.obj");
+        let result =
+            Model::load_from_obj_bytes(&device, b"this is not an obj file at all", "junk.obj");
         assert!(result.is_err());
         let msg = result.err().unwrap().to_string();
         assert!(

@@ -76,6 +76,10 @@ struct SceneArgs {
     #[arg(long)]
     slim: bool,
 
+    /// Render the built-in static cape.
+    #[arg(long)]
+    cape: bool,
+
     /// Camera orbit yaw in degrees.
     #[arg(long, default_value_t = 180.0)]
     cam_yaw: f32,
@@ -133,6 +137,7 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     } else {
         SkinType::Classic
     };
+    character.cape = scene.cape;
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
@@ -383,6 +388,7 @@ mod tests {
     fn default_scene() -> SceneArgs {
         SceneArgs {
             slim: false,
+            cape: false,
             cam_yaw: 180.0,
             cam_pitch: 90.0,
             cam_zoom: 1.0,

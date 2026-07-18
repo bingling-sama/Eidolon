@@ -47,6 +47,32 @@ impl Texture {
         Self::load_texture(device, queue, bind_group_layout, sampler, &image)
     }
 
+    /// Load a texture from memory without applying legacy skin-atlas conversion.
+    ///
+    /// This is intended for non-skin atlases such as 64x32 cape textures,
+    /// whose aspect ratio would otherwise be mistaken for a legacy player skin.
+    pub(crate) fn load_from_memory_raw(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        bytes: &[u8],
+    ) -> Result<Self, EidolonError> {
+        let image = image::load_from_memory(bytes)
+            .map_err(|e| EidolonError::texture(format!("failed to decode PNG from memory: {e}")))?
+            .to_rgba8();
+        let (width, height) = image.dimensions();
+        Self::upload_raw(
+            device,
+            queue,
+            bind_group_layout,
+            sampler,
+            image.as_raw(),
+            width,
+            height,
+        )
+    }
+
     /// Load a skin from a PNG file path, decode as RGBA, optionally convert single-layer skins,
     /// then create the GPU texture and bind group.
     ///

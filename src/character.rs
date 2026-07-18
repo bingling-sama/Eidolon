@@ -97,6 +97,8 @@ pub struct Character {
     pub position: Vector3<f32>,
     /// World-space rotation in degrees (Euler X, then Y, then Z) applied before joint matrices.
     pub rotation: Vector3<f32>,
+    /// Whether to render the built-in static cape.
+    pub cape: bool,
 }
 
 impl Default for Character {
@@ -106,6 +108,7 @@ impl Default for Character {
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
+            cape: false,
         }
     }
 }
@@ -144,10 +147,14 @@ mod tests {
     #[test]
     fn posture_debug_and_clone() {
         let p = Posture {
-            head_yaw: 1.0, head_pitch: 2.0,
-            left_arm_roll: 3.0, left_arm_pitch: 4.0,
-            right_arm_roll: 5.0, right_arm_pitch: 6.0,
-            left_leg_pitch: 7.0, right_leg_pitch: 8.0,
+            head_yaw: 1.0,
+            head_pitch: 2.0,
+            left_arm_roll: 3.0,
+            left_arm_pitch: 4.0,
+            right_arm_roll: 5.0,
+            right_arm_pitch: 6.0,
+            left_leg_pitch: 7.0,
+            right_leg_pitch: 8.0,
         };
         let p2 = p;
         let debug = format!("{:?}", p2);
@@ -192,8 +199,14 @@ mod tests {
     fn default_postures_running_larger_angles_than_walking() {
         let w = DefaultPostures::WALKING;
         let r = DefaultPostures::RUNNING;
-        assert!(r.left_arm_pitch.abs() > w.left_arm_pitch.abs(), "running: arms swing wider");
-        assert!(r.left_leg_pitch.abs() > w.left_leg_pitch.abs(), "running: legs swing wider");
+        assert!(
+            r.left_arm_pitch.abs() > w.left_arm_pitch.abs(),
+            "running: arms swing wider"
+        );
+        assert!(
+            r.left_leg_pitch.abs() > w.left_leg_pitch.abs(),
+            "running: legs swing wider"
+        );
     }
 
     #[test]
@@ -207,6 +220,7 @@ mod tests {
         assert_eq!(c.rotation.x, 0.0);
         assert_eq!(c.rotation.y, 0.0);
         assert_eq!(c.rotation.z, 0.0);
+        assert!(!c.cape);
     }
 
     #[test]
@@ -225,9 +239,11 @@ mod tests {
         c.posture = DefaultPostures::RUNNING;
         c.position = Vector3::new(1.0, 2.0, 3.0);
         c.rotation = Vector3::new(45.0, 90.0, 0.0);
+        c.cape = true;
         assert_eq!(c.skin_type, SkinType::Slim);
         assert_eq!(c.posture.right_leg_pitch, -74.48);
         assert_eq!(c.position.y, 2.0);
         assert_eq!(c.rotation.x, 45.0);
+        assert!(c.cape);
     }
 }

@@ -15,6 +15,7 @@ use image::{ImageBuffer, ImageFormat, Rgba};
 use winit::window::Window;
 
 use crate::camera::Camera;
+use crate::cape::build_cape;
 use crate::character::{Character, SkinType};
 use crate::error::EidolonError;
 use crate::model::Model;
@@ -89,6 +90,8 @@ pub struct Renderer {
     uniform_aligned_size: u32,
     slim_model: Model,
     default_model: Model,
+    cape_model: crate::model::CapePart,
+    cape_texture: Texture,
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
@@ -111,15 +114,13 @@ impl Renderer {
             force_fallback_adapter: false,
         }))
         .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("Eidolon Device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: Default::default(),
-                trace: wgpu::Trace::Off,
-            },
-        ))
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("Eidolon Device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            memory_hints: Default::default(),
+            trace: wgpu::Trace::Off,
+        }))
         .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
         Ok((device, queue, adapter))
     }
@@ -302,9 +303,9 @@ impl Renderer {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(
-                            std::mem::size_of::<uniforms::Uniforms>() as u64,
-                        ),
+                        min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<
+                            uniforms::Uniforms,
+                        >() as u64),
                     },
                     count: None,
                 }],
@@ -392,6 +393,15 @@ impl Renderer {
             (slim, classic)
         };
 
+        let cape_model = build_cape(&device)?;
+        let cape_texture = Texture::load_from_memory_raw(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            &sampler,
+            include_bytes!("../../resources/Turtle_Cape.png"),
+        )?;
+
         #[cfg(target_arch = "wasm32")]
         let (slim_model, default_model) = {
             let slim = Model::load_from_obj_bytes(
@@ -423,6 +433,8 @@ impl Renderer {
             uniform_aligned_size: aligned_size,
             slim_model,
             default_model,
+            cape_model,
+            cape_texture,
             surface,
             surface_config,
             surface_pipeline,
@@ -562,6 +574,20 @@ impl Renderer {
 
                 render_pass.set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
                 render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+            }
+
+            if character.cape {
+                // The cape mesh is already positioned at the upper back. Reuse
+                // the root/body transform (slot 5) for character translation,
+                // rotation, and camera scale.
+                render_pass.set_bind_group(
+                    0,
+                    &self.uniform_bind_group,
+                    &[(5u32) * self.uniform_aligned_size],
+                );
+                render_pass.set_bind_group(1, &self.cape_texture.bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
+                render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
             }
         }
     }
@@ -775,7 +801,9 @@ impl Renderer {
         format: OutputFormat,
     ) -> Result<(), EidolonError> {
         if filename.contains('\0') {
-            return Err(EidolonError::invalid_path("output filename contains null bytes"));
+            return Err(EidolonError::invalid_path(
+                "output filename contains null bytes",
+            ));
         }
 
         // Auto-adjust extension to match the requested format.
