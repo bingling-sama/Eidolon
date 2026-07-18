@@ -75,12 +75,15 @@ use eidolon::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let renderer = Renderer::new()?;
+    let mut renderer = Renderer::new()?;
 
     let mut character = Character::new();
     character.skin_type = SkinType::Slim;
     character.posture = DefaultPostures::WAVE;
     character.rotation.y = 20.0;    // 20° around Y axis
+    character.cape = true;
+    character.cape_pitch = 10.8;    // degrees around the top-back attachment edge
+    renderer.load_cape_texture("cape.png")?;
 
     let skin = renderer.load_texture("skin.png")?;
 
@@ -165,3 +168,6 @@ renderer.render_frame(&character, &skin, &camera)?;
 - `Model::load_from_obj_bytes()` is available for loading OBJ data from memory.
 - `Camera::scale` (renamed `cam_zoom` in the CLI) controls orbit distance: `distance = 4.0 / scale`. Larger values move the camera closer.
 - Character rotation is Euler: X first, then Y, then Z.
+- Call `Renderer::load_cape_texture()` and set `Character::cape` to render a cape; there is no
+  built-in default texture. `Character::cape_pitch` rotates it around the top-back shoulder
+  attachment edge; the skinview3d-compatible default is `10.8` degrees.

@@ -22,7 +22,10 @@ use crate::model::Model;
 use crate::texture::Texture;
 
 use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
-use uniforms::{body_part_ref, compute_body_part_uniforms, BODY_PART_COUNT, PART_CONFIGS};
+use uniforms::{
+    body_part_ref, compute_body_part_uniforms, compute_cape_uniform, CAPE_UNIFORM_INDEX,
+    PART_CONFIGS, UNIFORM_COUNT,
+};
 
 /// Image format for [`Renderer::render_to_image`].
 #[derive(Debug, Clone, Copy)]
@@ -91,7 +94,7 @@ pub struct Renderer {
     slim_model: Model,
     default_model: Model,
     cape_model: crate::model::CapePart,
-    cape_texture: Texture,
+    cape_texture: Option<Texture>,
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
@@ -364,11 +367,9 @@ impl Renderer {
         let alignment = device.limits().min_uniform_buffer_offset_alignment;
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
         let aligned_size = uniform_size.div_ceil(alignment) * alignment;
-        let num_body_parts = BODY_PART_COUNT as u32;
-
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Dynamic Uniform Buffer"),
-            size: (num_body_parts * aligned_size) as u64,
+            size: (UNIFORM_COUNT * aligned_size) as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -394,14 +395,6 @@ impl Renderer {
         };
 
         let cape_model = build_cape(&device)?;
-        let cape_texture = Texture::load_from_memory_raw(
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-            &sampler,
-            include_bytes!("../../resources/Turtle_Cape.png"),
-        )?;
-
         #[cfg(target_arch = "wasm32")]
         let (slim_model, default_model) = {
             let slim = Model::load_from_obj_bytes(
@@ -434,7 +427,7 @@ impl Renderer {
             slim_model,
             default_model,
             cape_model,
-            cape_texture,
+            cape_texture: None,
             surface,
             surface_config,
             surface_pipeline,
@@ -465,6 +458,33 @@ impl Renderer {
             &self.sampler,
             path,
         )
+    }
+
+    /// Load the cape texture used when [`Character::cape`] is enabled.
+    ///
+    /// Cape rendering has no built-in texture; callers must provide one.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_cape_texture(&mut self, path: &str) -> Result<(), EidolonError> {
+        self.cape_texture = Some(Texture::load_from_file_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            path,
+        )?);
+        Ok(())
+    }
+
+    /// Load the cape texture from PNG bytes.
+    pub fn load_cape_texture_from_memory(&mut self, bytes: &[u8]) -> Result<(), EidolonError> {
+        self.cape_texture = Some(Texture::load_from_memory_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            bytes,
+        )?);
+        Ok(())
     }
 
     /// Load a skin from in-memory PNG bytes (available on all platforms, required for WASM).
@@ -501,6 +521,16 @@ impl Renderer {
             let offset = (i as u64) * (self.uniform_aligned_size as u64);
             self.queue
                 .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(uniform));
+        }
+
+        if character.cape {
+            let cape_uniform = compute_cape_uniform(character, camera, width, height);
+            let offset = (CAPE_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
+            self.queue.write_buffer(
+                &self.uniform_buffer,
+                offset,
+                bytemuck::bytes_of(&cape_uniform),
+            );
         }
 
         let depth_view = {
@@ -577,15 +607,18 @@ impl Renderer {
             }
 
             if character.cape {
+                let Some(cape_texture) = &self.cape_texture else {
+                    return;
+                };
                 // The cape mesh is already positioned at the upper back. Reuse
                 // the root/body transform (slot 5) for character translation,
                 // rotation, and camera scale.
                 render_pass.set_bind_group(
                     0,
                     &self.uniform_bind_group,
-                    &[(5u32) * self.uniform_aligned_size],
+                    &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
-                render_pass.set_bind_group(1, &self.cape_texture.bind_group, &[]);
+                render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
                 render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
             }

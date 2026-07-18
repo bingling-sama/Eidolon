@@ -16,6 +16,9 @@ use crate::model::{BodyPart, Model};
 
 /// Number of body parts in the model and draw loop.
 pub(crate) const BODY_PART_COUNT: usize = 6;
+pub(crate) const CAPE_UNIFORM_INDEX: u32 = BODY_PART_COUNT as u32;
+pub(crate) const UNIFORM_COUNT: u32 = CAPE_UNIFORM_INDEX + 1;
+pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 
 /// Identifies a body part in [`PART_CONFIGS`] — single source of truth
 /// for mapping config entries to [`Model`] fields.
@@ -137,4 +140,65 @@ pub(crate) fn compute_body_part_uniforms(
 
         make_uniforms(transform, offset)
     })
+}
+
+pub(crate) fn compute_cape_uniform(
+    character: &Character,
+    camera: &Camera,
+    width: u32,
+    height: u32,
+) -> Uniforms {
+    let translation = Matrix4::from_translation(character.position);
+    let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
+        * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
+        * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
+    let base = translation * character_rotation * Matrix4::from_scale(camera.scale);
+    // skinview3d uses -Z for the back; this renderer uses +Z, so invert pitch.
+    let cape_rotation = Matrix4::from_angle_x(Rad(-character.cape_pitch.to_radians()));
+    let model = base
+        * Matrix4::from_translation(CAPE_PIVOT)
+        * cape_rotation
+        * Matrix4::from_translation(-CAPE_PIVOT);
+
+    Uniforms {
+        perspective: camera.get_projection_matrix(width, height),
+        view: camera.get_view_matrix(),
+        model: model.into(),
+        offset: 0.0,
+        _padding: [0.0; 3],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cgmath::{Point3, Transform};
+
+    #[test]
+    fn cape_rotation_keeps_attachment_axis_fixed() {
+        let mut character = Character::new();
+        character.cape_pitch = 45.0;
+        let camera = Camera::default();
+        let uniform = compute_cape_uniform(&character, &camera, 800, 600);
+        let model: Matrix4<f32> = uniform.model.into();
+        let pivot = Point3::new(CAPE_PIVOT.x, CAPE_PIVOT.y, CAPE_PIVOT.z);
+
+        let transformed = model.transform_point(pivot);
+        assert!((transformed.x - CAPE_PIVOT.x).abs() < 1e-6);
+        assert!((transformed.y - CAPE_PIVOT.y).abs() < 1e-6);
+        assert!((transformed.z - CAPE_PIVOT.z).abs() < 1e-6);
+    }
+
+    #[test]
+    fn positive_cape_pitch_moves_the_hanging_cape_backwards() {
+        let mut character = Character::new();
+        character.cape_pitch = 10.8;
+        let camera = Camera::default();
+        let uniform = compute_cape_uniform(&character, &camera, 800, 600);
+        let model: Matrix4<f32> = uniform.model.into();
+        let below_pivot = Point3::new(CAPE_PIVOT.x, CAPE_PIVOT.y - 1.0, CAPE_PIVOT.z);
+
+        let transformed = model.transform_point(below_pivot);
+        assert!(transformed.z > below_pivot.z);
+    }
 }

@@ -97,8 +97,10 @@ pub struct Character {
     pub position: Vector3<f32>,
     /// World-space rotation in degrees (Euler X, then Y, then Z) applied before joint matrices.
     pub rotation: Vector3<f32>,
-    /// Whether to render the built-in static cape.
+    /// Whether to render the cape texture configured on the renderer.
     pub cape: bool,
+    /// Cape rotation around its top attachment edge (X axis), in degrees.
+    pub cape_pitch: f32,
 }
 
 impl Default for Character {
@@ -109,6 +111,7 @@ impl Default for Character {
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
             cape: false,
+            cape_pitch: 10.8,
         }
     }
 }
@@ -221,6 +224,7 @@ mod tests {
         assert_eq!(c.rotation.y, 0.0);
         assert_eq!(c.rotation.z, 0.0);
         assert!(!c.cape);
+        assert_eq!(c.cape_pitch, 10.8);
     }
 
     #[test]
@@ -230,6 +234,7 @@ mod tests {
         assert_eq!(c1.skin_type, c2.skin_type);
         assert_eq!(c1.position.x, c2.position.x);
         assert_eq!(c1.rotation.x, c2.rotation.x);
+        assert_eq!(c1.cape_pitch, c2.cape_pitch);
     }
 
     #[test]
@@ -240,10 +245,12 @@ mod tests {
         c.position = Vector3::new(1.0, 2.0, 3.0);
         c.rotation = Vector3::new(45.0, 90.0, 0.0);
         c.cape = true;
+        c.cape_pitch = 24.0;
         assert_eq!(c.skin_type, SkinType::Slim);
         assert_eq!(c.posture.right_leg_pitch, -74.48);
         assert_eq!(c.position.y, 2.0);
         assert_eq!(c.rotation.x, 45.0);
         assert!(c.cape);
+        assert_eq!(c.cape_pitch, 24.0);
     }
 }

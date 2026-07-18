@@ -76,9 +76,9 @@ struct SceneArgs {
     #[arg(long)]
     slim: bool,
 
-    /// Render the built-in static cape.
+    /// Render a cape using the specified 64x32 PNG texture.
     #[arg(long)]
-    cape: bool,
+    cape: Option<String>,
 
     /// Camera orbit yaw in degrees.
     #[arg(long, default_value_t = 180.0)]
@@ -137,7 +137,7 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     } else {
         SkinType::Classic
     };
-    character.cape = scene.cape;
+    character.cape = scene.cape.is_some();
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
@@ -221,6 +221,7 @@ struct PreviewApp {
     skin: Option<eidolon::texture::Texture>,
     camera: Camera,
     texture_path: String,
+    cape_texture_path: Option<String>,
     initial_size: PhysicalSize<u32>,
     interaction: PreviewInteraction,
 }
@@ -304,6 +305,11 @@ impl ApplicationHandler for PreviewApp {
                 .load_texture(&self.texture_path)
                 .expect("Failed to load skin texture"),
         );
+        if let Some(path) = &self.cape_texture_path {
+            renderer
+                .load_cape_texture(path)
+                .expect("Failed to load cape texture");
+        }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
 
@@ -557,7 +563,7 @@ mod tests {
     fn default_scene() -> SceneArgs {
         SceneArgs {
             slim: false,
-            cape: false,
+            cape: None,
             cam_yaw: 180.0,
             cam_pitch: 90.0,
             cam_zoom: 1.0,
@@ -596,6 +602,14 @@ mod tests {
         scene.slim = true;
         let (c, _) = character_and_camera_from_scene(&scene);
         assert_eq!(c.skin_type, SkinType::Slim);
+    }
+
+    #[test]
+    fn scene_cape_path_enables_cape_rendering() {
+        let mut scene = default_scene();
+        scene.cape = Some("cape.png".to_owned());
+        let (character, _) = character_and_camera_from_scene(&scene);
+        assert!(character.cape);
     }
 
     #[test]
@@ -663,7 +677,26 @@ mod tests {
                 assert_eq!(viewport.height, 600);
                 assert_eq!(scene.cam_yaw, 180.0);
                 assert!(matches!(scene.posture, PostureCli::Stand));
+                assert_eq!(scene.cape, None);
             }
+            _ => panic!("Expected Render"),
+        }
+    }
+
+    #[test]
+    fn cli_cape_requires_and_captures_texture_path() {
+        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cape"]).is_err());
+
+        let args = Args::try_parse_from([
+            "eidolon",
+            "render",
+            "skin.png",
+            "--cape",
+            "cape.png",
+        ])
+        .expect("cape path should parse");
+        match args.command {
+            Command::Render { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
             _ => panic!("Expected Render"),
         }
     }
@@ -829,7 +862,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Output: {} ({}x{})", output, viewport.width, viewport.height);
 
             info!("Creating renderer...");
-            let renderer = Renderer::new()?;
+            let mut renderer = Renderer::new()?;
             info!("Renderer ready");
 
             let (character, camera) = character_and_camera_from_scene(&scene);
@@ -837,6 +870,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Loading skin: {}", skin);
             let skin_texture = renderer.load_texture(&skin)?;
             info!("Skin loaded");
+
+            if let Some(cape_path) = &scene.cape {
+                info!("Loading cape: {}", cape_path);
+                renderer.load_cape_texture(cape_path)?;
+                info!("Cape loaded");
+            }
 
             info!("Rendering...");
             let output_format = format_from_filename(&output);
@@ -867,6 +906,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 skin: None,
                 camera,
                 texture_path: skin,
+                cape_texture_path: scene.cape,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
                 interaction: PreviewInteraction::default(),
             };

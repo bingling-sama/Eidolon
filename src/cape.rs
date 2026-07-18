@@ -10,6 +10,14 @@ use crate::error::EidolonError;
 use crate::model::{CapePart, ModelPart, TexturedVertex};
 use wgpu::util::DeviceExt;
 
+const MODEL_PIXEL: f32 = 1.0 / 16.0;
+const CAPE_HALF_DEPTH: f32 = MODEL_PIXEL / 2.0;
+const BODY_BACK_Z: f32 = 2.0 * MODEL_PIXEL;
+const BODY_TOP: f32 = 1.5;
+// Match skinview3d: the cape starts at the body's top-back edge and extends out.
+const CAPE_Z: f32 = BODY_BACK_Z + CAPE_HALF_DEPTH;
+const CAPE_Y: f32 = BODY_TOP - 0.5;
+
 /// Build the hardcoded cape mesh and upload to GPU.
 ///
 /// The geometry is centered at origin. The caller positions it on the
@@ -17,44 +25,40 @@ use wgpu::util::DeviceExt;
 pub fn build_cape(device: &wgpu::Device) -> Result<CapePart, EidolonError> {
     // ── 24 unique vertices (position + UV) from skinview3d BoxGeometry(10, 16, 1) ──
     // Pixel coords converted to model space: ÷ 16.
-    // Y offset +1.0: top edge aligns with the shoulder line at Y=1.5,
-    // leaving the 16px-tall cape to hang down to Y=0.5.
+    // The top edge aligns with the body shoulder line.
     // Positive Z places it behind the model in this coordinate system.
-    const CAPE_Y: f32 = 1.0;
-    const CAPE_Z: f32 = 0.25;
-
     #[rustfmt::skip]
     let positions: [[f32; 3]; 24] = [
         // Right face (+X): vertices 0–3
-        [ 0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 0
-        [ 0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 1
-        [ 0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 2
-        [ 0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 3
+        [ 0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 0
+        [ 0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 1
+        [ 0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 2
+        [ 0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 3
         // Left face (-X): vertices 4–7
-        [-0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 4
-        [-0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 5
-        [-0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 6
-        [-0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 7
+        [-0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 4
+        [-0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 5
+        [-0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 6
+        [-0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 7
         // Top face (+Y): vertices 8–11
-        [-0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 8
-        [ 0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 9
-        [ 0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 10
-        [-0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 11
+        [-0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 8
+        [ 0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 9
+        [ 0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 10
+        [-0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 11
         // Bottom face (-Y): vertices 12–15
-        [-0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 12
-        [ 0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 13
-        [ 0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 14
-        [-0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 15
+        [-0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 12
+        [ 0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 13
+        [ 0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 14
+        [-0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 15
         // Front face (+Z): vertices 16–19
-        [-0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 16
-        [ 0.3125, -0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 17
-        [ 0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 18
-        [-0.3125,  0.5 + CAPE_Y,  0.03125 + CAPE_Z], // 19
+        [-0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 16
+        [ 0.3125, -0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 17
+        [ 0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 18
+        [-0.3125,  0.5 + CAPE_Y,  CAPE_HALF_DEPTH + CAPE_Z], // 19
         // Back face (-Z): vertices 20–23
-        [ 0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 20
-        [-0.3125, -0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 21
-        [-0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 22
-        [ 0.3125,  0.5 + CAPE_Y, -0.03125 + CAPE_Z], // 23
+        [ 0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 20
+        [-0.3125, -0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 21
+        [-0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 22
+        [ 0.3125,  0.5 + CAPE_Y, -CAPE_HALF_DEPTH + CAPE_Z], // 23
     ];
 
     #[rustfmt::skip]
@@ -122,4 +126,21 @@ pub fn build_cape(device: &wgpu::Device) -> Result<CapePart, EidolonError> {
             vertex_count,
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cape_inner_face_touches_the_body() {
+        let clearance = (CAPE_Z - CAPE_HALF_DEPTH) - BODY_BACK_Z;
+        assert_eq!(clearance, 0.0);
+    }
+
+    #[test]
+    fn cape_top_aligns_with_the_shoulder() {
+        let cape_top = CAPE_Y + 0.5;
+        assert_eq!(cape_top, BODY_TOP);
+    }
 }
