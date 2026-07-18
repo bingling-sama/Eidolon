@@ -10,7 +10,7 @@ use eidolon::{
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -222,6 +222,68 @@ struct PreviewApp {
     camera: Camera,
     texture_path: String,
     initial_size: PhysicalSize<u32>,
+    interaction: PreviewInteraction,
+}
+
+#[derive(Default)]
+struct PreviewInteraction {
+    left_pressed: bool,
+    right_pressed: bool,
+    last_cursor: Option<(f64, f64)>,
+    pan_x: f32,
+    pan_y: f32,
+    base_position: Option<cgmath::Vector3<f32>>,
+}
+
+impl PreviewInteraction {
+    fn mouse_input(&mut self, button: MouseButton, pressed: bool) {
+        if button == MouseButton::Left {
+            self.left_pressed = pressed;
+        } else if button == MouseButton::Right {
+            self.right_pressed = pressed;
+        }
+    }
+
+    fn cursor_moved(&mut self, x: f64, y: f64, character: &mut Character, camera: &mut Camera) {
+        self.base_position.get_or_insert(character.position);
+        if let Some((last_x, last_y)) = self.last_cursor {
+            let dx = (x - last_x) as f32;
+            let dy = (y - last_y) as f32;
+            if self.left_pressed {
+                self.pan_x += dx;
+                self.pan_y -= dy;
+            }
+            if self.right_pressed {
+                camera.yaw -= dx * 0.4;
+                camera.pitch = (camera.pitch + dy * 0.4).clamp(1.0, 179.0);
+            }
+            self.update_pan(character, camera);
+        }
+        self.last_cursor = Some((x, y));
+    }
+
+    fn scroll(&mut self, delta: f32, character: &mut Character, camera: &mut Camera) {
+        self.base_position.get_or_insert(character.position);
+        camera.scale = (camera.scale * 1.1_f32.powf(delta)).clamp(0.1, 10.0);
+        self.update_pan(character, camera);
+    }
+
+    fn update_pan(&self, character: &mut Character, camera: &Camera) {
+        let Some(base) = self.base_position else {
+            return;
+        };
+        let yaw = camera.yaw.to_radians();
+        let pitch = (camera.pitch - 90.0).to_radians();
+        let right = cgmath::Vector3::new(yaw.cos(), 0.0, -yaw.sin());
+        let up = cgmath::Vector3::new(
+            -yaw.sin() * pitch.sin(),
+            pitch.cos(),
+            -yaw.cos() * pitch.sin(),
+        );
+        let distance_per_pixel = 0.005 / camera.scale;
+        character.position =
+            base + (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
+    }
 }
 
 impl ApplicationHandler for PreviewApp {
@@ -267,6 +329,32 @@ impl ApplicationHandler for PreviewApp {
                     window.request_redraw();
                 }
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.interaction
+                    .mouse_input(button, state == ElementState::Pressed);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.interaction.cursor_moved(
+                    position.x,
+                    position.y,
+                    &mut self.character,
+                    &mut self.camera,
+                );
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let lines = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(position) => position.y as f32 / 50.0,
+                };
+                self.interaction
+                    .scroll(lines, &mut self.character, &mut self.camera);
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
             WindowEvent::RedrawRequested => {
                 if let (Some(renderer), Some(skin)) = (&self.renderer, &self.skin) {
                     match renderer.render_frame(&self.character, skin, &self.camera) {
@@ -298,6 +386,87 @@ impl ApplicationHandler for PreviewApp {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn preview_left_drag_pans_without_rotating() {
+        let mut interaction = PreviewInteraction::default();
+        let mut character = Character::new();
+        let mut camera = Camera::default();
+
+        interaction.mouse_input(winit::event::MouseButton::Left, true);
+        interaction.cursor_moved(100.0, 100.0, &mut character, &mut camera);
+        interaction.cursor_moved(120.0, 110.0, &mut character, &mut camera);
+
+        assert_ne!(character.position, cgmath::Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(camera.yaw, 180.0);
+        assert_eq!(camera.pitch, 90.0);
+    }
+
+    #[test]
+    fn preview_right_drag_rotates_in_pointer_direction_and_clamps_pitch() {
+        let mut interaction = PreviewInteraction::default();
+        let mut character = Character::new();
+        let mut camera = Camera::default();
+
+        interaction.mouse_input(winit::event::MouseButton::Right, true);
+        interaction.cursor_moved(100.0, 100.0, &mut character, &mut camera);
+        interaction.cursor_moved(120.0, -1000.0, &mut character, &mut camera);
+
+        assert_eq!(camera.yaw, 172.0);
+        assert_eq!(camera.pitch, 1.0);
+        assert_eq!(character.position, cgmath::Vector3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn preview_scroll_zooms_with_safe_limits() {
+        let mut interaction = PreviewInteraction::default();
+        let mut character = Character::new();
+        let mut camera = Camera::default();
+
+        interaction.scroll(1.0, &mut character, &mut camera);
+        assert!(camera.scale > 1.0);
+
+        interaction.scroll(-1000.0, &mut character, &mut camera);
+        assert_eq!(camera.scale, 0.1);
+
+        interaction.scroll(1000.0, &mut character, &mut camera);
+        assert_eq!(camera.scale, 10.0);
+    }
+
+    #[test]
+    fn preview_pan_stays_in_view_plane_after_rotation() {
+        let mut interaction = PreviewInteraction::default();
+        let mut character = Character::new();
+        let mut camera = Camera::default();
+
+        interaction.mouse_input(MouseButton::Left, true);
+        interaction.cursor_moved(0.0, 0.0, &mut character, &mut camera);
+        interaction.cursor_moved(20.0, 10.0, &mut character, &mut camera);
+        interaction.mouse_input(MouseButton::Left, false);
+        let before = character.position;
+
+        interaction.mouse_input(MouseButton::Right, true);
+        interaction.cursor_moved(220.0, -40.0, &mut character, &mut camera);
+
+        assert_ne!(character.position, before);
+        assert_ne!(character.position.z, 0.0);
+    }
+
+    #[test]
+    fn preview_pan_offset_scales_with_zoom() {
+        let mut interaction = PreviewInteraction::default();
+        let mut character = Character::new();
+        let mut camera = Camera::default();
+
+        interaction.mouse_input(MouseButton::Left, true);
+        interaction.cursor_moved(0.0, 0.0, &mut character, &mut camera);
+        interaction.cursor_moved(20.0, 0.0, &mut character, &mut camera);
+        let before = character.position.x.abs();
+
+        interaction.scroll(1.0, &mut character, &mut camera);
+
+        assert!(character.position.x.abs() < before);
+    }
 
     // ── parse_positive_scale ──
 
@@ -699,6 +868,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 camera,
                 texture_path: skin,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
+                interaction: PreviewInteraction::default(),
             };
             event_loop.run_app(&mut app)?;
 

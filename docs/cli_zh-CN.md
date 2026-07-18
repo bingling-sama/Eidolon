@@ -59,6 +59,8 @@ cargo run -- preview [OPTIONS]
 
 `preview` 支持与 `render` 相同的场景、相机、姿势和视口选项，但不包含 `--filename` 与 `--format`。
 
+在预览窗口中，按住鼠标左键拖拽可平移，按住右键拖拽可旋转，滚动滚轮可缩放。
+
 示例：
 
 ```bash

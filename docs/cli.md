@@ -80,6 +80,8 @@ eidolon preview [OPTIONS] <SKIN>
 
 Accepts the same scene, camera, posture, and viewport options as `render`, plus all power-user overrides. No output path or format argument.
 
+In the preview window, drag with the left mouse button to pan, drag with the right mouse button to rotate, and use the mouse wheel to zoom.
+
 ### Examples
 
 ```bash
