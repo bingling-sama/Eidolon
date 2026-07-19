@@ -6,9 +6,9 @@
 
 use crate::converter::single2double;
 use crate::error::EidolonError;
-use image::{DynamicImage, GenericImageView};
 #[cfg(not(target_arch = "wasm32"))]
 use image::ImageFormat;
+use image::{DynamicImage, GenericImageView};
 use log::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
@@ -87,11 +87,13 @@ impl Texture {
     ) -> Result<Self, EidolonError> {
         info!("Loading texture: {}", path);
         if path.contains('\0') {
-            return Err(EidolonError::invalid_path("texture path contains null bytes"));
+            return Err(EidolonError::invalid_path(
+                "texture path contains null bytes",
+            ));
         }
-        let canonical = Path::new(path)
-            .canonicalize()
-            .map_err(|e| EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e)))?;
+        let canonical = Path::new(path).canonicalize().map_err(|e| {
+            EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e))
+        })?;
         let file = File::open(&canonical)?;
         let reader = BufReader::new(file);
         let image = image::load(reader, ImageFormat::Png)
@@ -119,11 +121,13 @@ impl Texture {
     ) -> Result<Self, EidolonError> {
         info!("Loading texture (raw, no conversion): {}", path);
         if path.contains('\0') {
-            return Err(EidolonError::invalid_path("texture path contains null bytes"));
+            return Err(EidolonError::invalid_path(
+                "texture path contains null bytes",
+            ));
         }
-        let canonical = Path::new(path)
-            .canonicalize()
-            .map_err(|e| EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e)))?;
+        let canonical = Path::new(path).canonicalize().map_err(|e| {
+            EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e))
+        })?;
         let file = File::open(&canonical)?;
         let reader = BufReader::new(file);
         let image = image::load(reader, ImageFormat::Png)

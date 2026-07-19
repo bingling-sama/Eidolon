@@ -99,11 +99,17 @@ mod tests {
         // projection matrix should be finite
         for row in &proj {
             for &val in row {
-                assert!(val.is_finite(), "projection matrix contains non-finite value");
+                assert!(
+                    val.is_finite(),
+                    "projection matrix contains non-finite value"
+                );
             }
         }
         // last row should be [0, 0, -1, 0] for perspective projection
-        assert!(proj[3][2] < 0.0, "expected negative z-component in projection");
+        assert!(
+            proj[3][2] < 0.0,
+            "expected negative z-component in projection"
+        );
     }
 
     #[test]

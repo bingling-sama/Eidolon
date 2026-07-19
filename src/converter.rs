@@ -121,8 +121,11 @@ mod tests {
     #[test]
     fn test_single2double_success_synthetic() {
         // 64x32 synthetic single-layer skin
-        let img =
-            DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(64, 32, Rgba([255, 0, 0, 255])));
+        let img = DynamicImage::ImageRgba8(image::ImageBuffer::from_pixel(
+            64,
+            32,
+            Rgba([255, 0, 0, 255]),
+        ));
         let result = single2double(&img);
         assert!(result.is_ok());
         let out = result.unwrap();

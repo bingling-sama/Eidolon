@@ -81,8 +81,7 @@ pub(crate) fn map_output_buffer_to_rgba(
     let map_result = rx
         .recv()
         .map_err(|e| EidolonError::gpu(format!("failed to receive buffer map result: {e}")))?;
-    map_result
-        .map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
+    map_result.map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
     let data = buffer_slice.get_mapped_range();
     let mut img_buf = ImageBuffer::new(width, height);
@@ -94,7 +93,12 @@ pub(crate) fn map_output_buffer_to_rgba(
             img_buf.put_pixel(
                 x,
                 y,
-                Rgba([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]),
+                Rgba([
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                ]),
             );
         }
     }
@@ -126,8 +130,7 @@ pub(crate) async fn map_output_buffer_to_rgba_async(
     let map_result = rx
         .await
         .map_err(|_| EidolonError::gpu("oneshot channel closed"))?;
-    map_result
-        .map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
+    map_result.map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
     let data = buffer_slice.get_mapped_range();
     let mut img_buf = ImageBuffer::new(width, height);
@@ -139,7 +142,12 @@ pub(crate) async fn map_output_buffer_to_rgba_async(
             img_buf.put_pixel(
                 x,
                 y,
-                Rgba([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]),
+                Rgba([
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                ]),
             );
         }
     }
@@ -182,7 +190,11 @@ mod tests {
         let (device, _queue) = make_device();
         let result = create_output_buffer(&device, u32::MAX, 100);
         assert!(result.is_err());
-        assert!(result.err().unwrap().to_string().contains("width too large"));
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("width too large"));
     }
 
     #[test]
@@ -193,6 +205,10 @@ mod tests {
         let (device, _queue) = make_device();
         let result = create_output_buffer(&device, 0x3FFFFFFF, 100);
         assert!(result.is_err());
-        assert!(result.err().unwrap().to_string().contains("padded row size too large"));
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("padded row size too large"));
     }
 }

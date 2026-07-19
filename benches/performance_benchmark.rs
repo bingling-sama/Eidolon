@@ -1,10 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use eidolon::{
-    camera::Camera,
-    character::Character,
-    renderer::Renderer,
-    OutputFormat,
-};
+use eidolon::{camera::Camera, character::Character, renderer::Renderer, OutputFormat};
 use std::fs;
 
 fn performance_benchmark(c: &mut Criterion) {

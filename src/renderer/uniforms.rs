@@ -110,21 +110,39 @@ pub(crate) fn compute_body_part_uniforms(
     std::array::from_fn(|i| {
         let (pivot, offset, _part_id) = PART_CONFIGS[i];
         let rotation = match i {
-            0 => // Head: yaw(Y) then pitch(X)
+            0 =>
+            // Head: yaw(Y) then pitch(X)
+            {
                 Matrix4::from_angle_y(Rad(posture.head_yaw.to_radians()))
-                    * Matrix4::from_angle_x(Rad(posture.head_pitch.to_radians())),
-            1 => // Right Arm: roll(Z) then pitch(X)
+                    * Matrix4::from_angle_x(Rad(posture.head_pitch.to_radians()))
+            }
+            1 =>
+            // Right Arm: roll(Z) then pitch(X)
+            {
                 Matrix4::from_angle_z(Rad(posture.right_arm_roll.to_radians()))
-                    * Matrix4::from_angle_x(Rad(posture.right_arm_pitch.to_radians())),
-            2 => // Left Arm: -roll(Z) then pitch(X)
+                    * Matrix4::from_angle_x(Rad(posture.right_arm_pitch.to_radians()))
+            }
+            2 =>
+            // Left Arm: -roll(Z) then pitch(X)
+            {
                 Matrix4::from_angle_z(Rad(-posture.left_arm_roll.to_radians()))
-                    * Matrix4::from_angle_x(Rad(posture.left_arm_pitch.to_radians())),
-            3 => // Right Leg: pitch(X) only
-                Matrix4::from_angle_x(Rad(posture.right_leg_pitch.to_radians())),
-            4 => // Left Leg: pitch(X) only
-                Matrix4::from_angle_x(Rad(posture.left_leg_pitch.to_radians())),
-            5 => // Body: no rotation
-                Matrix4::from_scale(1.0),
+                    * Matrix4::from_angle_x(Rad(posture.left_arm_pitch.to_radians()))
+            }
+            3 =>
+            // Right Leg: pitch(X) only
+            {
+                Matrix4::from_angle_x(Rad(posture.right_leg_pitch.to_radians()))
+            }
+            4 =>
+            // Left Leg: pitch(X) only
+            {
+                Matrix4::from_angle_x(Rad(posture.left_leg_pitch.to_radians()))
+            }
+            5 =>
+            // Body: no rotation
+            {
+                Matrix4::from_scale(1.0)
+            }
             _ => unreachable!(),
         };
 

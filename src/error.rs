@@ -123,10 +123,7 @@ mod tests {
         let e = EidolonError::Io(io);
         let source = std::error::Error::source(&e);
         assert!(source.is_some());
-        assert_eq!(
-            source.unwrap().to_string(),
-            "denied"
-        );
+        assert_eq!(source.unwrap().to_string(), "denied");
     }
 
     #[test]
@@ -150,10 +147,7 @@ mod tests {
     #[test]
     fn display_all_variants() {
         let io = std::io::Error::new(std::io::ErrorKind::Other, "oops");
-        assert_eq!(
-            EidolonError::Io(io).to_string(),
-            "I/O error: oops"
-        );
+        assert_eq!(EidolonError::Io(io).to_string(), "I/O error: oops");
         assert_eq!(
             EidolonError::Gpu("shader compile failed".into()).to_string(),
             "GPU error: shader compile failed"

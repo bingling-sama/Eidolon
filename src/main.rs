@@ -154,10 +154,8 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
         left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
         right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
     };
-    character.position =
-        cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z);
-    character.rotation =
-        cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z);
+    character.position = cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z);
+    character.rotation = cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z);
 
     let camera = Camera {
         yaw: scene.cam_yaw,
@@ -287,8 +285,7 @@ impl PreviewInteraction {
             -yaw.cos() * pitch.sin(),
         );
         let distance_per_pixel = 0.005 / camera.scale;
-        character.position =
-            base + (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
+        character.position = base + (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
     }
 }
 
@@ -509,8 +506,14 @@ mod tests {
 
     #[test]
     fn format_from_filename_webp() {
-        assert!(matches!(format_from_filename("out.webp"), OutputFormat::WebP));
-        assert!(matches!(format_from_filename("/tmp/x.webp"), OutputFormat::WebP));
+        assert!(matches!(
+            format_from_filename("out.webp"),
+            OutputFormat::WebP
+        ));
+        assert!(matches!(
+            format_from_filename("/tmp/x.webp"),
+            OutputFormat::WebP
+        ));
     }
 
     #[test]
@@ -521,7 +524,10 @@ mod tests {
     #[test]
     fn format_from_filename_no_extension_defaults_png() {
         assert!(matches!(format_from_filename("output"), OutputFormat::Png));
-        assert!(matches!(format_from_filename("/tmp/noext"), OutputFormat::Png));
+        assert!(matches!(
+            format_from_filename("/tmp/noext"),
+            OutputFormat::Png
+        ));
         assert!(matches!(format_from_filename(""), OutputFormat::Png));
     }
 
@@ -635,8 +641,14 @@ mod tests {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;
         let (c, _) = character_and_camera_from_scene(&scene);
-        assert!(c.posture.left_arm_pitch > 0.0, "Wave posture: left arm raised");
-        assert_eq!(c.posture.right_arm_pitch, 0.0, "Wave posture: right arm still");
+        assert!(
+            c.posture.left_arm_pitch > 0.0,
+            "Wave posture: left arm raised"
+        );
+        assert_eq!(
+            c.posture.right_arm_pitch, 0.0,
+            "Wave posture: right arm still"
+        );
         assert_eq!(c.cape_pitch, 10.8);
     }
 
@@ -691,10 +703,15 @@ mod tests {
 
     #[test]
     fn cli_render_minimal() {
-        let args = Args::try_parse_from(["eidolon", "render", "skin.png"])
-            .expect("minimal render parse");
+        let args =
+            Args::try_parse_from(["eidolon", "render", "skin.png"]).expect("minimal render parse");
         match args.command {
-            Command::Render { skin, output, viewport, scene } => {
+            Command::Render {
+                skin,
+                output,
+                viewport,
+                scene,
+            } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(output, "output.png");
                 assert_eq!(viewport.width, 800);
@@ -712,27 +729,15 @@ mod tests {
         assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cape"]).is_err());
         assert!(Args::try_parse_from(["eidolon", "preview", "skin.png", "--cape"]).is_err());
 
-        let args = Args::try_parse_from([
-            "eidolon",
-            "render",
-            "skin.png",
-            "--cape",
-            "cape.png",
-        ])
-        .expect("cape path should parse");
+        let args = Args::try_parse_from(["eidolon", "render", "skin.png", "--cape", "cape.png"])
+            .expect("cape path should parse");
         match args.command {
             Command::Render { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
             _ => panic!("Expected Render"),
         }
 
-        let args = Args::try_parse_from([
-            "eidolon",
-            "preview",
-            "skin.png",
-            "--cape",
-            "cape.png",
-        ])
-        .expect("preview cape path should parse");
+        let args = Args::try_parse_from(["eidolon", "preview", "skin.png", "--cape", "cape.png"])
+            .expect("preview cape path should parse");
         match args.command {
             Command::Preview { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
             _ => panic!("Expected Preview"),
@@ -763,16 +768,40 @@ mod tests {
     #[test]
     fn cli_render_all_options() {
         let args = Args::try_parse_from([
-            "eidolon", "render", "skin.png", "out.webp",
-            "--width", "400", "--height", "300",
-            "--slim", "--cam-yaw", "90", "--cam-pitch", "45", "--cam-zoom", "2.0",
-            "--posture", "wave",
-            "--head-yaw", "15", "--left-arm-pitch", "45",
-            "--pos-x", "1", "--rot-y", "180",
+            "eidolon",
+            "render",
+            "skin.png",
+            "out.webp",
+            "--width",
+            "400",
+            "--height",
+            "300",
+            "--slim",
+            "--cam-yaw",
+            "90",
+            "--cam-pitch",
+            "45",
+            "--cam-zoom",
+            "2.0",
+            "--posture",
+            "wave",
+            "--head-yaw",
+            "15",
+            "--left-arm-pitch",
+            "45",
+            "--pos-x",
+            "1",
+            "--rot-y",
+            "180",
         ])
         .expect("full render parse");
         match args.command {
-            Command::Render { skin, output, viewport, scene } => {
+            Command::Render {
+                skin,
+                output,
+                viewport,
+                scene,
+            } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(output, "out.webp");
                 assert_eq!(viewport.width, 400);
@@ -798,18 +827,23 @@ mod tests {
 
     #[test]
     fn cli_render_invalid_zoom_zero_rejected() {
-        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "0"]).is_err());
+        assert!(
+            Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "0"]).is_err()
+        );
     }
 
     #[test]
     fn cli_render_invalid_zoom_negative_rejected() {
-        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "-1"]).is_err());
+        assert!(
+            Args::try_parse_from(["eidolon", "render", "skin.png", "--cam-zoom", "-1"]).is_err()
+        );
     }
 
     #[test]
     fn cli_render_invalid_posture_rejected() {
         assert!(
-            Args::try_parse_from(["eidolon", "render", "skin.png", "--posture", "unknown"]).is_err()
+            Args::try_parse_from(["eidolon", "render", "skin.png", "--posture", "unknown"])
+                .is_err()
         );
     }
 
@@ -818,7 +852,11 @@ mod tests {
         let args = Args::try_parse_from(["eidolon", "preview", "skin.png"])
             .expect("minimal preview parse");
         match args.command {
-            Command::Preview { skin, viewport, scene } => {
+            Command::Preview {
+                skin,
+                viewport,
+                scene,
+            } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(viewport.width, 800);
                 assert_eq!(viewport.height, 600);
@@ -831,13 +869,26 @@ mod tests {
     #[test]
     fn cli_preview_with_options() {
         let args = Args::try_parse_from([
-            "eidolon", "preview", "skin.png",
-            "--width", "1024", "--height", "768",
-            "--slim", "--posture", "running", "--cam-zoom", "1.5",
+            "eidolon",
+            "preview",
+            "skin.png",
+            "--width",
+            "1024",
+            "--height",
+            "768",
+            "--slim",
+            "--posture",
+            "running",
+            "--cam-zoom",
+            "1.5",
         ])
         .expect("preview with options parse");
         match args.command {
-            Command::Preview { skin, viewport, scene } => {
+            Command::Preview {
+                skin,
+                viewport,
+                scene,
+            } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(viewport.width, 1024);
                 assert_eq!(viewport.height, 768);
@@ -918,7 +969,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             info!("Minecraft skin renderer");
             info!("Skin: {}", skin);
-            info!("Output: {} ({}x{})", output, viewport.width, viewport.height);
+            info!(
+                "Output: {} ({}x{})",
+                output, viewport.width, viewport.height
+            );
 
             info!("Creating renderer...");
             let mut renderer = Renderer::new()?;

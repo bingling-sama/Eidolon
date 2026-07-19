@@ -79,10 +79,30 @@ fn different_camera_angle_produces_different_output() {
     let (character, skin) = character_with_skin(&renderer);
 
     let front = renderer
-        .render(&character, &skin, &Camera { yaw: 90.0, pitch: 90.0, scale: 1.0 }, 200, 150)
+        .render(
+            &character,
+            &skin,
+            &Camera {
+                yaw: 90.0,
+                pitch: 90.0,
+                scale: 1.0,
+            },
+            200,
+            150,
+        )
         .expect("Front render failed");
     let back = renderer
-        .render(&character, &skin, &Camera { yaw: 270.0, pitch: 90.0, scale: 1.0 }, 200, 150)
+        .render(
+            &character,
+            &skin,
+            &Camera {
+                yaw: 270.0,
+                pitch: 90.0,
+                scale: 1.0,
+            },
+            200,
+            150,
+        )
         .expect("Back render failed");
 
     let px_front: Vec<u8> = front.pixels().flat_map(|p| p.0.to_vec()).collect();
@@ -98,11 +118,21 @@ fn render_to_image_saves_to_disk() {
     let tmp = std::env::temp_dir().join("eidolon_test_output.png");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
-        .render_to_image(&character, &skin, &camera_default(), tmp_str, (200, 150), OutputFormat::Png)
+        .render_to_image(
+            &character,
+            &skin,
+            &camera_default(),
+            tmp_str,
+            (200, 150),
+            OutputFormat::Png,
+        )
         .expect("render_to_image failed");
 
     assert!(tmp.exists(), "Output file not created: {:?}", tmp);
-    assert!(std::fs::metadata(&tmp).unwrap().len() > 0, "Output file empty");
+    assert!(
+        std::fs::metadata(&tmp).unwrap().len() > 0,
+        "Output file empty"
+    );
     std::fs::remove_file(&tmp).ok();
 }
 
@@ -114,11 +144,21 @@ fn webp_output_format_works() {
     let tmp = std::env::temp_dir().join("eidolon_test_output.webp");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
-        .render_to_image(&character, &skin, &camera_default(), tmp_str, (200, 150), OutputFormat::WebP)
+        .render_to_image(
+            &character,
+            &skin,
+            &camera_default(),
+            tmp_str,
+            (200, 150),
+            OutputFormat::WebP,
+        )
         .expect("render_to_image (webp) failed");
 
     assert!(tmp.exists(), "WebP output file not created");
-    assert!(std::fs::metadata(&tmp).unwrap().len() > 0, "WebP output empty");
+    assert!(
+        std::fs::metadata(&tmp).unwrap().len() > 0,
+        "WebP output empty"
+    );
     std::fs::remove_file(&tmp).ok();
 }
 
@@ -155,11 +195,10 @@ fn load_model_from_bytes_matches_from_file() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("No wgpu device");
 
-    let from_file = Model::load_from_obj(&device, "resources/slim.obj")
-        .expect("load_from_obj slim failed");
-    let from_bytes =
-        Model::load_from_obj_bytes(&device, &slim_bytes, "slim.obj")
-            .expect("load_from_obj_bytes slim failed");
+    let from_file =
+        Model::load_from_obj(&device, "resources/slim.obj").expect("load_from_obj slim failed");
+    let from_bytes = Model::load_from_obj_bytes(&device, &slim_bytes, "slim.obj")
+        .expect("load_from_obj_bytes slim failed");
 
     // Both should have all parts.
     assert!(from_file.head.main.vertex_count > 0);
@@ -188,7 +227,10 @@ fn load_model_from_bytes_invalid_data_errors() {
     let result = Model::load_from_obj_bytes(&device, b"not an obj file", "bad.obj");
     assert!(result.is_err());
     let msg = result.err().unwrap().to_string();
-    assert!(msg.contains("Model error"), "expected Model error, got: {msg}");
+    assert!(
+        msg.contains("Model error"),
+        "expected Model error, got: {msg}"
+    );
 }
 
 #[test]
@@ -213,7 +255,14 @@ fn render_to_image_no_extension_auto_adjusts() {
     let tmp = std::env::temp_dir().join("eidolon_auto_ext_noext");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
-        .render_to_image(&character, &skin, &camera_default(), tmp_str, (100, 75), OutputFormat::WebP)
+        .render_to_image(
+            &character,
+            &skin,
+            &camera_default(),
+            tmp_str,
+            (100, 75),
+            OutputFormat::WebP,
+        )
         .expect("render_to_image no-ext failed");
     // Extension adjustment strips directory; file saved to CWD.
     let cwd_file = std::path::Path::new("eidolon_auto_ext_noext.webp");
@@ -225,22 +274,50 @@ fn render_to_image_no_extension_auto_adjusts() {
 #[test]
 fn camera_extreme_values_produce_finite_matrices() {
     let test_cases = [
-        Camera { yaw: 0.0, pitch: 0.0, scale: 0.1 },
-        Camera { yaw: 720.0, pitch: -180.0, scale: 10.0 },
-        Camera { yaw: 360.0, pitch: 180.0, scale: 0.5 },
-        Camera { yaw: -90.0, pitch: 45.0, scale: 2.0 },
+        Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            scale: 0.1,
+        },
+        Camera {
+            yaw: 720.0,
+            pitch: -180.0,
+            scale: 10.0,
+        },
+        Camera {
+            yaw: 360.0,
+            pitch: 180.0,
+            scale: 0.5,
+        },
+        Camera {
+            yaw: -90.0,
+            pitch: 45.0,
+            scale: 2.0,
+        },
     ];
     for cam in &test_cases {
         let view = cam.get_view_matrix();
         for row in &view {
             for &val in row {
-                assert!(val.is_finite(), "non-finite view value at yaw={} pitch={} scale={}", cam.yaw, cam.pitch, cam.scale);
+                assert!(
+                    val.is_finite(),
+                    "non-finite view value at yaw={} pitch={} scale={}",
+                    cam.yaw,
+                    cam.pitch,
+                    cam.scale
+                );
             }
         }
         let proj = cam.get_projection_matrix(800, 600);
         for row in &proj {
             for &val in row {
-                assert!(val.is_finite(), "non-finite proj value at yaw={} pitch={} scale={}", cam.yaw, cam.pitch, cam.scale);
+                assert!(
+                    val.is_finite(),
+                    "non-finite proj value at yaw={} pitch={} scale={}",
+                    cam.yaw,
+                    cam.pitch,
+                    cam.scale
+                );
             }
         }
     }
@@ -315,9 +392,12 @@ fn render_to_image_png_save_error() {
     let (character, skin) = character_with_skin(&renderer);
     // Write to a directory that doesn't exist — save_with_format fails
     let result = renderer.render_to_image(
-        &character, &skin, &camera_default(),
+        &character,
+        &skin,
+        &camera_default(),
         "/nonexistent_dir_xyz_eidolon_test/output.png",
-        (100, 75), OutputFormat::Png,
+        (100, 75),
+        OutputFormat::Png,
     );
     match result {
         Ok(_) => panic!("Expected error when writing to nonexistent directory"),
@@ -403,10 +483,13 @@ fn render_all_posture_presets_with_both_skin_types() {
             character.posture = *posture;
             let img = renderer
                 .render(&character, &skin, &cam, 160, 120)
-                .unwrap_or_else(|e| panic!(
-                    "render failed for {:?} posture {}: {e}", skin_type, i
-                ));
-            assert!(img.width() > 0, "blank render for {:?} posture {}", skin_type, i);
+                .unwrap_or_else(|e| panic!("render failed for {:?} posture {}: {e}", skin_type, i));
+            assert!(
+                img.width() > 0,
+                "blank render for {:?} posture {}",
+                skin_type,
+                i
+            );
         }
     }
 }
