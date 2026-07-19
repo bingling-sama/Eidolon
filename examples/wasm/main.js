@@ -3,6 +3,9 @@ import { CanvasRenderer } from './pkg/eidolon_wasm_example.js';
 // ---- DOM ----
 const fileInput = document.getElementById('file-input');
 const fileName = document.getElementById('file-name');
+const capeInput = document.getElementById('cape-input');
+const capeFileName = document.getElementById('cape-file-name');
+const btnClearCape = document.getElementById('btn-clear-cape');
 const resultDiv = document.getElementById('result');
 const resultHint = document.getElementById('result-hint');
 const postureSelect = document.getElementById('select-posture');
@@ -171,6 +174,45 @@ fileInput.addEventListener('change', () => {
     showError(`Failed to read ${file.name}.`, reader.error?.message);
   };
   reader.readAsArrayBuffer(file);
+});
+
+capeInput.addEventListener('change', () => {
+  const file = capeInput.files?.[0];
+  if (!file || !renderer) return;
+
+  capeFileName.textContent = file.name;
+  console.log('loading cape:', file.name);
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
+      renderer.load_cape(bytes);
+      btnClearCape.disabled = false;
+    } catch (e) {
+      renderer.clear_cape();
+      capeInput.value = '';
+      capeFileName.textContent = '';
+      btnClearCape.disabled = true;
+      console.error('Failed to load cape:', e);
+    }
+  };
+  reader.onerror = () => {
+    renderer.clear_cape();
+    capeInput.value = '';
+    capeFileName.textContent = '';
+    btnClearCape.disabled = true;
+    console.error(`Failed to read ${file.name}.`, reader.error?.message);
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+btnClearCape.addEventListener('click', () => {
+  if (!renderer) return;
+  renderer.clear_cape();
+  capeInput.value = '';
+  capeFileName.textContent = '';
+  btnClearCape.disabled = true;
 });
 
 // ---- Orbit interaction (drag to rotate, scroll to zoom) ----

@@ -1,6 +1,6 @@
 //! Eidolon library usage example.
 //!
-//! Renders a skin with several posture/format/skin-type combinations to show
+//! Renders a skin with several posture/format/skin-type/cape combinations to show
 //! the public API.  Run with `cargo run` from this directory, or from the
 //! repo root with `cargo run -p eidolon-example`.
 //!
@@ -37,14 +37,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&out_dir)?;
 
     // ── one-time setup: create renderer + load skin ──────────────────
-    let renderer = Renderer::new()?;
+    let mut renderer = Renderer::new()?;
     let skin = renderer.load_texture("resources/bingling_sama.png")?;
+    renderer.load_cape_texture("resources/Turtle_Cape.png")?;
 
     // ── helper: render + save ────────────────────────────────────────
-    let save = |name: &str,
-                character: &Character,
-                camera: &Camera,
-                format: OutputFormat| -> Result<(), Box<dyn std::error::Error>> {
+    let save = |name: &str, character: &Character, camera: &Camera, format: OutputFormat| {
         let path = out_dir.join(name);
         renderer.render_to_image(
             character,
@@ -55,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             format,
         )?;
         println!("  -> {}", path.display());
-        Ok(())
+        Ok::<(), eidolon::error::EidolonError>(())
     };
 
     // ── default camera ───────────────────────────────────────────────
@@ -66,7 +64,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut character = Character::new();
     character.skin_type = SkinType::Slim;
     character.posture = DefaultPostures::STAND;
-    save("classic-stand.png", &character, &default_cam, OutputFormat::Png)?;
+    save(
+        "classic-stand.png",
+        &character,
+        &default_cam,
+        OutputFormat::Png,
+    )?;
 
     // ── 2. classic + wave (WebP) ─────────────────────────────────────
     println!("classic-wave");
@@ -92,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 4. slim + running, zoomed out ────────────────────────────────
     println!("slim-running");
     character.posture = DefaultPostures::RUNNING;
+    character.cape_pitch = character.posture.cape_pitch;
     let cam = Camera {
         yaw: 160.0,
         pitch: 85.0,
@@ -99,7 +103,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     save("slim-running.png", &character, &cam, OutputFormat::Png)?;
 
-    // ── 5. custom posture (per-joint) ────────────────────────────────
+    // ── 5. slim + running + cape, rear camera ────────────────────────
+    println!("slim-running-cape");
+    character.cape = true;
+    character.cape_pitch = character.posture.cape_pitch;
+    let cam = Camera {
+        yaw: 0.0,
+        pitch: 90.0,
+        scale: 0.9,
+    };
+    save("slim-running-cape.png", &character, &cam, OutputFormat::Png)?;
+
+    // ── 6. custom posture (per-joint) + cape ─────────────────────────
     println!("custom-posture");
     character.posture = Posture {
         cape_pitch: 10.8,
@@ -112,6 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         left_leg_pitch: 20.0,
         right_leg_pitch: -20.0,
     };
+    character.cape_pitch = character.posture.cape_pitch;
     let cam = Camera {
         yaw: 180.0,
         pitch: 90.0,
@@ -119,6 +135,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     save("custom-posture.png", &character, &cam, OutputFormat::Png)?;
 
-    println!("\nDone — {} images in {}", 5, out_dir.display());
+    println!("\nDone — {} images in {}", 6, out_dir.display());
     Ok(())
 }

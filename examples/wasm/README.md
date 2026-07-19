@@ -24,26 +24,23 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and click **Render**.
+Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a cape PNG.
 
 ## How It Works
 
 1. `wasm-pack` compiles the Rust crate (`src/lib.rs`) to a WASM module + JS glue in `pkg/`
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
-3. JS calls `SkinRenderer.render(skinBytes)` which:
-   - Uploads the skin PNG to WebGPU as a texture
-   - Rigs it onto the 3D player model
-   - Renders an 800×600 offscreen frame
-   - Encodes the result as PNG and returns the bytes
-4. JS wraps the PNG bytes in a `Blob` and displays it via `<img>`
+3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads a cape PNG
+4. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop
+5. Export captures an offscreen PNG at the selected resolution
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `Cargo.toml` | Rust crate (cdylib) depending on `eidolon` with `wasm` feature |
-| `src/lib.rs` | `#[wasm_bindgen]` bindings: `SkinRenderer` class |
-| `index.html` | UI — file picker, render button, result display |
-| `main.js` | Vanilla JS — calls WASM, handles DOM |
+| `src/lib.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
+| `index.html` | UI — skin/cape pickers, posture controls, export controls, result canvas |
+| `main.js` | Vanilla JS — calls WASM, handles DOM, camera orbit, cape loading |
 | `vite.config.js` | Vite config with WASM plugins |
 | `package.json` | npm scripts + Vite deps |

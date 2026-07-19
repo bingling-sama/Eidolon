@@ -56,6 +56,23 @@ impl CanvasRenderer {
         Ok(())
     }
 
+    /// Load a cape from PNG bytes and enable cape rendering.
+    pub fn load_cape(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.inner
+            .load_cape_texture_from_memory(bytes)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.character.cape = true;
+        self.character.cape_pitch = self.character.posture.cape_pitch;
+        log::info!("Cape loaded");
+        Ok(())
+    }
+
+    /// Disable cape rendering.
+    pub fn clear_cape(&mut self) {
+        self.character.cape = false;
+        log::info!("Cape cleared");
+    }
+
     /// Set posture by preset. `"stand"`, `"wave"`, `"walking"`, `"running"`.
     pub fn set_posture(&mut self, preset: &str) -> Result<(), JsValue> {
         self.character.posture = match preset {
@@ -65,6 +82,7 @@ impl CanvasRenderer {
             "running" => DefaultPostures::RUNNING,
             other => return Err(JsValue::from_str(&format!("unknown posture: '{other}'"))),
         };
+        self.character.cape_pitch = self.character.posture.cape_pitch;
         Ok(())
     }
 
