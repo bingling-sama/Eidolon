@@ -25,6 +25,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--height <PX>` | Output height in pixels | `600` |
 | `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
 | `--cape <PNG>` | Render a cape using the specified cape texture | *(no cape)* |
+| `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
 | `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
@@ -59,7 +60,7 @@ eidolon render skin.png
 eidolon render skin.png out.webp --slim
 
 # Render with an explicit cape texture
-eidolon render skin.png --cape cape.png
+eidolon render skin.png --cape cape.png --cape-pitch 25
 
 # Wave pose, zoomed in, 1024×1024
 eidolon render skin.png big.webp --posture wave --cam-zoom 1.5 --width 1024 --height 1024

@@ -16,6 +16,8 @@ pub enum SkinType {
 /// library consumers work with intuitive 0°-is-neutral angles.
 #[derive(Debug, Clone, Copy)]
 pub struct Posture {
+    /// Recommended cape pitch for this posture, in degrees.
+    pub cape_pitch: f32,
     /// Head yaw around Y (degrees). 0° = facing forward, positive = turn right.
     pub head_yaw: f32,
     /// Head pitch around X (degrees). 0° = level, positive = look up.
@@ -40,6 +42,7 @@ pub struct DefaultPostures;
 impl DefaultPostures {
     /// Neutral standing pose.
     pub const STAND: Posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 0.0,
@@ -51,6 +54,7 @@ impl DefaultPostures {
     };
     /// Wave pose.
     pub const WAVE: Posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: -28.65,
@@ -62,6 +66,7 @@ impl DefaultPostures {
     };
     /// Walking pose.
     pub const WALKING: Posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 5.32,
@@ -73,6 +78,7 @@ impl DefaultPostures {
     };
     /// Running pose.
     pub const RUNNING: Posture = Posture {
+        cape_pitch: 54.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 12.27,
@@ -150,6 +156,7 @@ mod tests {
     #[test]
     fn posture_debug_and_clone() {
         let p = Posture {
+            cape_pitch: 9.0,
             head_yaw: 1.0,
             head_pitch: 2.0,
             left_arm_roll: 3.0,
@@ -168,6 +175,7 @@ mod tests {
     #[test]
     fn default_postures_stand_all_zero() {
         let p = DefaultPostures::STAND;
+        assert_eq!(p.cape_pitch, 10.8);
         assert_eq!(p.head_yaw, 0.0);
         assert_eq!(p.head_pitch, 0.0);
         assert_eq!(p.left_arm_roll, 0.0);
@@ -210,6 +218,8 @@ mod tests {
             r.left_leg_pitch.abs() > w.left_leg_pitch.abs(),
             "running: legs swing wider"
         );
+        assert_eq!(w.cape_pitch, 10.8);
+        assert_eq!(r.cape_pitch, 54.0);
     }
 
     #[test]

@@ -112,6 +112,7 @@ Build a `Posture` directly. All angles are degrees, 0° = neutral (no rotation f
 
 ```rust
 let posture = Posture {
+    cape_pitch: 10.8,        // recommended cape angle for this posture
     head_yaw: 0.0,           // 0° = facing forward, positive = turn right
     head_pitch: 0.0,         // 0° = level, positive = look up
     left_arm_roll: 0.0,      // 0° = neutral
@@ -127,10 +128,10 @@ Presets are available via `DefaultPostures`:
 
 | Constant | Description |
 |----------|-------------|
-| `DefaultPostures::STAND` | Neutral standing pose (all 0°) |
-| `DefaultPostures::WAVE` | Left arm raised in a wave |
-| `DefaultPostures::WALKING` | Arms and legs in walking swing |
-| `DefaultPostures::RUNNING` | Arms and legs in running swing |
+| `DefaultPostures::STAND` | Neutral standing pose; cape 10.8° |
+| `DefaultPostures::WAVE` | Left arm raised in a wave; cape 10.8° |
+| `DefaultPostures::WALKING` | Arms and legs in walking swing; cape baseline 10.8° |
+| `DefaultPostures::RUNNING` | Arms and legs in running swing; cape baseline 54° |
 
 ## Skin Conversion
 

@@ -102,6 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 5. custom posture (per-joint) ────────────────────────────────
     println!("custom-posture");
     character.posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 30.0,
         head_pitch: -10.0,
         left_arm_roll: 45.0,

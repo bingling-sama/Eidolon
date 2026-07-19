@@ -80,6 +80,10 @@ struct SceneArgs {
     #[arg(long)]
     cape: Option<String>,
 
+    /// Override the posture's cape pitch in degrees.
+    #[arg(long)]
+    cape_pitch: Option<f32>,
+
     /// Camera orbit yaw in degrees.
     #[arg(long, default_value_t = 180.0)]
     cam_yaw: f32,
@@ -140,6 +144,7 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     character.cape = scene.cape.is_some();
     let base: Posture = scene.posture.into();
     character.posture = Posture {
+        cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
         head_pitch: scene.head_pitch.unwrap_or(base.head_pitch),
         left_arm_roll: scene.left_arm_roll.unwrap_or(base.left_arm_roll),
@@ -564,6 +569,7 @@ mod tests {
         SceneArgs {
             slim: false,
             cape: None,
+            cape_pitch: None,
             cam_yaw: 180.0,
             cam_pitch: 90.0,
             cam_zoom: 1.0,
@@ -631,6 +637,24 @@ mod tests {
         let (c, _) = character_and_camera_from_scene(&scene);
         assert!(c.posture.left_arm_pitch > 0.0, "Wave posture: left arm raised");
         assert_eq!(c.posture.right_arm_pitch, 0.0, "Wave posture: right arm still");
+        assert_eq!(c.cape_pitch, 10.8);
+    }
+
+    #[test]
+    fn scene_running_uses_running_cape_pitch() {
+        let mut scene = default_scene();
+        scene.posture = PostureCli::Running;
+        let (character, _) = character_and_camera_from_scene(&scene);
+        assert_eq!(character.cape_pitch, 54.0);
+    }
+
+    #[test]
+    fn scene_cape_pitch_overrides_posture() {
+        let mut scene = default_scene();
+        scene.posture = PostureCli::Running;
+        scene.cape_pitch = Some(25.0);
+        let (character, _) = character_and_camera_from_scene(&scene);
+        assert_eq!(character.cape_pitch, 25.0);
     }
 
     #[test]
@@ -686,6 +710,7 @@ mod tests {
     #[test]
     fn cli_cape_requires_and_captures_texture_path() {
         assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--cape"]).is_err());
+        assert!(Args::try_parse_from(["eidolon", "preview", "skin.png", "--cape"]).is_err());
 
         let args = Args::try_parse_from([
             "eidolon",
@@ -698,6 +723,40 @@ mod tests {
         match args.command {
             Command::Render { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
             _ => panic!("Expected Render"),
+        }
+
+        let args = Args::try_parse_from([
+            "eidolon",
+            "preview",
+            "skin.png",
+            "--cape",
+            "cape.png",
+        ])
+        .expect("preview cape path should parse");
+        match args.command {
+            Command::Preview { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
+            _ => panic!("Expected Preview"),
+        }
+    }
+
+    #[test]
+    fn cli_cape_pitch_is_available_to_render_and_preview() {
+        for command in ["render", "preview"] {
+            let args = Args::try_parse_from([
+                "eidolon",
+                command,
+                "skin.png",
+                "--cape",
+                "cape.png",
+                "--cape-pitch",
+                "25",
+            ])
+            .expect("cape pitch should parse");
+            let scene = match args.command {
+                Command::Render { scene, .. } | Command::Preview { scene, .. } => scene,
+                _ => panic!("Expected render or preview"),
+            };
+            assert_eq!(scene.cape_pitch, Some(25.0));
         }
     }
 

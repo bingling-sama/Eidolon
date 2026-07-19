@@ -19,6 +19,7 @@ cargo run -- render [OPTIONS]
 - `--texture <PATH>` 皮肤 PNG 路径。默认：`resources/bingling_sama.png`
 - `--skin-type <classic|slim>` 手臂类型，必填
 - `--cape <PNG>` 使用指定的披风贴图渲染披风；没有默认披风，省略时不渲染
+- `--cape-pitch <DEG>` 覆盖所选姿势的披风角度；默认使用姿势自带角度
 - `--yaw <DEG>` 相机 yaw。默认：`180`
 - `--pitch <DEG>` 相机 pitch。默认：`90`
 - `--scale <FLOAT>` 相机距离缩放（必须 > 0）。默认：`1.0`
@@ -44,7 +45,7 @@ cargo run -- render [OPTIONS]
 cargo run -- render --skin-type classic --texture resources/bingling_sama.png \
   --width 1024 --height 768 --yaw 210 --pitch 90 --scale 1.2 --format png
 
-cargo run -- render resources/bingling_sama.png --cape cape.png
+cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
 ```
 
 如果使用 `--format webp` 且保持默认 `--filename output.png`，CLI 会把输出路径改为

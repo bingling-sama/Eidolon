@@ -36,6 +36,7 @@ fn snapshot_classic_standing_front() {
     let mut character = Character::new();
     character.skin_type = SkinType::Classic;
     character.posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 90.0,

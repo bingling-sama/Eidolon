@@ -51,6 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 先调用 `Renderer::load_cape_texture()` 并设置 `Character::cape` 才会渲染披风；没有内置
   默认披风贴图。`Character::cape_pitch` 控制披风绕肩部背面顶边旋转，与 skinview3d
   一致的默认值为 `10.8` 度。
+- 默认姿势包含建议的披风角度：`STAND`、`WAVE`、`WALKING` 为 `10.8` 度，
+  `RUNNING` 为 `54` 度。CLI 选择姿势时会自动应用该角度。
 - 渲染前必须设置 `Character::skin`；否则渲染器会以 `No skin texture available` panic。
 - `Renderer::new` 和 `Renderer::new_windowed` 会从 `resources/` 加载两套内置 OBJ 模型，因此建议从仓库根目录运行，或确保这些资源路径可用。
 

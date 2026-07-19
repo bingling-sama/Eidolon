@@ -19,6 +19,7 @@ fn character_with_skin(renderer: &Renderer) -> (Character, Texture) {
     let mut c = Character::new();
     c.skin_type = SkinType::Classic;
     c.posture = Posture {
+        cape_pitch: 10.8,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 90.0,
