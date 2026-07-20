@@ -6,6 +6,9 @@ const fileName = document.getElementById('file-name');
 const capeInput = document.getElementById('cape-input');
 const capeFileName = document.getElementById('cape-file-name');
 const btnClearCape = document.getElementById('btn-clear-cape');
+const elytraInput = document.getElementById('elytra-input');
+const elytraFileName = document.getElementById('elytra-file-name');
+const btnClearElytra = document.getElementById('btn-clear-elytra');
 const resultDiv = document.getElementById('result');
 const resultHint = document.getElementById('result-hint');
 const postureSelect = document.getElementById('select-posture');
@@ -189,6 +192,9 @@ capeInput.addEventListener('change', () => {
       const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
       renderer.load_cape(bytes);
       btnClearCape.disabled = false;
+      elytraInput.value = '';
+      elytraFileName.textContent = '';
+      btnClearElytra.disabled = true;
     } catch (e) {
       renderer.clear_cape();
       capeInput.value = '';
@@ -207,12 +213,54 @@ capeInput.addEventListener('change', () => {
   reader.readAsArrayBuffer(file);
 });
 
+elytraInput.addEventListener('change', () => {
+  const file = elytraInput.files?.[0];
+  if (!file || !renderer) return;
+
+  elytraFileName.textContent = file.name;
+  console.log('loading elytra:', file.name);
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
+      renderer.load_elytra(bytes);
+      btnClearElytra.disabled = false;
+      capeInput.value = '';
+      capeFileName.textContent = '';
+      btnClearCape.disabled = true;
+    } catch (e) {
+      renderer.clear_elytra();
+      elytraInput.value = '';
+      elytraFileName.textContent = '';
+      btnClearElytra.disabled = true;
+      console.error('Failed to load elytra:', e);
+    }
+  };
+  reader.onerror = () => {
+    renderer.clear_elytra();
+    elytraInput.value = '';
+    elytraFileName.textContent = '';
+    btnClearElytra.disabled = true;
+    console.error(`Failed to read ${file.name}.`, reader.error?.message);
+  };
+  reader.readAsArrayBuffer(file);
+});
+
 btnClearCape.addEventListener('click', () => {
   if (!renderer) return;
   renderer.clear_cape();
   capeInput.value = '';
   capeFileName.textContent = '';
   btnClearCape.disabled = true;
+});
+
+btnClearElytra.addEventListener('click', () => {
+  if (!renderer) return;
+  renderer.clear_elytra();
+  elytraInput.value = '';
+  elytraFileName.textContent = '';
+  btnClearElytra.disabled = true;
 });
 
 // ---- Orbit interaction (drag to rotate, scroll to zoom) ----

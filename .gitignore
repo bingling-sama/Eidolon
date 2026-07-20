@@ -3,6 +3,7 @@
 *.png
 *.webp
 !resources/*
+!docs/**/*.png
 .agents
 skills-lock.json
 .env

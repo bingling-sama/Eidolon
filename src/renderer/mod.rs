@@ -17,14 +17,16 @@ use winit::window::Window;
 use crate::camera::Camera;
 use crate::cape::build_cape;
 use crate::character::{Character, SkinType};
+use crate::elytra::build_elytra;
 use crate::error::EidolonError;
 use crate::model::Model;
 use crate::texture::Texture;
 
 use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
 use uniforms::{
-    body_part_ref, compute_body_part_uniforms, compute_cape_uniform, CAPE_UNIFORM_INDEX,
-    PART_CONFIGS, UNIFORM_COUNT,
+    body_part_ref, compute_body_part_uniforms, compute_cape_uniform, compute_elytra_uniforms,
+    CAPE_UNIFORM_INDEX, LEFT_ELYTRA_UNIFORM_INDEX, PART_CONFIGS, RIGHT_ELYTRA_UNIFORM_INDEX,
+    UNIFORM_COUNT,
 };
 
 /// Image format for [`Renderer::render_to_image`].
@@ -95,6 +97,8 @@ pub struct Renderer {
     default_model: Model,
     cape_model: crate::model::CapePart,
     cape_texture: Option<Texture>,
+    elytra_model: crate::model::ElytraPart,
+    elytra_texture: Option<Texture>,
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
@@ -395,6 +399,7 @@ impl Renderer {
         };
 
         let cape_model = build_cape(&device)?;
+        let elytra_model = build_elytra(&device)?;
         #[cfg(target_arch = "wasm32")]
         let (slim_model, default_model) = {
             let slim = Model::load_from_obj_bytes(
@@ -428,6 +433,8 @@ impl Renderer {
             default_model,
             cape_model,
             cape_texture: None,
+            elytra_model,
+            elytra_texture: None,
             surface,
             surface_config,
             surface_pipeline,
@@ -465,25 +472,60 @@ impl Renderer {
     /// Cape rendering has no built-in texture; callers must provide one.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_cape_texture(&mut self, path: &str) -> Result<(), EidolonError> {
-        self.cape_texture = Some(Texture::load_from_file_raw(
+        let texture = Texture::load_from_file_raw(
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
             &self.sampler,
             path,
-        )?);
+        )?;
+        texture.validate_cape_atlas()?;
+        self.cape_texture = Some(texture);
         Ok(())
     }
 
     /// Load the cape texture from PNG bytes.
     pub fn load_cape_texture_from_memory(&mut self, bytes: &[u8]) -> Result<(), EidolonError> {
-        self.cape_texture = Some(Texture::load_from_memory_raw(
+        let texture = Texture::load_from_memory_raw(
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
             &self.sampler,
             bytes,
-        )?);
+        )?;
+        texture.validate_cape_atlas()?;
+        self.cape_texture = Some(texture);
+        Ok(())
+    }
+
+    /// Load the elytra texture used when [`Character::elytra`] is enabled.
+    ///
+    /// Elytra use a 2:1 cape atlas (64x32 or an HD multiple) and have no built-in texture.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_elytra_texture(&mut self, path: &str) -> Result<(), EidolonError> {
+        let texture = Texture::load_from_file_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            path,
+        )?;
+        texture.validate_cape_atlas()?;
+        self.elytra_texture = Some(texture);
+        Ok(())
+    }
+
+    /// Load an elytra texture from PNG bytes.
+    pub fn load_elytra_texture_from_memory(&mut self, bytes: &[u8]) -> Result<(), EidolonError> {
+        let texture = Texture::load_from_memory_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            bytes,
+        )?;
+        texture.validate_cape_atlas()?;
+        self.elytra_texture = Some(texture);
         Ok(())
     }
 
@@ -531,6 +573,18 @@ impl Renderer {
                 offset,
                 bytemuck::bytes_of(&cape_uniform),
             );
+        }
+
+        if character.elytra {
+            let elytra_uniforms = compute_elytra_uniforms(character, camera, width, height);
+            for (index, uniform) in [LEFT_ELYTRA_UNIFORM_INDEX, RIGHT_ELYTRA_UNIFORM_INDEX]
+                .into_iter()
+                .zip(elytra_uniforms)
+            {
+                let offset = (index as u64) * (self.uniform_aligned_size as u64);
+                self.queue
+                    .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
+            }
         }
 
         let depth_view = {
@@ -607,20 +661,34 @@ impl Renderer {
             }
 
             if character.cape {
-                let Some(cape_texture) = &self.cape_texture else {
-                    return;
-                };
-                // The cape mesh is already positioned at the upper back. Reuse
-                // the root/body transform (slot 5) for character translation,
-                // rotation, and camera scale.
-                render_pass.set_bind_group(
-                    0,
-                    &self.uniform_bind_group,
-                    &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
-                );
-                render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
-                render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
+                if let Some(cape_texture) = &self.cape_texture {
+                    render_pass.set_bind_group(
+                        0,
+                        &self.uniform_bind_group,
+                        &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
+                    );
+                    render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
+                    render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
+                }
+            }
+
+            if character.elytra {
+                if let Some(elytra_texture) = &self.elytra_texture {
+                    render_pass.set_bind_group(1, &elytra_texture.bind_group, &[]);
+                    for (index, wing) in [
+                        (LEFT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.left_wing),
+                        (RIGHT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.right_wing),
+                    ] {
+                        render_pass.set_bind_group(
+                            0,
+                            &self.uniform_bind_group,
+                            &[index * self.uniform_aligned_size],
+                        );
+                        render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
+                        render_pass.draw(0..wing.vertex_count, 0..1);
+                    }
+                }
             }
         }
     }

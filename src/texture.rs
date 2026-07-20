@@ -27,9 +27,15 @@ pub struct Texture {
     #[allow(dead_code)]
     pub(crate) view: wgpu::TextureView,
     pub(crate) bind_group: wgpu::BindGroup,
+    width: u32,
+    height: u32,
 }
 
 impl Texture {
+    pub(crate) fn validate_cape_atlas(&self) -> Result<(), EidolonError> {
+        validate_cape_atlas_dimensions(self.width, self.height)
+    }
+
     /// Load a skin from in-memory PNG bytes, decode as RGBA, optionally convert single-layer
     /// skins, then create the GPU texture and bind group.
     ///
@@ -239,6 +245,44 @@ impl Texture {
             texture,
             view,
             bind_group,
+            width,
+            height,
         })
+    }
+}
+
+fn validate_cape_atlas_dimensions(width: u32, height: u32) -> Result<(), EidolonError> {
+    let width_scale = width / 64;
+    let height_scale = height / 32;
+    let is_integer_hd_atlas = width >= 64
+        && height >= 32
+        && width.is_multiple_of(64)
+        && height.is_multiple_of(32)
+        && width_scale == height_scale;
+    if !is_integer_hd_atlas {
+        return Err(EidolonError::texture(format!(
+            "cape atlas must be 64x32 or an integer HD multiple, got {width}x{height}"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_cape_atlas_dimensions;
+
+    #[test]
+    fn cape_atlas_accepts_base_and_hd_dimensions() {
+        assert!(validate_cape_atlas_dimensions(64, 32).is_ok());
+        assert!(validate_cape_atlas_dimensions(128, 64).is_ok());
+        assert!(validate_cape_atlas_dimensions(256, 128).is_ok());
+    }
+
+    #[test]
+    fn cape_atlas_rejects_non_integer_scales_and_wrong_aspects() {
+        assert!(validate_cape_atlas_dimensions(2, 1).is_err());
+        assert!(validate_cape_atlas_dimensions(100, 50).is_err());
+        assert!(validate_cape_atlas_dimensions(64, 64).is_err());
+        assert!(validate_cape_atlas_dimensions(128, 32).is_err());
     }
 }

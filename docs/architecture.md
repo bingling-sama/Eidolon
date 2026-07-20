@@ -10,6 +10,7 @@ image output.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
 - `src/camera.rs` computes view and projection matrices for an orbit camera.
+- `src/cape.rs` and `src/elytra.rs` build back-equipment meshes using skinview3d atlas mappings.
 - `src/character.rs` defines skin geometry selection, posture presets (0° = neutral for all joints),
   and character transforms.
 - `src/model.rs` loads the classic and slim OBJ meshes from `resources/`. Supports loading from
@@ -84,5 +85,7 @@ Internal `pub(crate)` functions in `readback.rs` and `uniforms.rs` also use `Eid
 ## Current Limits
 
 - Skin textures are loaded from PNG files only.
+- Cape and elytra textures must use a 2:1 cape atlas (64x32 or an HD multiple), and applications
+  should enable only one back-equipment type at a time.
 - The renderer expects a usable `wgpu` backend. Headless rendering still creates a GPU adapter.
 - Model loading requires the exact object names listed above.

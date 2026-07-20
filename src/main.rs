@@ -77,8 +77,12 @@ struct SceneArgs {
     slim: bool,
 
     /// Render a cape using the specified 64x32 PNG texture.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "elytra")]
     cape: Option<String>,
+
+    /// Render elytra using the specified 64x32 PNG texture.
+    #[arg(long, conflicts_with = "cape")]
+    elytra: Option<String>,
 
     /// Override the posture's cape pitch in degrees.
     #[arg(long)]
@@ -142,6 +146,7 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
         SkinType::Classic
     };
     character.cape = scene.cape.is_some();
+    character.elytra = scene.elytra.is_some();
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
@@ -154,6 +159,7 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
         left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
         right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
     };
+    character.cape_pitch = character.posture.cape_pitch;
     character.position = cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z);
     character.rotation = cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z);
 
@@ -225,6 +231,7 @@ struct PreviewApp {
     camera: Camera,
     texture_path: String,
     cape_texture_path: Option<String>,
+    elytra_texture_path: Option<String>,
     initial_size: PhysicalSize<u32>,
     interaction: PreviewInteraction,
 }
@@ -311,6 +318,11 @@ impl ApplicationHandler for PreviewApp {
             renderer
                 .load_cape_texture(path)
                 .expect("Failed to load cape texture");
+        }
+        if let Some(path) = &self.elytra_texture_path {
+            renderer
+                .load_elytra_texture(path)
+                .expect("Failed to load elytra texture");
         }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
@@ -575,6 +587,7 @@ mod tests {
         SceneArgs {
             slim: false,
             cape: None,
+            elytra: None,
             cape_pitch: None,
             cam_yaw: 180.0,
             cam_pitch: 90.0,
@@ -622,6 +635,14 @@ mod tests {
         scene.cape = Some("cape.png".to_owned());
         let (character, _) = character_and_camera_from_scene(&scene);
         assert!(character.cape);
+    }
+
+    #[test]
+    fn scene_elytra_path_enables_elytra_rendering() {
+        let mut scene = default_scene();
+        scene.elytra = Some("elytra.png".to_owned());
+        let (character, _) = character_and_camera_from_scene(&scene);
+        assert!(character.elytra);
     }
 
     #[test]
@@ -719,6 +740,7 @@ mod tests {
                 assert_eq!(scene.cam_yaw, 180.0);
                 assert!(matches!(scene.posture, PostureCli::Stand));
                 assert_eq!(scene.cape, None);
+                assert_eq!(scene.elytra, None);
             }
             _ => panic!("Expected Render"),
         }
@@ -742,6 +764,37 @@ mod tests {
             Command::Preview { scene, .. } => assert_eq!(scene.cape.as_deref(), Some("cape.png")),
             _ => panic!("Expected Preview"),
         }
+    }
+
+    #[test]
+    fn cli_elytra_requires_and_captures_texture_path() {
+        assert!(Args::try_parse_from(["eidolon", "render", "skin.png", "--elytra"]).is_err());
+        assert!(Args::try_parse_from(["eidolon", "preview", "skin.png", "--elytra"]).is_err());
+
+        for command in ["render", "preview"] {
+            let args =
+                Args::try_parse_from(["eidolon", command, "skin.png", "--elytra", "elytra.png"])
+                    .expect("elytra path should parse");
+            let scene = match args.command {
+                Command::Render { scene, .. } | Command::Preview { scene, .. } => scene,
+                _ => panic!("Expected render or preview"),
+            };
+            assert_eq!(scene.elytra.as_deref(), Some("elytra.png"));
+        }
+    }
+
+    #[test]
+    fn cli_rejects_cape_and_elytra_together() {
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "render",
+            "skin.png",
+            "--cape",
+            "cape.png",
+            "--elytra",
+            "elytra.png",
+        ])
+        .is_err());
     }
 
     #[test]
@@ -989,6 +1042,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 renderer.load_cape_texture(cape_path)?;
                 info!("Cape loaded");
             }
+            if let Some(elytra_path) = &scene.elytra {
+                info!("Loading elytra: {}", elytra_path);
+                renderer.load_elytra_texture(elytra_path)?;
+                info!("Elytra loaded");
+            }
 
             info!("Rendering...");
             let output_format = format_from_filename(&output);
@@ -1020,6 +1078,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 camera,
                 texture_path: skin,
                 cape_texture_path: scene.cape,
+                elytra_texture_path: scene.elytra,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
                 interaction: PreviewInteraction::default(),
             };

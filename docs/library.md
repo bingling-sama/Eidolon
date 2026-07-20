@@ -172,3 +172,8 @@ renderer.render_frame(&character, &skin, &camera)?;
 - Call `Renderer::load_cape_texture()` and set `Character::cape` to render a cape; there is no
   built-in default texture. `Character::cape_pitch` rotates it around the top-back shoulder
   attachment edge; the skinview3d-compatible default is `10.8` degrees.
+- Call `Renderer::load_elytra_texture()` and set `Character::elytra` to render elytra. Elytra use
+  the same 2:1 cape atlas format (64x32 or an HD multiple) and the skinview3d-compatible default
+  wing pose. Applications should enable either cape or elytra, not both.
+
+![Elytra rendered from the rear](elytra-preview.png)

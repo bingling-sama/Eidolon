@@ -51,6 +51,11 @@ pub struct CapePart {
     pub main: ModelPart,
 }
 
+pub struct ElytraPart {
+    pub left_wing: ModelPart,
+    pub right_wing: ModelPart,
+}
+
 /// One body region: opaque `main` mesh plus `layer` overlay (hat/body/armor layer).
 pub struct BodyPart {
     pub main: ModelPart,

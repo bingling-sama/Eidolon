@@ -105,6 +105,8 @@ pub struct Character {
     pub rotation: Vector3<f32>,
     /// Whether to render the cape texture configured on the renderer.
     pub cape: bool,
+    /// Whether to render the elytra texture configured on the renderer.
+    pub elytra: bool,
     /// Cape rotation around its top attachment edge (X axis), in degrees.
     pub cape_pitch: f32,
 }
@@ -117,6 +119,7 @@ impl Default for Character {
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
             cape: false,
+            elytra: false,
             cape_pitch: 10.8,
         }
     }
@@ -234,6 +237,7 @@ mod tests {
         assert_eq!(c.rotation.y, 0.0);
         assert_eq!(c.rotation.z, 0.0);
         assert!(!c.cape);
+        assert!(!c.elytra);
         assert_eq!(c.cape_pitch, 10.8);
     }
 
@@ -255,12 +259,14 @@ mod tests {
         c.position = Vector3::new(1.0, 2.0, 3.0);
         c.rotation = Vector3::new(45.0, 90.0, 0.0);
         c.cape = true;
+        c.elytra = true;
         c.cape_pitch = 24.0;
         assert_eq!(c.skin_type, SkinType::Slim);
         assert_eq!(c.posture.right_leg_pitch, -74.48);
         assert_eq!(c.position.y, 2.0);
         assert_eq!(c.rotation.x, 45.0);
         assert!(c.cape);
+        assert!(c.elytra);
         assert_eq!(c.cape_pitch, 24.0);
     }
 }

@@ -62,6 +62,7 @@ impl CanvasRenderer {
             .load_cape_texture_from_memory(bytes)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         self.character.cape = true;
+        self.character.elytra = false;
         self.character.cape_pitch = self.character.posture.cape_pitch;
         log::info!("Cape loaded");
         Ok(())
@@ -71,6 +72,23 @@ impl CanvasRenderer {
     pub fn clear_cape(&mut self) {
         self.character.cape = false;
         log::info!("Cape cleared");
+    }
+
+    /// Load an elytra texture from PNG bytes and enable elytra rendering.
+    pub fn load_elytra(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.inner
+            .load_elytra_texture_from_memory(bytes)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.character.elytra = true;
+        self.character.cape = false;
+        log::info!("Elytra loaded");
+        Ok(())
+    }
+
+    /// Disable elytra rendering.
+    pub fn clear_elytra(&mut self) {
+        self.character.elytra = false;
+        log::info!("Elytra cleared");
     }
 
     /// Set posture by preset. `"stand"`, `"wave"`, `"walking"`, `"running"`.

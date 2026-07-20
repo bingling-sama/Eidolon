@@ -1,6 +1,6 @@
 //! Eidolon library usage example.
 //!
-//! Renders a skin with several posture/format/skin-type/cape combinations to show
+//! Renders a skin with posture/format/skin-type/back-equipment combinations to show
 //! the public API.  Run with `cargo run` from this directory, or from the
 //! repo root with `cargo run -p eidolon-example`.
 //!
@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut renderer = Renderer::new()?;
     let skin = renderer.load_texture("resources/bingling_sama.png")?;
     renderer.load_cape_texture("resources/Turtle_Cape.png")?;
+    renderer.load_elytra_texture("resources/Turtle_Cape.png")?;
 
     // ── helper: render + save ────────────────────────────────────────
     let save = |name: &str, character: &Character, camera: &Camera, format: OutputFormat| {
@@ -135,6 +136,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     save("custom-posture.png", &character, &cam, OutputFormat::Png)?;
 
-    println!("\nDone — {} images in {}", 6, out_dir.display());
+    // -- 7. elytra, rear camera ---------------------------------------
+    println!("slim-elytra");
+    character.cape = false;
+    character.elytra = true;
+    let rear_cam = Camera { yaw: 0.0, ..cam };
+    save("slim-elytra.png", &character, &rear_cam, OutputFormat::Png)?;
+
+    println!("\nDone — {} images in {}", 7, out_dir.display());
     Ok(())
 }

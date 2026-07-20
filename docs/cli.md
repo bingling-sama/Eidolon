@@ -25,6 +25,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--height <PX>` | Output height in pixels | `600` |
 | `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
 | `--cape <PNG>` | Render a cape using the specified cape texture | *(no cape)* |
+| `--elytra <PNG>` | Render elytra using a 2:1 cape atlas (64x32 or HD) | *(no elytra)* |
 | `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
@@ -62,6 +63,9 @@ eidolon render skin.png out.webp --slim
 # Render with an explicit cape texture
 eidolon render skin.png --cape cape.png --cape-pitch 25
 
+# Render elytra (mutually exclusive with --cape)
+eidolon render skin.png --elytra cape.png
+
 # Wave pose, zoomed in, 1024×1024
 eidolon render skin.png big.webp --posture wave --cam-zoom 1.5 --width 1024 --height 1024
 
@@ -93,6 +97,7 @@ In the preview window, drag with the left mouse button to pan, drag with the rig
 eidolon preview skin.png
 eidolon preview skin.png --slim --cam-zoom 2.0
 eidolon preview skin.png --cape cape.png
+eidolon preview skin.png --elytra cape.png
 eidolon preview skin.png --posture running --width 1024 --height 768
 ```
 

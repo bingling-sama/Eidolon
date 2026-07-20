@@ -8,6 +8,7 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 - `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
+- `src/cape.rs` 和 `src/elytra.rs` 使用 skinview3d 图集映射构建背部装备网格。
 - `src/character.rs` 定义皮肤几何类型、姿势预设和角色变换。
 - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型。
 - `src/texture.rs` 加载 PNG 皮肤，并在需要时自动展开旧版单层皮肤。
@@ -55,5 +56,7 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 ## 当前限制
 
 - 皮肤纹理仅支持从 PNG 文件加载。
-- `Character::cape` 和 `Character::nametag` 是预留字段，当前不会渲染。
+- 披风与鞘翅使用 2:1 披风图集（64×32 或等比例高清图集）；启用前需分别加载对应纹理，
+  场景中应只选择一种背部装备。
+- `Character::nametag` 是预留字段，当前不会渲染。
 - 渲染器需要可用的 `wgpu` 后端。无窗口渲染同样需要创建 GPU adapter。

@@ -111,6 +111,41 @@ fn different_camera_angle_produces_different_output() {
 }
 
 #[test]
+fn enabling_elytra_changes_the_back_view() {
+    let mut renderer = make_renderer();
+    let (mut character, skin) = character_with_skin(&renderer);
+    let back_camera = Camera {
+        yaw: 0.0,
+        pitch: 90.0,
+        scale: 1.0,
+    };
+
+    let without_elytra = renderer
+        .render(&character, &skin, &back_camera, 200, 150)
+        .expect("render without elytra failed");
+
+    renderer
+        .load_elytra_texture("resources/Turtle_Cape.png")
+        .expect("load elytra texture failed");
+    character.elytra = true;
+    let with_elytra = renderer
+        .render(&character, &skin, &back_camera, 200, 150)
+        .expect("render with elytra failed");
+
+    assert_ne!(without_elytra.as_raw(), with_elytra.as_raw());
+}
+
+#[test]
+fn elytra_rejects_non_cape_atlas_dimensions() {
+    let mut renderer = make_renderer();
+    let error = renderer
+        .load_elytra_texture("resources/bingling_sama.png")
+        .expect_err("square skin must not be accepted as an elytra atlas");
+
+    assert!(error.to_string().contains("64x32"));
+}
+
+#[test]
 fn render_to_image_saves_to_disk() {
     let renderer = make_renderer();
     let (character, skin) = character_with_skin(&renderer);
