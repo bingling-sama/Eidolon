@@ -19,7 +19,8 @@ pub(crate) const BODY_PART_COUNT: usize = 6;
 pub(crate) const CAPE_UNIFORM_INDEX: u32 = BODY_PART_COUNT as u32;
 pub(crate) const LEFT_ELYTRA_UNIFORM_INDEX: u32 = CAPE_UNIFORM_INDEX + 1;
 pub(crate) const RIGHT_ELYTRA_UNIFORM_INDEX: u32 = LEFT_ELYTRA_UNIFORM_INDEX + 1;
-pub(crate) const UNIFORM_COUNT: u32 = RIGHT_ELYTRA_UNIFORM_INDEX + 1;
+pub(crate) const NAMETAG_UNIFORM_INDEX: u32 = RIGHT_ELYTRA_UNIFORM_INDEX + 1;
+pub(crate) const UNIFORM_COUNT: u32 = NAMETAG_UNIFORM_INDEX + 1;
 pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 pub(crate) const ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 const BODY_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -52,7 +53,7 @@ pub(crate) struct Uniforms {
 ///
 /// Pivot points are joint positions from the Blockbench OBJ model.
 /// Coordinate system: Y-up, character centered at X=0 Z=0, feet at Y≈0,
-/// head top at Y≈2.
+/// collision-box top at Y≈1.8.
 pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32, PartId); BODY_PART_COUNT] = &[
     // Head: pivot at neck joint
     (Vector3::new(0.0, 1.5, 0.0), 0.0, PartId::Head),
@@ -83,7 +84,7 @@ pub(crate) fn body_part_ref<'a>(i: usize, model: &'a Model) -> &'a BodyPart {
     }
 }
 
-fn compute_base_model_matrix(character: &Character, camera: &Camera) -> Matrix4<f32> {
+pub(crate) fn compute_base_model_matrix(character: &Character, camera: &Camera) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(character.position);
     let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
         * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))

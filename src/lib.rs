@@ -4,6 +4,7 @@ Eidolon: Minecraft skin rendering library.
 Provides:
 - Loading and rendering Minecraft skins (PNG; single-layer skins are expanded to double-layer when needed)
 - Configurable character posture and camera
+- Minecraft-style player nametags
 - Headless image output (PNG / WebP) and windowed preview
 */
 

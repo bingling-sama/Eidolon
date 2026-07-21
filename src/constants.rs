@@ -77,3 +77,52 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(tex_color.rgb * diffuse, tex_color.a);
 }
 "#;
+
+/// Unlit textured billboard shader used for player nametags.
+pub const NAMETAG_SHADER: &str = r#"
+struct Uniforms {
+    perspective: mat4x4<f32>,
+    view: mat4x4<f32>,
+    model: mat4x4<f32>,
+    offset: f32,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: Uniforms;
+
+@group(1) @binding(0)
+var t_nametag: texture_2d<f32>;
+@group(1) @binding(1)
+var s_nametag: sampler;
+
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.tex_coords = in.tex_coords;
+    out.clip_position = uniforms.perspective * uniforms.view * uniforms.model
+        * vec4<f32>(in.position, 1.0);
+    return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(t_nametag, s_nametag, in.tex_coords);
+}
+
+@fragment
+fn fs_see_through(in: VertexOutput) -> @location(0) vec4<f32> {
+    let tex_color = textureSample(t_nametag, s_nametag, in.tex_coords);
+    return vec4<f32>(tex_color.rgb, tex_color.a * 0.25);
+}
+"#;

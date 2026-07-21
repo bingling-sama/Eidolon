@@ -141,6 +141,10 @@ impl DefaultPostures {
 pub struct Character {
     /// Chooses `classic.obj` vs `slim.obj` arm geometry.
     pub skin_type: SkinType,
+    /// Optional player name rendered above the model. `None` hides the nametag.
+    pub nametag: Option<String>,
+    /// Whether an occluded nametag remains visible at reduced opacity.
+    pub nametag_see_through: bool,
     pub posture: Posture,
     /// World-space translation applied before per-part joint matrices.
     pub position: Vector3<f32>,
@@ -158,6 +162,8 @@ impl Default for Character {
     fn default() -> Self {
         Self {
             skin_type: SkinType::Classic,
+            nametag: None,
+            nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
@@ -183,6 +189,16 @@ mod tests {
         assert_eq!(SkinType::Classic, SkinType::Classic);
         assert_eq!(SkinType::Slim, SkinType::Slim);
         assert_ne!(SkinType::Classic, SkinType::Slim);
+    }
+
+    #[test]
+    fn nametag_is_hidden_by_default() {
+        assert_eq!(Character::new().nametag, None);
+    }
+
+    #[test]
+    fn nametag_uses_translucent_occlusion_by_default() {
+        assert!(Character::new().nametag_see_through);
     }
 
     #[test]

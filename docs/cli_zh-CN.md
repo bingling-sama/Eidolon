@@ -18,6 +18,8 @@ cargo run -- render [OPTIONS]
 - `--height <PX>` 输出高度（像素）。默认：`600`
 - `--texture <PATH>` 皮肤 PNG 路径。默认：`resources/bingling_sama.png`
 - `--skin-type <classic|slim>` 手臂类型，必填
+- `--nametag <TEXT>` 在模型头顶渲染 Minecraft 风格玩家名；默认不显示
+- `--disable-nametag-see-through` 让被场景几何遮挡的 nametag 像素完全隐藏；默认以低透明度显示
 - `--cape <PNG>` 使用指定的披风贴图渲染披风；没有默认披风，省略时不渲染
 - `--elytra <PNG>` 使用 2:1 披风图集（64×32 或等比例高清图集）渲染鞘翅；与 `--cape` 互斥
 - `--cape-pitch <DEG>` 覆盖所选姿势的披风角度；默认使用姿势自带角度
@@ -50,6 +52,8 @@ cargo run -- render --skin-type classic --texture resources/bingling_sama.png \
 
 cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
 cargo run -- render resources/bingling_sama.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
+cargo run -- render resources/bingling_sama.png --nametag Steve
+cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nametag-see-through
 ```
 
 如果使用 `--format webp` 且保持默认 `--filename output.png`，CLI 会把输出路径改为
@@ -75,6 +79,7 @@ cargo run -- preview [OPTIONS]
 cargo run -- preview --skin-type slim --texture resources/bingling_sama.png --yaw 200
 cargo run -- preview resources/bingling_sama.png --cape cape.png
 cargo run -- preview resources/bingling_sama.png --elytra cape.png
+cargo run -- preview resources/bingling_sama.png --nametag Steve
 ```
 
 ## Convert

@@ -79,6 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut character = Character::new();
     character.skin_type = SkinType::Slim;
+    character.nametag = Some("Steve".to_owned());
+    character.nametag_see_through = false; // optional: fully hide occluded pixels
     character.posture = DefaultPostures::WAVE;
     character.rotation.y = 20.0;    // 20° around Y axis
     character.cape = true;
@@ -174,6 +176,16 @@ renderer.render_frame(&character, &skin, &camera)?;
 - `Model::load_from_obj_bytes()` is available for loading OBJ data from memory.
 - `Camera::scale` (renamed `cam_zoom` in the CLI) controls orbit distance: `distance = 4.0 / scale`. Larger values move the camera closer.
 - Character rotation is Euler: X first, then Y, then Z.
+- Set `Character::nametag` to `Some(name)` to draw an unlit, camera-facing label above the player.
+  The label uses the bundled Monocraft pixel font, a white glyph shadow, a translucent black
+  background, and scene depth testing. Nametags are single-line and limited to 64 characters;
+  characters missing from the bundled font use its standard missing-glyph box.
+- Nametag spacing is applied along the scene's vertical Y axis after finding the highest point of
+  the transformed player collision box's scene-space AABB. The label is centered over that AABB.
+  The collision box is 1.8 world units tall and the default gap is 0.5 units; both scale with
+  `Camera::scale`.
+  Occluded pixels render at 25% opacity by default, followed by the normal depth-tested pass. Set
+  `Character::nametag_see_through` to `false` to hide occluded pixels completely.
 - Call `Renderer::load_cape_texture()` and set `Character::cape` to render a cape; there is no
   built-in default texture. `Character::cape_pitch` rotates it around the top-back shoulder
   attachment edge; the skinview3d-compatible default is `10.8` degrees.

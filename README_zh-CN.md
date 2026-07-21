@@ -14,6 +14,7 @@ Eidolon 是一个使用 Rust 编写的 Minecraft 皮肤渲染器。它可以把�
 - 使用 wgpu 进行 3D 渲染
 - 输出 PNG 或 WebP 图片
 - 可配置相机、姿势和输出尺寸
+- 支持在玩家模型头顶渲染 Minecraft 风格 nametag
 - 支持披风与鞘翅渲染
 - 支持无窗口离屏渲染和窗口预览
 - 跨平台支持 Windows、macOS、Linux
@@ -46,13 +47,13 @@ cargo build
 ### 渲染图片
 
 ```bash
-cargo run -- render --skin-type classic
+cargo run -- render resources/bingling_sama.png --nametag BinglingTX
 ```
 
 ### 窗口预览
 
 ```bash
-cargo run -- preview --skin-type classic
+cargo run -- preview resources/bingling_sama.png --nametag BinglingTX
 ```
 
 更多 CLI 选项见 `docs/cli_zh-CN.md`。

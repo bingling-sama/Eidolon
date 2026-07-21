@@ -181,7 +181,7 @@ impl Texture {
         )
     }
 
-    fn upload_raw(
+    pub(crate) fn upload_raw(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,

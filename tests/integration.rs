@@ -78,6 +78,71 @@ fn render_output_not_blank() {
 }
 
 #[test]
+fn nametag_renders_above_the_player() {
+    let renderer = make_renderer();
+    let (mut character, skin) = character_with_skin(&renderer);
+    let without_nametag = renderer
+        .render(&character, &skin, &camera_default(), 400, 300)
+        .expect("render without nametag failed");
+
+    character.nametag = Some("Steve".to_owned());
+    let with_nametag = renderer
+        .render(&character, &skin, &camera_default(), 400, 300)
+        .expect("render with nametag failed");
+
+    let changed_pixels: Vec<(u32, u32)> = without_nametag
+        .enumerate_pixels()
+        .zip(with_nametag.enumerate_pixels())
+        .filter_map(|((x, y, before), (_, _, after))| (before != after).then_some((x, y)))
+        .collect();
+    assert!(
+        changed_pixels.len() > 20,
+        "nametag should change visible pixels"
+    );
+    assert!(
+        changed_pixels.iter().all(|(_, y)| *y < 150),
+        "nametag changes should stay above the player's midpoint"
+    );
+}
+
+#[test]
+fn nametag_see_through_only_reveals_occluded_pixels() {
+    let renderer = make_renderer();
+    let (mut character, skin) = character_with_skin(&renderer);
+    character.posture = DefaultPostures::FLYING;
+    let back_camera = Camera {
+        yaw: 0.0,
+        pitch: 30.0,
+        scale: 1.0,
+    };
+    let without_nametag = renderer
+        .render(&character, &skin, &back_camera, 400, 300)
+        .expect("render without nametag failed");
+
+    character.nametag = Some("BinglingTX".to_owned());
+    character.nametag_see_through = false;
+    let fully_occluded = renderer
+        .render(&character, &skin, &back_camera, 400, 300)
+        .expect("render with full nametag occlusion failed");
+
+    character.nametag_see_through = true;
+    let translucent_occlusion = renderer
+        .render(&character, &skin, &back_camera, 400, 300)
+        .expect("render with translucent nametag occlusion failed");
+
+    let revealed_pixels = without_nametag
+        .pixels()
+        .zip(fully_occluded.pixels())
+        .zip(translucent_occlusion.pixels())
+        .filter(|((without, hidden), translucent)| without == hidden && without != translucent)
+        .count();
+    assert!(
+        revealed_pixels > 10,
+        "see-through pass should reveal nametag pixels hidden by the player model"
+    );
+}
+
+#[test]
 fn different_camera_angle_produces_different_output() {
     let renderer = make_renderer();
     let (character, skin) = character_with_skin(&renderer);

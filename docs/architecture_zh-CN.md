@@ -12,7 +12,7 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 - `src/character.rs` 定义皮肤几何类型、姿势预设和角色变换。
 - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型。
 - `src/texture.rs` 加载 PNG 皮肤，并在需要时自动展开旧版单层皮肤。
-- `src/renderer/` 包含共享的 `wgpu` 渲染器、输出编码、读回、管线和 uniform 逻辑。
+- `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、输出编码、读回、管线和 uniform 逻辑。
 - `src/utils/converter.rs` 实现单层皮肤图集到双层图集的转换。
 - `benches/performance_benchmark.rs` 使用 Criterion 批量渲染图片做基准测试。
 
@@ -27,6 +27,12 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
    正方形双层图集再上传到 GPU。
 5. `Renderer::render_to_image` 渲染到离屏 `Rgba8Unorm` 纹理，将带 padding 的 GPU 行数据复制
    到 CPU buffer，去除 padding 后保存为 PNG 或 WebP。
+
+设置 `Character::nametag` 后，渲染器会将单行文本光栅化并缓存为纹理，再通过不受光照影响的
+billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
+上方。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位，二者都会随 `Camera::scale` 缩放。
+默认先绘制 25% 透明度且忽略深度的遮挡层，再绘制正常深度测试层；
+`nametag_see_through = false` 会跳过第一层。
 
 `preview` 使用同一套场景数据和渲染管线，但 `Renderer::new_windowed` 会创建窗口 surface，
 `render_frame` 每帧提交到 swapchain。
@@ -59,5 +65,5 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 - 皮肤纹理仅支持从 PNG 文件加载。
 - 披风与鞘翅使用 2:1 披风图集（64×32 或等比例高清图集）；启用前需分别加载对应纹理，
   场景中应只选择一种背部装备。
-- `Character::nametag` 是预留字段，当前不会渲染。
+- nametag 仅支持单行，最多渲染 64 个 Unicode 字符。
 - 渲染器需要可用的 `wgpu` 后端。无窗口渲染同样需要创建 GPU adapter。

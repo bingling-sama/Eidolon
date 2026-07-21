@@ -24,6 +24,8 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--width <PX>` | Output width in pixels | `800` |
 | `--height <PX>` | Output height in pixels | `600` |
 | `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
+| `--nametag <TEXT>` | Render a Minecraft-style player name above the model | *(hidden)* |
+| `--disable-nametag-see-through` | Fully hide nametag pixels occluded by scene geometry | *(translucent when occluded)* |
 | `--cape <PNG>` | Render a cape using the specified cape texture | *(no cape)* |
 | `--elytra <PNG>` | Render elytra using a 2:1 cape atlas (64x32 or HD) | *(no elytra)* |
 | `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
@@ -62,6 +64,12 @@ eidolon render skin.png
 # Slim arms, WebP output
 eidolon render skin.png out.webp --slim
 
+# Minecraft-style nametag
+eidolon render skin.png --nametag Steve
+
+# Fully hide nametag pixels behind the player or scene geometry
+eidolon render skin.png --nametag Steve --disable-nametag-see-through
+
 # Render with an explicit cape texture
 eidolon render skin.png --cape cape.png --cape-pitch 25
 
@@ -98,6 +106,7 @@ In the preview window, drag with the left mouse button to pan, drag with the rig
 ```bash
 eidolon preview skin.png
 eidolon preview skin.png --slim --cam-zoom 2.0
+eidolon preview skin.png --nametag Steve
 eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png
 eidolon preview skin.png --posture running --width 1024 --height 768

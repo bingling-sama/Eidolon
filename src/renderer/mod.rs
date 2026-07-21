@@ -1,5 +1,6 @@
 //! WGPU renderer: headless RGBA readback and windowed surface preview, shared skin pipeline.
 
+mod nametag;
 mod pipeline;
 mod readback;
 mod uniforms;
@@ -22,11 +23,12 @@ use crate::error::EidolonError;
 use crate::model::Model;
 use crate::texture::Texture;
 
-use pipeline::{create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
+use nametag::{compute_nametag_uniform, nametag_passes, CachedNametag, NametagPass};
+use pipeline::{create_nametag_pipeline, create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
 use uniforms::{
     body_part_ref, compute_body_part_uniforms, compute_cape_uniform, compute_elytra_uniforms,
-    CAPE_UNIFORM_INDEX, LEFT_ELYTRA_UNIFORM_INDEX, PART_CONFIGS, RIGHT_ELYTRA_UNIFORM_INDEX,
-    UNIFORM_COUNT,
+    CAPE_UNIFORM_INDEX, LEFT_ELYTRA_UNIFORM_INDEX, NAMETAG_UNIFORM_INDEX, PART_CONFIGS,
+    RIGHT_ELYTRA_UNIFORM_INDEX, UNIFORM_COUNT,
 };
 
 /// Image format for [`Renderer::render_to_image`].
@@ -88,6 +90,8 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline: wgpu::RenderPipeline,
+    nametag_pipeline: wgpu::RenderPipeline,
+    nametag_see_through_pipeline: wgpu::RenderPipeline,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     uniform_buffer: wgpu::Buffer,
@@ -102,6 +106,9 @@ pub struct Renderer {
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
+    nametag_surface_pipeline: Option<wgpu::RenderPipeline>,
+    nametag_see_through_surface_pipeline: Option<wgpu::RenderPipeline>,
+    nametag_cache: RefCell<Option<CachedNametag>>,
     /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
     cached_depth_texture: RefCell<Option<(wgpu::Texture, u32, u32)>>,
     /// RGBA clear color for the render pass background. Default: transparent black.
@@ -359,6 +366,18 @@ impl Renderer {
         });
 
         let pipeline = create_pipeline(&device, &pipeline_layout, RENDER_TARGET_FORMAT);
+        let nametag_pipeline = create_nametag_pipeline(
+            &device,
+            &pipeline_layout,
+            RENDER_TARGET_FORMAT,
+            NametagPass::Normal,
+        );
+        let nametag_see_through_pipeline = create_nametag_pipeline(
+            &device,
+            &pipeline_layout,
+            RENDER_TARGET_FORMAT,
+            NametagPass::SeeThrough,
+        );
 
         let surface_pipeline = surface_info.as_ref().and_then(|(_, _, format)| {
             if *format != RENDER_TARGET_FORMAT {
@@ -367,6 +386,31 @@ impl Renderer {
                 None
             }
         });
+        let nametag_surface_pipeline = surface_info.as_ref().and_then(|(_, _, format)| {
+            if *format != RENDER_TARGET_FORMAT {
+                Some(create_nametag_pipeline(
+                    &device,
+                    &pipeline_layout,
+                    *format,
+                    NametagPass::Normal,
+                ))
+            } else {
+                None
+            }
+        });
+        let nametag_see_through_surface_pipeline =
+            surface_info.as_ref().and_then(|(_, _, format)| {
+                if *format != RENDER_TARGET_FORMAT {
+                    Some(create_nametag_pipeline(
+                        &device,
+                        &pipeline_layout,
+                        *format,
+                        NametagPass::SeeThrough,
+                    ))
+                } else {
+                    None
+                }
+            });
 
         let alignment = device.limits().min_uniform_buffer_offset_alignment;
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
@@ -424,6 +468,8 @@ impl Renderer {
             device,
             queue,
             pipeline,
+            nametag_pipeline,
+            nametag_see_through_pipeline,
             texture_bind_group_layout,
             sampler,
             uniform_buffer,
@@ -438,6 +484,9 @@ impl Renderer {
             surface,
             surface_config,
             surface_pipeline,
+            nametag_surface_pipeline,
+            nametag_see_through_surface_pipeline,
+            nametag_cache: RefCell::new(None),
             cached_depth_texture: RefCell::new(None),
             clear_color: [0.0, 0.0, 0.0, 0.0],
         })
@@ -546,6 +595,8 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
         pipeline: &wgpu::RenderPipeline,
+        nametag_pipeline: &wgpu::RenderPipeline,
+        nametag_see_through_pipeline: &wgpu::RenderPipeline,
         character: &Character,
         skin: &Texture,
         camera: &Camera,
@@ -585,6 +636,32 @@ impl Renderer {
                 self.queue
                     .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
             }
+        }
+
+        let nametag_text = character
+            .nametag
+            .as_deref()
+            .filter(|text| !text.trim().is_empty());
+        if let Some(text) = nametag_text {
+            let needs_rebuild = self
+                .nametag_cache
+                .borrow()
+                .as_ref()
+                .is_none_or(|cached| cached.text != text);
+            if needs_rebuild {
+                *self.nametag_cache.borrow_mut() = CachedNametag::new(
+                    &self.device,
+                    &self.queue,
+                    &self.texture_bind_group_layout,
+                    &self.sampler,
+                    text,
+                );
+            }
+
+            let uniform = compute_nametag_uniform(character, camera, width, height);
+            let offset = (NAMETAG_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
+            self.queue
+                .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
         }
 
         let depth_view = {
@@ -690,6 +767,26 @@ impl Renderer {
                     }
                 }
             }
+
+            if let Some(text) = nametag_text {
+                let cache = self.nametag_cache.borrow();
+                if let Some(cached) = cache.as_ref().filter(|cached| cached.text == text) {
+                    render_pass.set_bind_group(
+                        0,
+                        &self.uniform_bind_group,
+                        &[NAMETAG_UNIFORM_INDEX * self.uniform_aligned_size],
+                    );
+                    render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
+                    for pass in nametag_passes(character.nametag_see_through) {
+                        render_pass.set_pipeline(match pass {
+                            NametagPass::SeeThrough => nametag_see_through_pipeline,
+                            NametagPass::Normal => nametag_pipeline,
+                        });
+                        render_pass.draw(0..cached.vertex_count, 0..1);
+                    }
+                }
+            }
         }
     }
 
@@ -732,6 +829,8 @@ impl Renderer {
             &mut encoder,
             &texture_view,
             &self.pipeline,
+            &self.nametag_pipeline,
+            &self.nametag_see_through_pipeline,
             character,
             skin,
             camera,
@@ -801,6 +900,8 @@ impl Renderer {
             &mut encoder,
             &texture_view,
             &self.pipeline,
+            &self.nametag_pipeline,
+            &self.nametag_see_through_pipeline,
             character,
             skin,
             camera,
@@ -845,6 +946,14 @@ impl Renderer {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         let pipeline = self.surface_pipeline.as_ref().unwrap_or(&self.pipeline);
+        let nametag_pipeline = self
+            .nametag_surface_pipeline
+            .as_ref()
+            .unwrap_or(&self.nametag_pipeline);
+        let nametag_see_through_pipeline = self
+            .nametag_see_through_surface_pipeline
+            .as_ref()
+            .unwrap_or(&self.nametag_see_through_pipeline);
 
         let mut encoder = self
             .device
@@ -856,6 +965,8 @@ impl Renderer {
             &mut encoder,
             &view,
             pipeline,
+            nametag_pipeline,
+            nametag_see_through_pipeline,
             character,
             skin,
             camera,

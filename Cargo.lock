@@ -704,6 +704,7 @@ dependencies = [
 name = "eidolonmc"
 version = "0.0.1-alpha"
 dependencies = [
+ "ab_glyph",
  "bytemuck",
  "cgmath",
  "clap",

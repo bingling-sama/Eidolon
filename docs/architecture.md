@@ -19,6 +19,7 @@ image output.
 - `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
 - `src/renderer/` contains the shared `wgpu` renderer split into submodules:
   - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
+  - `nametag.rs` — Monocraft text rasterization, cached label geometry, and billboard transforms.
   - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
   - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
   - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.
@@ -37,6 +38,13 @@ For `cargo run -- render skin.png`, the flow is:
 5. `Renderer::render_to_image` renders to an off-screen `Rgba8Unorm` texture, copies the padded
    GPU rows into a CPU buffer, strips padding, and saves the image as PNG or WebP. The output
    filename extension is auto-adjusted to match the format.
+
+When `Character::nametag` is set, the renderer rasterizes and caches a single-line label texture.
+The anchor transforms the player collision box, computes its scene-space AABB, and places the label
+at the AABB's horizontal center just above its highest point. An unlit billboard pipeline draws it
+after the player mesh. The default path draws a 25%-opacity depth-independent pass followed by the
+normal depth-tested pass; the collision box is 1.8 world units tall and the default label gap is
+0.5 units (both scale with `Camera::scale`); `nametag_see_through = false` skips the first pass.
 
 For `preview`, the same scene data and pipeline are used, but `Renderer::new_windowed` creates a
 window surface and `render_frame` presents each frame to the swapchain.
@@ -90,3 +98,4 @@ Internal `pub(crate)` functions in `readback.rs` and `uniforms.rs` also use `Eid
   should enable only one back-equipment type at a time.
 - The renderer expects a usable `wgpu` backend. Headless rendering still creates a GPU adapter.
 - Model loading requires the exact object names listed above.
+- Nametags are single-line and render at most 64 Unicode characters.

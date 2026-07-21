@@ -78,6 +78,14 @@ struct SceneArgs {
     #[arg(long)]
     slim: bool,
 
+    /// Render a Minecraft-style player name above the model.
+    #[arg(long)]
+    nametag: Option<String>,
+
+    /// Hide nametag pixels completely when they are behind scene geometry.
+    #[arg(long)]
+    disable_nametag_see_through: bool,
+
     /// Render a cape using the specified 64x32 PNG texture.
     #[arg(long, conflicts_with = "elytra")]
     cape: Option<String>,
@@ -155,6 +163,8 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     } else {
         SkinType::Classic
     };
+    character.nametag = scene.nametag.clone();
+    character.nametag_see_through = !scene.disable_nametag_see_through;
     character.cape = scene.cape.is_some();
     character.elytra = scene.elytra.is_some();
     let base: Posture = scene.posture.into();
@@ -611,6 +621,8 @@ mod tests {
     fn default_scene() -> SceneArgs {
         SceneArgs {
             slim: false,
+            nametag: None,
+            disable_nametag_see_through: false,
             cape: None,
             elytra: None,
             cape_pitch: None,
@@ -654,6 +666,26 @@ mod tests {
         scene.slim = true;
         let (c, _) = character_and_camera_from_scene(&scene);
         assert_eq!(c.skin_type, SkinType::Slim);
+    }
+
+    #[test]
+    fn scene_nametag_is_passed_to_character() {
+        let mut scene = default_scene();
+        scene.nametag = Some("Steve".to_owned());
+        let (character, _) = character_and_camera_from_scene(&scene);
+
+        assert_eq!(character.nametag.as_deref(), Some("Steve"));
+    }
+
+    #[test]
+    fn scene_can_disable_nametag_see_through() {
+        let default_character = character_and_camera_from_scene(&default_scene()).0;
+        assert!(default_character.nametag_see_through);
+
+        let mut scene = default_scene();
+        scene.disable_nametag_see_through = true;
+        let character = character_and_camera_from_scene(&scene).0;
+        assert!(!character.nametag_see_through);
     }
 
     #[test]
@@ -766,9 +798,39 @@ mod tests {
                 assert_eq!(viewport.height, 600);
                 assert_eq!(scene.cam_yaw, 180.0);
                 assert!(matches!(scene.posture, PostureCli::Stand));
+                assert_eq!(scene.nametag, None);
                 assert_eq!(scene.cape, None);
                 assert_eq!(scene.elytra, None);
             }
+            _ => panic!("Expected Render"),
+        }
+    }
+
+    #[test]
+    fn cli_nametag_is_available_to_render_and_preview() {
+        for command in ["render", "preview"] {
+            let args = Args::try_parse_from(["eidolon", command, "skin.png", "--nametag", "Steve"])
+                .expect("nametag should parse");
+            let scene = match args.command {
+                Command::Render { scene, .. } | Command::Preview { scene, .. } => scene,
+                _ => panic!("Expected render or preview"),
+            };
+
+            assert_eq!(scene.nametag.as_deref(), Some("Steve"));
+            assert!(!scene.disable_nametag_see_through);
+        }
+
+        let args = Args::try_parse_from([
+            "eidolon",
+            "render",
+            "skin.png",
+            "--nametag",
+            "Steve",
+            "--disable-nametag-see-through",
+        ])
+        .expect("nametag see-through toggle should parse");
+        match args.command {
+            Command::Render { scene, .. } => assert!(scene.disable_nametag_see_through),
             _ => panic!("Expected Render"),
         }
     }
