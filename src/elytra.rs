@@ -11,11 +11,12 @@ use crate::model::{ElytraPart, ModelPart, TexturedVertex};
 use wgpu::util::DeviceExt;
 
 const MODEL_PIXEL: f32 = 1.0 / 16.0;
-const WING_CENTER_Y: f32 = 1.5 - 10.0 * MODEL_PIXEL;
+const BODY_TOP: f32 = 1.5;
 const WING_CENTER_Z: f32 = 2.0 * MODEL_PIXEL + MODEL_PIXEL;
 const WING_HALF_WIDTH: f32 = 6.0 * MODEL_PIXEL;
 const WING_HALF_HEIGHT: f32 = 11.0 * MODEL_PIXEL;
 const WING_HALF_DEPTH: f32 = MODEL_PIXEL;
+const WING_CENTER_Y: f32 = BODY_TOP - WING_HALF_HEIGHT - MODEL_PIXEL;
 
 fn wing_vertices(mirrored: bool) -> Vec<TexturedVertex> {
     #[rustfmt::skip]
@@ -154,8 +155,18 @@ mod tests {
         };
 
         assert_eq!(bounds(0), (-0.375, 0.375));
-        assert_eq!(bounds(1), (0.1875, 1.5625));
+        assert_eq!(bounds(1), (0.0625, 1.4375));
         assert_eq!(bounds(2), (0.125, 0.25));
+    }
+
+    #[test]
+    fn wing_top_is_inset_below_the_shoulder_before_posture_rotation() {
+        let wing_top = wing_vertices(false)
+            .iter()
+            .map(|vertex| vertex.position[1])
+            .fold(f32::NEG_INFINITY, f32::max);
+
+        assert_eq!(wing_top, BODY_TOP - MODEL_PIXEL);
     }
 
     #[test]
