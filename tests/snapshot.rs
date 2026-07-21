@@ -37,6 +37,9 @@ fn snapshot_classic_standing_front() {
     character.skin_type = SkinType::Classic;
     character.posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 90.0,

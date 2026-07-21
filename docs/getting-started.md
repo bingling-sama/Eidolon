@@ -41,11 +41,12 @@ cargo run -- render resources/bingling_sama.png --slim
 
 ### Posture Presets
 
-Choose from `stand` (default), `wave`, `walking`, `running`:
+Choose from `stand` (default), `wave`, `walking`, `running`, `flying`:
 
 ```bash
 cargo run -- render resources/bingling_sama.png --posture wave
 cargo run -- render resources/bingling_sama.png --posture running --slim
+cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture flying
 ```
 
 ### Camera Control

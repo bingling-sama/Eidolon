@@ -20,6 +20,9 @@ fn character_with_skin(renderer: &Renderer) -> (Character, Texture) {
     c.skin_type = SkinType::Classic;
     c.posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 90.0,
@@ -133,6 +136,32 @@ fn enabling_elytra_changes_the_back_view() {
         .expect("render with elytra failed");
 
     assert_ne!(without_elytra.as_raw(), with_elytra.as_raw());
+}
+
+#[test]
+fn flying_posture_changes_the_elytra_back_view() {
+    let mut renderer = make_renderer();
+    let (mut character, skin) = character_with_skin(&renderer);
+    let back_camera = Camera {
+        yaw: 0.0,
+        pitch: 90.0,
+        scale: 1.0,
+    };
+    renderer
+        .load_elytra_texture("resources/Turtle_Cape.png")
+        .expect("load elytra texture failed");
+    character.elytra = true;
+
+    character.posture = DefaultPostures::STAND;
+    let folded = renderer
+        .render(&character, &skin, &back_camera, 200, 150)
+        .expect("render folded elytra failed");
+    character.posture = DefaultPostures::FLYING;
+    let flying = renderer
+        .render(&character, &skin, &back_camera, 200, 150)
+        .expect("render flying elytra failed");
+
+    assert_ne!(folded.as_raw(), flying.as_raw());
 }
 
 #[test]

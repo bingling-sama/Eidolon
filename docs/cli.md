@@ -30,7 +30,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
 | `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
-| `--posture <PRESET>` | Posture preset: `stand`, `wave`, `walking`, `running` | `stand` |
+| `--posture <PRESET>` | Posture preset: `stand`, `wave`, `walking`, `running`, `flying` | `stand` |
 
 **Power-user options** (show in `--help` but not `-h`):
 

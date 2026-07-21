@@ -52,8 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   默认披风贴图。`Character::cape_pitch` 控制披风绕肩部背面顶边旋转，与 skinview3d
   一致的默认值为 `10.8` 度。
 - 先调用 `Renderer::load_elytra_texture()` 并设置 `Character::elytra` 才会渲染鞘翅。
-  鞘翅使用相同的 2:1 披风图集格式（64×32 或等比例高清图集）和与 skinview3d 一致的
-  默认双翼姿态；应用应只启用披风或鞘翅中的一种。
+  鞘翅使用相同的 2:1 披风图集格式（64×32 或等比例高清图集）。姿势中的
+  `elytra_pitch`、`elytra_yaw`、`elytra_roll` 控制左翼，右翼会镜像 yaw 和 roll；
+  `DefaultPostures::FLYING` 使用 MC 稳定滑翔时的展开角。应用应只启用披风或鞘翅中的一种。
 
 ![从背面渲染的鞘翅](elytra-preview.png)
 - 默认姿势包含建议的披风角度：`STAND`、`WAVE`、`WALKING` 为 `10.8` 度，

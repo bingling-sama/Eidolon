@@ -18,6 +18,12 @@ pub enum SkinType {
 pub struct Posture {
     /// Recommended cape pitch for this posture, in degrees.
     pub cape_pitch: f32,
+    /// Left elytra wing pitch around X (degrees); shared by the mirrored right wing.
+    pub elytra_pitch: f32,
+    /// Left elytra wing yaw around Y (degrees); mirrored for the right wing.
+    pub elytra_yaw: f32,
+    /// Left elytra wing roll around Z (degrees); mirrored for the right wing.
+    pub elytra_roll: f32,
     /// Head yaw around Y (degrees). 0° = facing forward, positive = turn right.
     pub head_yaw: f32,
     /// Head pitch around X (degrees). 0° = level, positive = look up.
@@ -43,6 +49,9 @@ impl DefaultPostures {
     /// Neutral standing pose.
     pub const STAND: Posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 0.0,
@@ -55,6 +64,9 @@ impl DefaultPostures {
     /// Wave pose.
     pub const WAVE: Posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: -28.65,
@@ -67,6 +79,9 @@ impl DefaultPostures {
     /// Walking pose.
     pub const WALKING: Posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 5.32,
@@ -79,6 +94,9 @@ impl DefaultPostures {
     /// Running pose.
     pub const RUNNING: Posture = Posture {
         cape_pitch: 54.0,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
         left_arm_roll: 12.27,
@@ -87,6 +105,24 @@ impl DefaultPostures {
         right_arm_pitch: 85.94,
         left_leg_pitch: 74.48,
         right_leg_pitch: -74.48,
+    };
+    /// Minecraft's horizontal fall-flying endpoint with fully spread elytra wings.
+    ///
+    /// Vanilla dynamically interpolates toward these angles from the folded pose
+    /// according to flight direction; a static posture uses the stable endpoint.
+    pub const FLYING: Posture = Posture {
+        cape_pitch: 10.8,
+        elytra_pitch: 20.0,
+        elytra_yaw: 0.0,
+        elytra_roll: 90.0,
+        head_yaw: 0.0,
+        head_pitch: 0.0,
+        left_arm_roll: 0.0,
+        left_arm_pitch: 0.0,
+        right_arm_roll: 0.0,
+        right_arm_pitch: 0.0,
+        left_leg_pitch: 0.0,
+        right_leg_pitch: 0.0,
     };
 }
 
@@ -160,6 +196,9 @@ mod tests {
     fn posture_debug_and_clone() {
         let p = Posture {
             cape_pitch: 9.0,
+            elytra_pitch: 10.0,
+            elytra_yaw: 11.0,
+            elytra_roll: 12.0,
             head_yaw: 1.0,
             head_pitch: 2.0,
             left_arm_roll: 3.0,
@@ -223,6 +262,23 @@ mod tests {
         );
         assert_eq!(w.cape_pitch, 10.8);
         assert_eq!(r.cape_pitch, 54.0);
+    }
+
+    #[test]
+    fn default_postures_flying_opens_elytra_with_neutral_limbs() {
+        let stand = DefaultPostures::STAND;
+        let flying = DefaultPostures::FLYING;
+
+        assert_eq!(stand.elytra_pitch, 15.0);
+        assert_eq!(stand.elytra_roll, 15.0);
+        assert_eq!(flying.elytra_pitch, 20.0);
+        assert_eq!(flying.elytra_yaw, 0.0);
+        assert_eq!(flying.elytra_roll, 90.0);
+        assert_eq!(flying.head_pitch, 0.0);
+        assert_eq!(flying.left_arm_pitch, 0.0);
+        assert_eq!(flying.right_arm_pitch, 0.0);
+        assert_eq!(flying.left_leg_pitch, 0.0);
+        assert_eq!(flying.right_leg_pitch, 0.0);
     }
 
     #[test]

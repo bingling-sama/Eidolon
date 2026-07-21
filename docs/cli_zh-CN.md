@@ -24,7 +24,7 @@ cargo run -- render [OPTIONS]
 - `--yaw <DEG>` 相机 yaw。默认：`180`
 - `--pitch <DEG>` 相机 pitch。默认：`90`
 - `--scale <FLOAT>` 相机距离缩放（必须 > 0）。默认：`1.0`
-- `--posture <stand|wave|walking|running>` 姿势预设。默认：`stand`
+- `--posture <stand|wave|walking|running|flying>` 姿势预设。`flying` 会展开左右鞘翅。默认：`stand`
 - `--head-yaw <DEG>` 覆盖头部 yaw
 - `--head-pitch <DEG>` 覆盖头部 pitch
 - `--left-arm-roll <DEG>` 覆盖左臂 roll

@@ -35,6 +35,7 @@ enum PostureCli {
     Wave,
     Walking,
     Running,
+    Flying,
 }
 
 impl From<PostureCli> for Posture {
@@ -44,6 +45,7 @@ impl From<PostureCli> for Posture {
             PostureCli::Wave => DefaultPostures::WAVE,
             PostureCli::Walking => DefaultPostures::WALKING,
             PostureCli::Running => DefaultPostures::RUNNING,
+            PostureCli::Flying => DefaultPostures::FLYING,
         }
     }
 }
@@ -100,7 +102,7 @@ struct SceneArgs {
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     cam_zoom: f32,
 
-    /// Posture preset: stand, wave, walking, running.
+    /// Posture preset: stand, wave, walking, running, flying.
     #[arg(long, value_enum, default_value_t = PostureCli::Stand)]
     posture: PostureCli,
 
@@ -150,6 +152,9 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
+        elytra_pitch: base.elytra_pitch,
+        elytra_yaw: base.elytra_yaw,
+        elytra_roll: base.elytra_roll,
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
         head_pitch: scene.head_pitch.unwrap_or(base.head_pitch),
         left_arm_roll: scene.left_arm_roll.unwrap_or(base.left_arm_roll),
@@ -579,6 +584,15 @@ mod tests {
         let r: Posture = PostureCli::Running.into();
         assert!(r.left_arm_pitch.abs() > w.left_arm_pitch.abs());
         assert!(r.left_leg_pitch.abs() > w.left_leg_pitch.abs());
+    }
+
+    #[test]
+    fn posture_cli_flying_spreads_elytra() {
+        let posture: Posture = PostureCli::Flying.into();
+
+        assert_eq!(posture.elytra_pitch, 20.0);
+        assert_eq!(posture.elytra_yaw, 0.0);
+        assert_eq!(posture.elytra_roll, 90.0);
     }
 
     // ── character_and_camera_from_scene ──

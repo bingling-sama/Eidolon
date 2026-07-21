@@ -119,6 +119,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("custom-posture");
     character.posture = Posture {
         cape_pitch: 10.8,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.5729578,
+        elytra_roll: 15.0,
         head_yaw: 30.0,
         head_pitch: -10.0,
         left_arm_roll: 45.0,
@@ -140,6 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("slim-elytra");
     character.cape = false;
     character.elytra = true;
+    character.posture = DefaultPostures::FLYING;
     let rear_cam = Camera { yaw: 0.0, ..cam };
     save("slim-elytra.png", &character, &rear_cam, OutputFormat::Png)?;
 

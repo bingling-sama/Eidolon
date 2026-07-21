@@ -205,10 +205,11 @@ pub(crate) fn compute_elytra_uniforms(
     let projection = camera.get_projection_matrix(width, height);
     let view = camera.get_view_matrix();
 
+    let posture = character.posture;
     let wing = |pivot: Vector3<f32>, yaw: f32, roll: f32| {
-        let rotation = Matrix4::from_angle_x(Rad(-15.0_f32.to_radians()))
-            * Matrix4::from_angle_y(Rad(yaw))
-            * Matrix4::from_angle_z(Rad(roll));
+        let rotation = Matrix4::from_angle_x(Rad(-posture.elytra_pitch.to_radians()))
+            * Matrix4::from_angle_y(Rad(yaw.to_radians()))
+            * Matrix4::from_angle_z(Rad(roll.to_radians()));
         let model =
             base * Matrix4::from_translation(pivot) * rotation * Matrix4::from_translation(-pivot);
         Uniforms {
@@ -223,8 +224,8 @@ pub(crate) fn compute_elytra_uniforms(
     // skinview3d uses -Z for the back. Mirroring that axis reverses X/Y
     // rotations while preserving the left/right Z roll.
     [
-        wing(LEFT_ELYTRA_PIVOT, -0.01, 15.0_f32.to_radians()),
-        wing(RIGHT_ELYTRA_PIVOT, 0.01, -15.0_f32.to_radians()),
+        wing(LEFT_ELYTRA_PIVOT, -posture.elytra_yaw, posture.elytra_roll),
+        wing(RIGHT_ELYTRA_PIVOT, posture.elytra_yaw, -posture.elytra_roll),
     ]
 }
 
@@ -263,17 +264,53 @@ mod tests {
 
     #[test]
     fn elytra_wings_keep_their_attachment_points_fixed() {
-        let character = Character::new();
         let camera = Camera::default();
-        let uniforms = compute_elytra_uniforms(&character, &camera, 800, 600);
+        for posture in [
+            crate::character::DefaultPostures::STAND,
+            crate::character::DefaultPostures::FLYING,
+        ] {
+            let mut character = Character::new();
+            character.posture = posture;
+            let uniforms = compute_elytra_uniforms(&character, &camera, 800, 600);
 
-        for (uniform, pivot) in uniforms.iter().zip([LEFT_ELYTRA_PIVOT, RIGHT_ELYTRA_PIVOT]) {
-            let model: Matrix4<f32> = uniform.model.into();
-            let point = Point3::new(pivot.x, pivot.y, pivot.z);
-            let transformed = model.transform_point(point);
-            assert!((transformed.x - pivot.x).abs() < 1e-6);
-            assert!((transformed.y - pivot.y).abs() < 1e-6);
-            assert!((transformed.z - pivot.z).abs() < 1e-6);
+            for (uniform, pivot) in uniforms.iter().zip([LEFT_ELYTRA_PIVOT, RIGHT_ELYTRA_PIVOT]) {
+                let model: Matrix4<f32> = uniform.model.into();
+                let point = Point3::new(pivot.x, pivot.y, pivot.z);
+                let transformed = model.transform_point(point);
+                assert!((transformed.x - pivot.x).abs() < 1e-6);
+                assert!((transformed.y - pivot.y).abs() < 1e-6);
+                assert!((transformed.z - pivot.z).abs() < 1e-6);
+            }
         }
+    }
+
+    #[test]
+    fn flying_posture_spreads_both_elytra_wings() {
+        let camera = Camera::default();
+        let standing = Character::new();
+        let mut flying = Character::new();
+        flying.posture = crate::character::DefaultPostures::FLYING;
+
+        let standing_uniforms = compute_elytra_uniforms(&standing, &camera, 800, 600);
+        let flying_uniforms = compute_elytra_uniforms(&flying, &camera, 800, 600);
+        let pivots = [LEFT_ELYTRA_PIVOT, RIGHT_ELYTRA_PIVOT];
+        let mut standing_tips = Vec::new();
+        let mut flying_tips = Vec::new();
+
+        for ((standing_uniform, flying_uniform), pivot) in
+            standing_uniforms.iter().zip(&flying_uniforms).zip(pivots)
+        {
+            let tip = Point3::new(pivot.x, pivot.y - 1.0, pivot.z);
+            let standing_model: Matrix4<f32> = standing_uniform.model.into();
+            let flying_model: Matrix4<f32> = flying_uniform.model.into();
+            standing_tips.push(standing_model.transform_point(tip));
+            flying_tips.push(flying_model.transform_point(tip));
+        }
+
+        assert!(flying_tips[0].x > standing_tips[0].x);
+        assert!(flying_tips[1].x < standing_tips[1].x);
+        assert!((flying_tips[0].x + flying_tips[1].x).abs() < 1e-6);
+        assert!((flying_tips[0].y - flying_tips[1].y).abs() < 1e-6);
+        assert!((flying_tips[0].z - flying_tips[1].z).abs() < 1e-6);
     }
 }

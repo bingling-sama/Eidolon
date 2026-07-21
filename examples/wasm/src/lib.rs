@@ -91,13 +91,14 @@ impl CanvasRenderer {
         log::info!("Elytra cleared");
     }
 
-    /// Set posture by preset. `"stand"`, `"wave"`, `"walking"`, `"running"`.
+    /// Set posture by preset. `"stand"`, `"wave"`, `"walking"`, `"running"`, `"flying"`.
     pub fn set_posture(&mut self, preset: &str) -> Result<(), JsValue> {
         self.character.posture = match preset {
             "stand" => DefaultPostures::STAND,
             "wave" => DefaultPostures::WAVE,
             "walking" => DefaultPostures::WALKING,
             "running" => DefaultPostures::RUNNING,
+            "flying" => DefaultPostures::FLYING,
             other => return Err(JsValue::from_str(&format!("unknown posture: '{other}'"))),
         };
         self.character.cape_pitch = self.character.posture.cape_pitch;
