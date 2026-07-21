@@ -18,6 +18,8 @@ pub enum SkinType {
 pub struct Posture {
     /// Recommended cape pitch for this posture, in degrees.
     pub cape_pitch: f32,
+    /// Whole-character pitch around the model center (degrees).
+    pub body_pitch: f32,
     /// Left elytra wing pitch around X (degrees); shared by the mirrored right wing.
     pub elytra_pitch: f32,
     /// Left elytra wing yaw around Y (degrees); mirrored for the right wing.
@@ -49,6 +51,7 @@ impl DefaultPostures {
     /// Neutral standing pose.
     pub const STAND: Posture = Posture {
         cape_pitch: 10.8,
+        body_pitch: 0.0,
         elytra_pitch: 15.0,
         elytra_yaw: 0.5729578,
         elytra_roll: 15.0,
@@ -64,6 +67,7 @@ impl DefaultPostures {
     /// Wave pose.
     pub const WAVE: Posture = Posture {
         cape_pitch: 10.8,
+        body_pitch: 0.0,
         elytra_pitch: 15.0,
         elytra_yaw: 0.5729578,
         elytra_roll: 15.0,
@@ -79,6 +83,7 @@ impl DefaultPostures {
     /// Walking pose.
     pub const WALKING: Posture = Posture {
         cape_pitch: 10.8,
+        body_pitch: 0.0,
         elytra_pitch: 15.0,
         elytra_yaw: 0.5729578,
         elytra_roll: 15.0,
@@ -94,6 +99,7 @@ impl DefaultPostures {
     /// Running pose.
     pub const RUNNING: Posture = Posture {
         cape_pitch: 54.0,
+        body_pitch: 0.0,
         elytra_pitch: 15.0,
         elytra_yaw: 0.5729578,
         elytra_roll: 15.0,
@@ -106,17 +112,18 @@ impl DefaultPostures {
         left_leg_pitch: 74.48,
         right_leg_pitch: -74.48,
     };
-    /// Minecraft's horizontal fall-flying endpoint with fully spread elytra wings.
+    /// Static horizontal fall-flying pose with spread elytra wings.
     ///
-    /// Vanilla dynamically interpolates toward these angles from the folded pose
-    /// according to flight direction; a static posture uses the stable endpoint.
+    /// Vanilla dynamically adjusts the wings according to flight direction.
+    /// This static preset uses 20 degrees of pitch and 60 degrees of spread.
     pub const FLYING: Posture = Posture {
         cape_pitch: 10.8,
+        body_pitch: -90.0,
         elytra_pitch: 20.0,
         elytra_yaw: 0.0,
-        elytra_roll: 90.0,
+        elytra_roll: 60.0,
         head_yaw: 0.0,
-        head_pitch: 0.0,
+        head_pitch: 45.0,
         left_arm_roll: 0.0,
         left_arm_pitch: 0.0,
         right_arm_roll: 0.0,
@@ -196,6 +203,7 @@ mod tests {
     fn posture_debug_and_clone() {
         let p = Posture {
             cape_pitch: 9.0,
+            body_pitch: 0.0,
             elytra_pitch: 10.0,
             elytra_yaw: 11.0,
             elytra_roll: 12.0,
@@ -265,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn default_postures_flying_opens_elytra_with_neutral_limbs() {
+    fn default_postures_flying_sets_minecraft_glide_pose() {
         let stand = DefaultPostures::STAND;
         let flying = DefaultPostures::FLYING;
 
@@ -273,8 +281,9 @@ mod tests {
         assert_eq!(stand.elytra_roll, 15.0);
         assert_eq!(flying.elytra_pitch, 20.0);
         assert_eq!(flying.elytra_yaw, 0.0);
-        assert_eq!(flying.elytra_roll, 90.0);
-        assert_eq!(flying.head_pitch, 0.0);
+        assert_eq!(flying.elytra_roll, 60.0);
+        assert_eq!(flying.body_pitch, -90.0);
+        assert_eq!(flying.head_pitch, 45.0);
         assert_eq!(flying.left_arm_pitch, 0.0);
         assert_eq!(flying.right_arm_pitch, 0.0);
         assert_eq!(flying.left_leg_pitch, 0.0);

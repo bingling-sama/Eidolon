@@ -24,13 +24,13 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a cape or elytra texture.
+Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a cape or elytra texture. Elytra pitch and wing spread can be adjusted independently after choosing a posture.
 
 ## How It Works
 
 1. `wasm-pack` compiles the Rust crate (`src/lib.rs`) to a WASM module + JS glue in `pkg/`
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
-3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra
+3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; `set_elytra_angles(pitch, spread)` overrides the selected posture, while `elytra_pitch()` and `elytra_spread()` expose the current values
 4. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop
 5. Export captures an offscreen PNG at the selected resolution
 

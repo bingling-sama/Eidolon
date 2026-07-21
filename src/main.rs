@@ -90,6 +90,14 @@ struct SceneArgs {
     #[arg(long)]
     cape_pitch: Option<f32>,
 
+    /// Override the posture's elytra pitch in degrees.
+    #[arg(long)]
+    elytra_pitch: Option<f32>,
+
+    /// Override the posture's elytra opening angle in degrees.
+    #[arg(long)]
+    elytra_spread: Option<f32>,
+
     /// Camera orbit yaw in degrees.
     #[arg(long, default_value_t = 180.0)]
     cam_yaw: f32,
@@ -152,9 +160,10 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
     let base: Posture = scene.posture.into();
     character.posture = Posture {
         cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
-        elytra_pitch: base.elytra_pitch,
+        body_pitch: base.body_pitch,
+        elytra_pitch: scene.elytra_pitch.unwrap_or(base.elytra_pitch),
         elytra_yaw: base.elytra_yaw,
-        elytra_roll: base.elytra_roll,
+        elytra_roll: scene.elytra_spread.unwrap_or(base.elytra_roll),
         head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
         head_pitch: scene.head_pitch.unwrap_or(base.head_pitch),
         left_arm_roll: scene.left_arm_roll.unwrap_or(base.left_arm_roll),
@@ -592,7 +601,9 @@ mod tests {
 
         assert_eq!(posture.elytra_pitch, 20.0);
         assert_eq!(posture.elytra_yaw, 0.0);
-        assert_eq!(posture.elytra_roll, 90.0);
+        assert_eq!(posture.elytra_roll, 60.0);
+        assert_eq!(posture.body_pitch, -90.0);
+        assert_eq!(posture.head_pitch, 45.0);
     }
 
     // ── character_and_camera_from_scene ──
@@ -603,6 +614,8 @@ mod tests {
             cape: None,
             elytra: None,
             cape_pitch: None,
+            elytra_pitch: None,
+            elytra_spread: None,
             cam_yaw: 180.0,
             cam_pitch: 90.0,
             cam_zoom: 1.0,
@@ -829,6 +842,34 @@ mod tests {
                 _ => panic!("Expected render or preview"),
             };
             assert_eq!(scene.cape_pitch, Some(25.0));
+        }
+    }
+
+    #[test]
+    fn cli_elytra_angles_override_the_selected_posture() {
+        for command in ["render", "preview"] {
+            let args = Args::try_parse_from([
+                "eidolon",
+                command,
+                "skin.png",
+                "--posture",
+                "flying",
+                "--elytra-pitch",
+                "18",
+                "--elytra-spread",
+                "42",
+            ])
+            .expect("elytra angles should parse");
+            let scene = match args.command {
+                Command::Render { scene, .. } | Command::Preview { scene, .. } => scene,
+                _ => panic!("Expected render or preview"),
+            };
+            assert_eq!(scene.elytra_pitch, Some(18.0));
+            assert_eq!(scene.elytra_spread, Some(42.0));
+
+            let (character, _) = character_and_camera_from_scene(&scene);
+            assert_eq!(character.posture.elytra_pitch, 18.0);
+            assert_eq!(character.posture.elytra_roll, 42.0);
         }
     }
 

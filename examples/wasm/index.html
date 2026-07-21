@@ -276,6 +276,47 @@
       box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
     }
 
+    .angle-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 40px;
+    }
+    .angle-slider {
+      min-width: 80px;
+      flex: 1;
+      height: 20px;
+      margin: 0;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    .angle-slider::-webkit-slider-runnable-track {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--gray-400);
+    }
+    .angle-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      margin-top: -5px;
+      border-radius: 9999px;
+      background: var(--bg-100);
+      box-shadow: inset 0 0 0 1px var(--gray-500), 0 1px 2px rgba(0,0,0,0.08);
+    }
+    .angle-slider:focus-visible { outline: none; }
+    .angle-slider:focus-visible::-webkit-slider-thumb {
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+    .angle-value {
+      width: 34px;
+      font-family: 'Geist Mono', 'SF Mono', monospace;
+      font-size: 12px;
+      color: var(--gray-900);
+      text-align: right;
+    }
+
     input[type=file] {
       position: absolute;
       width: 1px; height: 1px;
@@ -486,6 +527,20 @@
             <option value="classic">Classic</option>
             <option value="slim">Slim</option>
           </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="input-elytra-pitch">Elytra Pitch</label>
+          <div class="angle-control">
+            <input type="range" id="input-elytra-pitch" class="angle-slider" min="0" max="90" value="15" step="1">
+            <output id="output-elytra-pitch" class="angle-value" for="input-elytra-pitch">15°</output>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="input-elytra-spread">Wing Spread</label>
+          <div class="angle-control">
+            <input type="range" id="input-elytra-spread" class="angle-slider" min="0" max="90" value="15" step="1">
+            <output id="output-elytra-spread" class="angle-value" for="input-elytra-spread">15°</output>
+          </div>
         </div>
         <div class="field" style="max-width:160px;flex:0 0 auto">
           <label class="field-label">Background</label>

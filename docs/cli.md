@@ -27,6 +27,8 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--cape <PNG>` | Render a cape using the specified cape texture | *(no cape)* |
 | `--elytra <PNG>` | Render elytra using a 2:1 cape atlas (64x32 or HD) | *(no elytra)* |
 | `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
+| `--elytra-pitch <DEG>` | Override the selected posture's elytra pitch | *(posture value)* |
+| `--elytra-spread <DEG>` | Override the selected posture's elytra opening angle | *(posture value)* |
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
 | `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
@@ -63,8 +65,8 @@ eidolon render skin.png out.webp --slim
 # Render with an explicit cape texture
 eidolon render skin.png --cape cape.png --cape-pitch 25
 
-# Render elytra (mutually exclusive with --cape)
-eidolon render skin.png --elytra cape.png
+# Render elytra with custom pitch and opening angle (mutually exclusive with --cape)
+eidolon render skin.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
 
 # Wave pose, zoomed in, 1024×1024
 eidolon render skin.png big.webp --posture wave --cam-zoom 1.5 --width 1024 --height 1024

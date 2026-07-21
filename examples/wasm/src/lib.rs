@@ -105,6 +105,22 @@ impl CanvasRenderer {
         Ok(())
     }
 
+    /// Override elytra pitch and opening angle in degrees.
+    pub fn set_elytra_angles(&mut self, pitch: f32, spread: f32) {
+        self.character.posture.elytra_pitch = pitch;
+        self.character.posture.elytra_roll = spread;
+    }
+
+    /// Current elytra pitch in degrees.
+    pub fn elytra_pitch(&self) -> f32 {
+        self.character.posture.elytra_pitch
+    }
+
+    /// Current elytra opening angle in degrees.
+    pub fn elytra_spread(&self) -> f32 {
+        self.character.posture.elytra_roll
+    }
+
     /// Set arm width. `"classic"` (4px) or `"slim"` (3px).
     pub fn set_skin_type(&mut self, skin_type: &str) -> Result<(), JsValue> {
         self.character.skin_type = match skin_type {

@@ -30,6 +30,15 @@ cargo run -- render --skin-type classic --format webp
 
 如果同时使用 `--filename output.png` 与 `--format webp`，输出文件名会自动调整为 `output.webp`。
 
+### 姿势预设
+
+可选姿势包括 `stand`（默认）、`wave`、`walking`、`running` 和 `flying`：
+
+```bash
+cargo run -- render resources/bingling_sama.png --posture wave
+cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture flying
+```
+
 渲染自定义皮肤和相机角度：
 
 ```bash

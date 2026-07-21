@@ -21,8 +21,8 @@ pub(crate) const LEFT_ELYTRA_UNIFORM_INDEX: u32 = CAPE_UNIFORM_INDEX + 1;
 pub(crate) const RIGHT_ELYTRA_UNIFORM_INDEX: u32 = LEFT_ELYTRA_UNIFORM_INDEX + 1;
 pub(crate) const UNIFORM_COUNT: u32 = RIGHT_ELYTRA_UNIFORM_INDEX + 1;
 pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
-pub(crate) const LEFT_ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.3125, 1.5, 0.125);
-pub(crate) const RIGHT_ELYTRA_PIVOT: Vector3<f32> = Vector3::new(-0.3125, 1.5, 0.125);
+pub(crate) const ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
+const BODY_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
 /// Identifies a body part in [`PART_CONFIGS`] — single source of truth
 /// for mapping config entries to [`Model`] fields.
@@ -83,6 +83,18 @@ pub(crate) fn body_part_ref<'a>(i: usize, model: &'a Model) -> &'a BodyPart {
     }
 }
 
+fn compute_base_model_matrix(character: &Character, camera: &Camera) -> Matrix4<f32> {
+    let translation = Matrix4::from_translation(character.position);
+    let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
+        * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
+        * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
+    let body_rotation = Matrix4::from_translation(BODY_PIVOT)
+        * Matrix4::from_angle_x(Rad(character.posture.body_pitch.to_radians()))
+        * Matrix4::from_translation(-BODY_PIVOT);
+
+    translation * character_rotation * Matrix4::from_scale(camera.scale) * body_rotation
+}
+
 pub(crate) fn compute_body_part_uniforms(
     character: &Character,
     camera: &Camera,
@@ -92,12 +104,7 @@ pub(crate) fn compute_body_part_uniforms(
     let perspective: [[f32; 4]; 4] = camera.get_projection_matrix(width, height);
     let view: [[f32; 4]; 4] = camera.get_view_matrix();
 
-    let translation = Matrix4::from_translation(character.position);
-    let rotation_matrix = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
-        * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
-        * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
-    let scale = Matrix4::from_scale(camera.scale);
-    let base_model_matrix = translation * rotation_matrix * scale;
+    let base_model_matrix = compute_base_model_matrix(character, camera);
 
     let posture = &character.posture;
 
@@ -170,11 +177,7 @@ pub(crate) fn compute_cape_uniform(
     width: u32,
     height: u32,
 ) -> Uniforms {
-    let translation = Matrix4::from_translation(character.position);
-    let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
-        * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
-        * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
-    let base = translation * character_rotation * Matrix4::from_scale(camera.scale);
+    let base = compute_base_model_matrix(character, camera);
     // skinview3d uses -Z for the back; this renderer uses +Z, so invert pitch.
     let cape_rotation = Matrix4::from_angle_x(Rad(-character.cape_pitch.to_radians()));
     let model = base
@@ -197,19 +200,16 @@ pub(crate) fn compute_elytra_uniforms(
     width: u32,
     height: u32,
 ) -> [Uniforms; 2] {
-    let translation = Matrix4::from_translation(character.position);
-    let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
-        * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
-        * Matrix4::from_angle_z(Rad(character.rotation.z.to_radians()));
-    let base = translation * character_rotation * Matrix4::from_scale(camera.scale);
+    let base = compute_base_model_matrix(character, camera);
     let projection = camera.get_projection_matrix(width, height);
     let view = camera.get_view_matrix();
 
     let posture = character.posture;
     let wing = |pivot: Vector3<f32>, yaw: f32, roll: f32| {
-        let rotation = Matrix4::from_angle_x(Rad(-posture.elytra_pitch.to_radians()))
+        // Match upstream ModelPart/Three.js local XYZ Euler rotation order.
+        let rotation = Matrix4::from_angle_z(Rad(roll.to_radians()))
             * Matrix4::from_angle_y(Rad(yaw.to_radians()))
-            * Matrix4::from_angle_z(Rad(roll.to_radians()));
+            * Matrix4::from_angle_x(Rad(-posture.elytra_pitch.to_radians()));
         let model =
             base * Matrix4::from_translation(pivot) * rotation * Matrix4::from_translation(-pivot);
         Uniforms {
@@ -224,8 +224,8 @@ pub(crate) fn compute_elytra_uniforms(
     // skinview3d uses -Z for the back. Mirroring that axis reverses X/Y
     // rotations while preserving the left/right Z roll.
     [
-        wing(LEFT_ELYTRA_PIVOT, -posture.elytra_yaw, posture.elytra_roll),
-        wing(RIGHT_ELYTRA_PIVOT, posture.elytra_yaw, -posture.elytra_roll),
+        wing(ELYTRA_PIVOT, -posture.elytra_yaw, posture.elytra_roll),
+        wing(ELYTRA_PIVOT, posture.elytra_yaw, -posture.elytra_roll),
     ]
 }
 
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn elytra_wings_keep_their_attachment_points_fixed() {
+    fn elytra_wings_keep_the_central_back_attachment_fixed() {
         let camera = Camera::default();
         for posture in [
             crate::character::DefaultPostures::STAND,
@@ -272,14 +272,16 @@ mod tests {
             let mut character = Character::new();
             character.posture = posture;
             let uniforms = compute_elytra_uniforms(&character, &camera, 800, 600);
+            let base = compute_base_model_matrix(&character, &camera);
 
-            for (uniform, pivot) in uniforms.iter().zip([LEFT_ELYTRA_PIVOT, RIGHT_ELYTRA_PIVOT]) {
+            for uniform in &uniforms {
                 let model: Matrix4<f32> = uniform.model.into();
-                let point = Point3::new(pivot.x, pivot.y, pivot.z);
+                let point = Point3::new(CAPE_PIVOT.x, CAPE_PIVOT.y, CAPE_PIVOT.z);
                 let transformed = model.transform_point(point);
-                assert!((transformed.x - pivot.x).abs() < 1e-6);
-                assert!((transformed.y - pivot.y).abs() < 1e-6);
-                assert!((transformed.z - pivot.z).abs() < 1e-6);
+                let expected = base.transform_point(point);
+                assert!((transformed.x - expected.x).abs() < 1e-6);
+                assert!((transformed.y - expected.y).abs() < 1e-6);
+                assert!((transformed.z - expected.z).abs() < 1e-6);
             }
         }
     }
@@ -293,7 +295,7 @@ mod tests {
 
         let standing_uniforms = compute_elytra_uniforms(&standing, &camera, 800, 600);
         let flying_uniforms = compute_elytra_uniforms(&flying, &camera, 800, 600);
-        let pivots = [LEFT_ELYTRA_PIVOT, RIGHT_ELYTRA_PIVOT];
+        let pivots = [ELYTRA_PIVOT; 2];
         let mut standing_tips = Vec::new();
         let mut flying_tips = Vec::new();
 
@@ -312,5 +314,47 @@ mod tests {
         assert!((flying_tips[0].x + flying_tips[1].x).abs() < 1e-6);
         assert!((flying_tips[0].y - flying_tips[1].y).abs() < 1e-6);
         assert!((flying_tips[0].z - flying_tips[1].z).abs() < 1e-6);
+    }
+
+    #[test]
+    fn elytra_rotation_uses_upstream_local_xyz_order() {
+        let mut character = Character::new();
+        character.posture.elytra_pitch = 23.0;
+        character.posture.elytra_yaw = 17.0;
+        character.posture.elytra_roll = 41.0;
+        let camera = Camera::default();
+        let actual: Matrix4<f32> = compute_elytra_uniforms(&character, &camera, 800, 600)[0]
+            .model
+            .into();
+        let rotation = Matrix4::from_angle_z(Rad(41.0_f32.to_radians()))
+            * Matrix4::from_angle_y(Rad(-17.0_f32.to_radians()))
+            * Matrix4::from_angle_x(Rad(-23.0_f32.to_radians()));
+        let expected = compute_base_model_matrix(&character, &camera)
+            * Matrix4::from_translation(ELYTRA_PIVOT)
+            * rotation
+            * Matrix4::from_translation(-ELYTRA_PIVOT);
+        let probe = Point3::new(0.25, 0.5, 0.25);
+        let actual_probe = actual.transform_point(probe);
+        let expected_probe = expected.transform_point(probe);
+
+        assert!((actual_probe.x - expected_probe.x).abs() < 1e-6);
+        assert!((actual_probe.y - expected_probe.y).abs() < 1e-6);
+        assert!((actual_probe.z - expected_probe.z).abs() < 1e-6);
+    }
+
+    #[test]
+    fn flying_posture_rotates_the_player_horizontally_around_its_center() {
+        let mut character = Character::new();
+        character.posture = crate::character::DefaultPostures::FLYING;
+        let uniforms = compute_body_part_uniforms(&character, &Camera::default(), 800, 600);
+        let body_model: Matrix4<f32> = uniforms[5].model.into();
+
+        let top = body_model.transform_point(Point3::new(0.0, 2.0, 0.0));
+        let bottom = body_model.transform_point(Point3::new(0.0, 0.0, 0.0));
+
+        assert!((top.y - 1.0).abs() < 1e-6);
+        assert!((bottom.y - 1.0).abs() < 1e-6);
+        assert!(top.z < -0.9);
+        assert!(bottom.z > 0.9);
     }
 }

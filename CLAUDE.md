@@ -63,7 +63,7 @@ src/
 ├── model.rs        # OBJ loader: parses named objects into BodyParts (main + layer meshes)
 ├── texture.rs      # Skin texture: loads PNG, auto-converts single→double layer
 ├── converter.rs    # single2double(): mirrors right-leg/arm regions to left side
-├── character.rs    # Character: skin_type, posture (8 joint angles, 0° = neutral), position, rotation
+├── character.rs    # Character: skin_type, posture (body/joint/back-equipment angles), position, rotation
 └── renderer/
     ├── mod.rs      # Renderer: headless + windowed, shared pipeline
     ├── pipeline.rs # Render pipeline creation from WGSL shader
@@ -82,7 +82,7 @@ src/
 
 - **Two OBJ models** loaded at startup: `resources/slim.obj` (Alex, 3px arms) and `resources/classic.obj` (Steve, 4px arms). Each named object in the OBJ has a main mesh and a "Layer" mesh (for jacket/hat overlay).
 - **Pivot-point articulation**: Each limb rotates around a hardcoded pivot (e.g., right arm pivot at `(0.3125, 1.375, 0.0)`). The transform formula is `base × translate(pivot) × rotate × translate(-pivot)`.
-- **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward.
+- **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward. `body_pitch` rotates the full model around its center; elytra share a central upper-back pivot and mirror yaw/roll between wings.
 - **Single→double layer conversion**: `converter::single2double()` mirrors right-side arm/leg regions horizontally to create left-side overlays in the bottom half of a square texture. Source regions defined as pixel rectangles for 64px reference, scaled by an HD ratio for larger skins.
 - **Output formats**: PNG and WebP via `OutputFormat` enum. Format is inferred from the output filename extension.
 - **Error handling**: Public API returns `EidolonError` (typed enum: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`). Skin texture is passed as `&Texture` to render methods — the compiler guarantees it's loaded before rendering.

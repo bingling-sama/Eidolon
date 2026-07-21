@@ -113,6 +113,7 @@ Build a `Posture` directly. All angles are degrees, 0° = neutral (no rotation f
 ```rust
 let posture = Posture {
     cape_pitch: 10.8,        // recommended cape angle for this posture
+    body_pitch: 0.0,         // whole-character pitch around its center
     elytra_pitch: 15.0,      // shared wing pitch
     elytra_yaw: 0.5729578,   // left wing yaw; mirrored on the right
     elytra_roll: 15.0,       // left wing roll; mirrored on the right
@@ -135,7 +136,7 @@ Presets are available via `DefaultPostures`:
 | `DefaultPostures::WAVE` | Left arm raised in a wave; cape 10.8° |
 | `DefaultPostures::WALKING` | Arms and legs in walking swing; cape baseline 10.8° |
 | `DefaultPostures::RUNNING` | Arms and legs in running swing; cape baseline 54° |
-| `DefaultPostures::FLYING` | Neutral limbs with elytra spread to Minecraft's stable-flight pose |
+| `DefaultPostures::FLYING` | Horizontal player with neutral limbs, 20° pitch, and 60° elytra spread |
 
 ## Skin Conversion
 
@@ -178,8 +179,9 @@ renderer.render_frame(&character, &skin, &camera)?;
   attachment edge; the skinview3d-compatible default is `10.8` degrees.
 - Call `Renderer::load_elytra_texture()` and set `Character::elytra` to render elytra. Elytra use
   the same 2:1 cape atlas format (64x32 or an HD multiple). Postures control both wings through
-  `elytra_pitch`, `elytra_yaw`, and `elytra_roll`; the right wing mirrors the left wing's yaw and
-  roll. `DefaultPostures::FLYING` uses Minecraft's stable-flight spread. Applications should enable
-  either cape or elytra, not both.
+  `elytra_pitch`, `elytra_yaw`, and `elytra_roll`; both wings rotate around the central upper-back
+  attachment, and the right wing mirrors the left wing's yaw and roll. `DefaultPostures::FLYING`
+  uses `20°` pitch and a `60°` spread; applications can construct other
+  snapshots with the same fields. Applications should enable either cape or elytra, not both.
 
 ![Elytra rendered from the rear](elytra-preview.png)

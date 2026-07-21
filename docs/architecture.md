@@ -60,9 +60,9 @@ Textures are sampled with nearest filtering so Minecraft skin pixels stay crisp.
 - **Camera**: yaw and pitch are degrees. `yaw` orbits around the Y axis (0° = front-right, 180° = front). `pitch` is measured from horizontal (90° = level). The eye orbits a fixed look-at point at `(0, 1, 0)` with radius `4.0 / scale`.
 - **Camera scale** (CLI: `--cam-zoom`): positive. Larger = closer. Also scales the model matrix.
 - **Posture**: all joint angles are degrees. 0° = neutral (no rotation from the model's bind pose). Positive yaw turns the head right. Positive pitch tilts the head up / swings limbs forward.
-- **Elytra posture**: pitch is shared by both wings; yaw and roll describe the left wing and are mirrored for the right wing. `FLYING` uses the fully spread endpoint of Minecraft's fall-flying animation.
+- **Elytra posture**: both wings rotate around the central upper-back attachment at `(0, 1.5, 0.125)`. Pitch is shared; yaw and roll describe the left wing and are mirrored for the right wing. Local XYZ Euler angles use the upstream `Rz × Ry × Rx` matrix order. `FLYING` uses 20° pitch and a 60° spread.
 - **Character rotation**: Euler rotation in X, then Y, then Z order, applied before per-joint matrices.
-- **Pivot articulation**: each limb rotates around a hardcoded joint pivot (e.g., right arm at `(0.3125, 1.375, 0.0)`). The transform is `base × translate(pivot) × rotate × translate(-pivot)`. The body has no pivot and uses the base transform directly.
+- **Pivot articulation**: `body_pitch` rotates the full character around `(0, 1, 0)`. Each limb then rotates around a hardcoded joint pivot (e.g., right arm at `(0.3125, 1.375, 0.0)`). The transform is `base × translate(pivot) × rotate × translate(-pivot)`.
 
 ## Body Part Ordering
 

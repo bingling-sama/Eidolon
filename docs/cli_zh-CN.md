@@ -21,6 +21,8 @@ cargo run -- render [OPTIONS]
 - `--cape <PNG>` 使用指定的披风贴图渲染披风；没有默认披风，省略时不渲染
 - `--elytra <PNG>` 使用 2:1 披风图集（64×32 或等比例高清图集）渲染鞘翅；与 `--cape` 互斥
 - `--cape-pitch <DEG>` 覆盖所选姿势的披风角度；默认使用姿势自带角度
+- `--elytra-pitch <DEG>` 覆盖所选姿势的鞘翅 pitch；默认使用姿势自带角度
+- `--elytra-spread <DEG>` 覆盖所选姿势的鞘翅开合角；默认使用姿势自带角度
 - `--yaw <DEG>` 相机 yaw。默认：`180`
 - `--pitch <DEG>` 相机 pitch。默认：`90`
 - `--scale <FLOAT>` 相机距离缩放（必须 > 0）。默认：`1.0`
@@ -47,7 +49,7 @@ cargo run -- render --skin-type classic --texture resources/bingling_sama.png \
   --width 1024 --height 768 --yaw 210 --pitch 90 --scale 1.2 --format png
 
 cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
-cargo run -- render resources/bingling_sama.png --elytra cape.png
+cargo run -- render resources/bingling_sama.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
 ```
 
 如果使用 `--format webp` 且保持默认 `--filename output.png`，CLI 会把输出路径改为

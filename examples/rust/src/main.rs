@@ -119,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("custom-posture");
     character.posture = Posture {
         cape_pitch: 10.8,
+        body_pitch: 0.0,
         elytra_pitch: 15.0,
         elytra_yaw: 0.5729578,
         elytra_roll: 15.0,

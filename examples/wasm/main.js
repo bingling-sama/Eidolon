@@ -13,6 +13,10 @@ const resultDiv = document.getElementById('result');
 const resultHint = document.getElementById('result-hint');
 const postureSelect = document.getElementById('select-posture');
 const skinTypeSelect = document.getElementById('select-skin-type');
+const inputElytraPitch = document.getElementById('input-elytra-pitch');
+const inputElytraSpread = document.getElementById('input-elytra-spread');
+const outputElytraPitch = document.getElementById('output-elytra-pitch');
+const outputElytraSpread = document.getElementById('output-elytra-spread');
 const btnExport = document.getElementById('btn-export');
 const inputSizeW = document.getElementById('input-size-w');
 const inputSizeH = document.getElementById('input-size-h');
@@ -43,6 +47,8 @@ async function boot() {
     renderer = await CanvasRenderer.new(canvas);
     resizeCanvas();
     setActivePreset(bgPresets.querySelector('.bg-swatch.transparent'));
+    renderer.set_posture(postureSelect.value);
+    setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
     console.log('Renderer ready');
     requestAnimationFrame(frame);
   } catch (e) {
@@ -82,7 +88,25 @@ function frame() {
 postureSelect.addEventListener('change', () => {
   if (!renderer) return;
   renderer.set_posture(postureSelect.value);
+  setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
 });
+
+function setElytraAngleControls(pitch, spread) {
+  inputElytraPitch.value = pitch;
+  inputElytraSpread.value = spread;
+  syncElytraAngles();
+}
+
+function syncElytraAngles() {
+  const pitch = Number(inputElytraPitch.value);
+  const spread = Number(inputElytraSpread.value);
+  outputElytraPitch.value = `${pitch}°`;
+  outputElytraSpread.value = `${spread}°`;
+  if (renderer) renderer.set_elytra_angles(pitch, spread);
+}
+
+inputElytraPitch.addEventListener('input', syncElytraAngles);
+inputElytraSpread.addEventListener('input', syncElytraAngles);
 
 skinTypeSelect.addEventListener('change', () => {
   if (!renderer) return;
