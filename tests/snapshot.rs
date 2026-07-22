@@ -33,8 +33,10 @@ fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
 fn snapshot_classic_standing_front() {
     let renderer = Renderer::new().expect("Failed to create Renderer");
 
-    let mut character = Character::new();
-    character.skin_type = SkinType::Classic;
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("Failed to load body");
+    let mut character = Character::from_body(body);
     character.posture = Posture {
         cape_pitch: 10.8,
         body_pitch: 0.0,
@@ -50,10 +52,6 @@ fn snapshot_classic_standing_front() {
         left_leg_pitch: 0.0,
         right_leg_pitch: 0.0,
     };
-    let skin = renderer
-        .load_texture("resources/bingling_sama.png")
-        .expect("Failed to load skin");
-
     let camera = Camera {
         yaw: 180.0,
         pitch: 90.0,
@@ -61,7 +59,7 @@ fn snapshot_classic_standing_front() {
     };
 
     let image = renderer
-        .render(&character, &skin, &camera, 800, 600)
+        .render(&character, &camera, 800, 600)
         .expect("Snapshot render failed");
 
     let raw: Vec<u8> = image

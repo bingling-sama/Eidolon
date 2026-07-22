@@ -8,6 +8,7 @@ mod uniforms;
 use std::cell::RefCell;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
@@ -15,6 +16,8 @@ use image::{ImageBuffer, ImageFormat, Rgba};
 #[cfg(not(target_arch = "wasm32"))]
 use winit::window::Window;
 
+use crate::back_equipment::{BackEquipmentAtlas, BackEquipmentKind};
+use crate::body::Body;
 use crate::camera::Camera;
 use crate::cape::build_cape;
 use crate::character::{Character, SkinType};
@@ -30,6 +33,8 @@ use uniforms::{
     CAPE_UNIFORM_INDEX, LEFT_ELYTRA_UNIFORM_INDEX, NAMETAG_UNIFORM_INDEX, PART_CONFIGS,
     RIGHT_ELYTRA_UNIFORM_INDEX, UNIFORM_COUNT,
 };
+
+static NEXT_RENDERER_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Image format for [`Renderer::render_to_image`].
 #[derive(Debug, Clone, Copy)]
@@ -87,6 +92,7 @@ mod tests {
 }
 
 pub struct Renderer {
+    context_id: u64,
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline: wgpu::RenderPipeline,
@@ -100,9 +106,7 @@ pub struct Renderer {
     slim_model: Model,
     default_model: Model,
     cape_model: crate::model::CapePart,
-    cape_texture: Option<Texture>,
     elytra_model: crate::model::ElytraPart,
-    elytra_texture: Option<Texture>,
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
@@ -465,6 +469,7 @@ impl Renderer {
         };
 
         Ok(Self {
+            context_id: NEXT_RENDERER_CONTEXT_ID.fetch_add(1, Ordering::Relaxed),
             device,
             queue,
             pipeline,
@@ -478,9 +483,7 @@ impl Renderer {
             slim_model,
             default_model,
             cape_model,
-            cape_texture: None,
             elytra_model,
-            elytra_texture: None,
             surface,
             surface_config,
             surface_pipeline,
@@ -492,35 +495,12 @@ impl Renderer {
         })
     }
 
-    /// Load a skin PNG and build GPU resources (same path as CLI `--texture`).
+    /// Load and validate the atlas shared by cape and elytra presentation.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_texture(&self, path: &str) -> Result<Texture, EidolonError> {
-        Texture::load_from_file(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            path,
-        )
-    }
-
-    /// Load a skin PNG without auto-converting single-layer to double-layer.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_texture_raw(&self, path: &str) -> Result<Texture, EidolonError> {
-        Texture::load_from_file_raw(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            path,
-        )
-    }
-
-    /// Load the cape texture used when [`Character::cape`] is enabled.
-    ///
-    /// Cape rendering has no built-in texture; callers must provide one.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_cape_texture(&mut self, path: &str) -> Result<(), EidolonError> {
+    pub fn load_back_equipment_atlas(
+        &self,
+        path: &str,
+    ) -> Result<BackEquipmentAtlas, EidolonError> {
         let texture = Texture::load_from_file_raw(
             &self.device,
             &self.queue,
@@ -529,12 +509,14 @@ impl Renderer {
             path,
         )?;
         texture.validate_cape_atlas()?;
-        self.cape_texture = Some(texture);
-        Ok(())
+        Ok(BackEquipmentAtlas::new(texture, self.context_id))
     }
 
-    /// Load the cape texture from PNG bytes.
-    pub fn load_cape_texture_from_memory(&mut self, bytes: &[u8]) -> Result<(), EidolonError> {
+    /// Load a back-equipment atlas from PNG bytes.
+    pub fn load_back_equipment_atlas_from_memory(
+        &self,
+        bytes: &[u8],
+    ) -> Result<BackEquipmentAtlas, EidolonError> {
         let texture = Texture::load_from_memory_raw(
             &self.device,
             &self.queue,
@@ -543,50 +525,36 @@ impl Renderer {
             bytes,
         )?;
         texture.validate_cape_atlas()?;
-        self.cape_texture = Some(texture);
-        Ok(())
+        Ok(BackEquipmentAtlas::new(texture, self.context_id))
     }
 
-    /// Load the elytra texture used when [`Character::elytra`] is enabled.
-    ///
-    /// Elytra use a 2:1 cape atlas (64x32 or an HD multiple) and have no built-in texture.
+    /// Load a body skin and bind its classic or slim geometry selection.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_elytra_texture(&mut self, path: &str) -> Result<(), EidolonError> {
-        let texture = Texture::load_from_file_raw(
+    pub fn load_body(&self, path: &str, skin_type: SkinType) -> Result<Body, EidolonError> {
+        let texture = Texture::load_from_file(
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
             &self.sampler,
             path,
         )?;
-        texture.validate_cape_atlas()?;
-        self.elytra_texture = Some(texture);
-        Ok(())
+        Ok(Body::new(texture, skin_type, self.context_id))
     }
 
-    /// Load an elytra texture from PNG bytes.
-    pub fn load_elytra_texture_from_memory(&mut self, bytes: &[u8]) -> Result<(), EidolonError> {
-        let texture = Texture::load_from_memory_raw(
+    /// Load a body skin from PNG bytes.
+    pub fn load_body_from_memory(
+        &self,
+        bytes: &[u8],
+        skin_type: SkinType,
+    ) -> Result<Body, EidolonError> {
+        let texture = Texture::load_from_memory(
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
             &self.sampler,
             bytes,
         )?;
-        texture.validate_cape_atlas()?;
-        self.elytra_texture = Some(texture);
-        Ok(())
-    }
-
-    /// Load a skin from in-memory PNG bytes (available on all platforms, required for WASM).
-    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Result<Texture, EidolonError> {
-        Texture::load_from_memory(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            bytes,
-        )
+        Ok(Body::new(texture, skin_type, self.context_id))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -598,25 +566,34 @@ impl Renderer {
         nametag_pipeline: &wgpu::RenderPipeline,
         nametag_see_through_pipeline: &wgpu::RenderPipeline,
         character: &Character,
-        skin: &Texture,
         camera: &Camera,
         width: u32,
         height: u32,
     ) {
-        let model = match character.skin_type {
+        let body = character.body();
+        let model = body.map(|body| match body.skin_type() {
             SkinType::Slim => &self.slim_model,
             SkinType::Classic => &self.default_model,
-        };
+        });
 
-        let uniforms = compute_body_part_uniforms(character, camera, width, height);
-
-        for (i, uniform) in uniforms.iter().enumerate() {
-            let offset = (i as u64) * (self.uniform_aligned_size as u64);
-            self.queue
-                .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(uniform));
+        if body.is_some() {
+            let uniforms = compute_body_part_uniforms(character, camera, width, height);
+            for (i, uniform) in uniforms.iter().enumerate() {
+                let offset = (i as u64) * (self.uniform_aligned_size as u64);
+                self.queue
+                    .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(uniform));
+            }
         }
 
-        if character.cape {
+        let equipment = character.back_equipment();
+        let cape_texture = equipment
+            .filter(|equipment| equipment.kind() == BackEquipmentKind::Cape)
+            .map(|equipment| equipment.atlas().texture.as_ref());
+        let elytra_texture = equipment
+            .filter(|equipment| equipment.kind() == BackEquipmentKind::Elytra)
+            .map(|equipment| equipment.atlas().texture.as_ref());
+
+        if cape_texture.is_some() {
             let cape_uniform = compute_cape_uniform(character, camera, width, height);
             let offset = (CAPE_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
             self.queue.write_buffer(
@@ -626,7 +603,7 @@ impl Renderer {
             );
         }
 
-        if character.elytra {
+        if elytra_texture.is_some() {
             let elytra_uniforms = compute_elytra_uniforms(character, camera, width, height);
             for (index, uniform) in [LEFT_ELYTRA_UNIFORM_INDEX, RIGHT_ELYTRA_UNIFORM_INDEX]
                 .into_iter()
@@ -723,48 +700,46 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(pipeline);
-            render_pass.set_bind_group(1, &skin.bind_group, &[]);
 
-            for i in 0..PART_CONFIGS.len() {
-                let body_part = body_part_ref(i, model);
-                let dynamic_offset = (i as u32) * self.uniform_aligned_size;
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[dynamic_offset]);
+            if let (Some(body), Some(model)) = (body, model) {
+                render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
+                for i in 0..PART_CONFIGS.len() {
+                    let body_part = body_part_ref(i, model);
+                    let dynamic_offset = (i as u32) * self.uniform_aligned_size;
+                    render_pass.set_bind_group(0, &self.uniform_bind_group, &[dynamic_offset]);
 
-                render_pass.set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
-                render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                    render_pass.set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
+                    render_pass.draw(0..body_part.main.vertex_count, 0..1);
 
-                render_pass.set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
-                render_pass.draw(0..body_part.layer.vertex_count, 0..1);
-            }
-
-            if character.cape {
-                if let Some(cape_texture) = &self.cape_texture {
-                    render_pass.set_bind_group(
-                        0,
-                        &self.uniform_bind_group,
-                        &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
-                    );
-                    render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
-                    render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
+                    render_pass.set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
+                    render_pass.draw(0..body_part.layer.vertex_count, 0..1);
                 }
             }
 
-            if character.elytra {
-                if let Some(elytra_texture) = &self.elytra_texture {
-                    render_pass.set_bind_group(1, &elytra_texture.bind_group, &[]);
-                    for (index, wing) in [
-                        (LEFT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.left_wing),
-                        (RIGHT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.right_wing),
-                    ] {
-                        render_pass.set_bind_group(
-                            0,
-                            &self.uniform_bind_group,
-                            &[index * self.uniform_aligned_size],
-                        );
-                        render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
-                        render_pass.draw(0..wing.vertex_count, 0..1);
-                    }
+            if let Some(cape_texture) = cape_texture {
+                render_pass.set_bind_group(
+                    0,
+                    &self.uniform_bind_group,
+                    &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
+                );
+                render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
+                render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
+            }
+
+            if let Some(elytra_texture) = elytra_texture {
+                render_pass.set_bind_group(1, &elytra_texture.bind_group, &[]);
+                for (index, wing) in [
+                    (LEFT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.left_wing),
+                    (RIGHT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.right_wing),
+                ] {
+                    render_pass.set_bind_group(
+                        0,
+                        &self.uniform_bind_group,
+                        &[index * self.uniform_aligned_size],
+                    );
+                    render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
+                    render_pass.draw(0..wing.vertex_count, 0..1);
                 }
             }
 
@@ -790,12 +765,39 @@ impl Renderer {
         }
     }
 
-    /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (blocking map readback).
+    fn validate_character_context(&self, character: &Character) -> Result<(), EidolonError> {
+        let body_matches = character
+            .body()
+            .is_none_or(|body| body.context_id == self.context_id);
+        let equipment_matches = character
+            .back_equipment()
+            .is_none_or(|equipment| equipment.atlas().context_id == self.context_id);
+        if body_matches && equipment_matches {
+            Ok(())
+        } else {
+            Err(EidolonError::gpu(
+                "character resources belong to a different renderer context",
+            ))
+        }
+    }
+
+    /// Render a character to an offscreen RGBA image.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn render(
         &self,
         character: &Character,
-        skin: &Texture,
+        camera: &Camera,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        self.validate_character_context(character)?;
+        self.render_offscreen(character, camera, width, height)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn render_offscreen(
+        &self,
+        character: &Character,
         camera: &Camera,
         width: u32,
         height: u32,
@@ -832,7 +834,6 @@ impl Renderer {
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
             character,
-            skin,
             camera,
             width,
             height,
@@ -866,11 +867,11 @@ impl Renderer {
     pub async fn render_async(
         &self,
         character: &Character,
-        skin: &Texture,
         camera: &Camera,
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        self.validate_character_context(character)?;
         let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Render Target"),
             size: wgpu::Extent3d {
@@ -903,7 +904,6 @@ impl Renderer {
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
             character,
-            skin,
             camera,
             width,
             height,
@@ -931,12 +931,8 @@ impl Renderer {
     }
 
     /// Present one frame to the window surface (expects `new_windowed`).
-    pub fn render_frame(
-        &self,
-        character: &Character,
-        skin: &Texture,
-        camera: &Camera,
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub fn render_frame(&self, character: &Character, camera: &Camera) -> Result<(), EidolonError> {
+        self.validate_character_context(character)?;
         let surface = self.surface.as_ref().expect("Not in windowed mode");
         let config = self.surface_config.as_ref().unwrap();
 
@@ -968,7 +964,6 @@ impl Renderer {
             nametag_pipeline,
             nametag_see_through_pipeline,
             character,
-            skin,
             camera,
             config.width,
             config.height,
@@ -1006,7 +1001,6 @@ impl Renderer {
     pub fn render_to_image(
         &self,
         character: &Character,
-        skin: &Texture,
         camera: &Camera,
         filename: &str,
         size: (u32, u32),
@@ -1030,7 +1024,7 @@ impl Renderer {
             }
         };
 
-        let image_buffer = self.render(character, skin, camera, size.0, size.1)?;
+        let image_buffer = self.render(character, camera, size.0, size.1)?;
         image_buffer
             .save_with_format(&adjusted, format.as_image_format())
             .map_err(|e| EidolonError::texture(format!("failed to save image: {e}")))?;

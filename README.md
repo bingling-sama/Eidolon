@@ -83,13 +83,12 @@ use eidolon::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
 
-    let character = Character::new();
-    let skin = renderer.load_texture("skin.png")?;
+    let body = renderer.load_body("skin.png", SkinType::Classic)?;
+    let character = Character::from_body(body);
     let camera = Camera::new();
 
     renderer.render_to_image(
         &character,
-        &skin,
         &camera,
         "output.png",
         (800, 600),

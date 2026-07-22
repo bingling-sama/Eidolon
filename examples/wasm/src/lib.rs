@@ -3,10 +3,10 @@
 //! Build with `wasm-pack build --target bundler`, then import from JS.
 //! Requires a browser with WebGPU support (Chrome 113+, Edge 113+, Firefox Nightly).
 
+use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon::camera::Camera;
-use eidolon::character::{Character, DefaultPostures, SkinType};
+use eidolon::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon::renderer::Renderer;
-use eidolon::texture::Texture;
 use image::ImageFormat;
 use std::io::Cursor;
 use wasm_bindgen::prelude::*;
@@ -24,8 +24,9 @@ pub fn init_logger() {
 #[wasm_bindgen]
 pub struct CanvasRenderer {
     inner: Renderer,
-    skin: Option<Texture>,
-    character: Character,
+    character: Option<Character>,
+    pending_posture: Option<Posture>,
+    skin_type: SkinType,
     camera: Camera,
 }
 
@@ -39,61 +40,90 @@ impl CanvasRenderer {
         log::info!("Canvas renderer created");
         Ok(CanvasRenderer {
             inner,
-            skin: None,
-            character: Character::new(),
+            character: None,
+            pending_posture: Some(DefaultPostures::STAND),
+            skin_type: SkinType::Classic,
             camera: Camera::default(),
         })
     }
 
     /// Load a skin from PNG bytes. Must be called before `render_frame`.
     pub fn load_skin(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
-        let texture = self
+        let body = self
             .inner
-            .load_texture_from_memory(bytes)
+            .load_body_from_memory(bytes, self.skin_type)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        self.skin = Some(texture);
+        if let Some(character) = &mut self.character {
+            character.attach_body(body);
+        } else {
+            let mut character = Character::from_body(body);
+            character.posture = self
+                .pending_posture
+                .take()
+                .unwrap_or(DefaultPostures::STAND);
+            self.character = Some(character);
+        }
         log::info!("Skin loaded");
         Ok(())
     }
 
     /// Load a cape from PNG bytes and enable cape rendering.
     pub fn load_cape(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
-        self.inner
-            .load_cape_texture_from_memory(bytes)
+        let atlas = self
+            .inner
+            .load_back_equipment_atlas_from_memory(bytes)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        self.character.cape = true;
-        self.character.elytra = false;
-        self.character.cape_pitch = self.character.posture.cape_pitch;
+        let equipment = BackEquipment::new(atlas, BackEquipmentKind::Cape);
+        if let Some(character) = &mut self.character {
+            character.equip(equipment);
+        } else {
+            let mut character = Character::from_back_equipment(equipment);
+            character.posture = self
+                .pending_posture
+                .take()
+                .unwrap_or(DefaultPostures::STAND);
+            self.character = Some(character);
+        }
         log::info!("Cape loaded");
         Ok(())
     }
 
     /// Disable cape rendering.
     pub fn clear_cape(&mut self) {
-        self.character.cape = false;
+        self.clear_back_equipment(BackEquipmentKind::Cape);
         log::info!("Cape cleared");
     }
 
     /// Load an elytra texture from PNG bytes and enable elytra rendering.
     pub fn load_elytra(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
-        self.inner
-            .load_elytra_texture_from_memory(bytes)
+        let atlas = self
+            .inner
+            .load_back_equipment_atlas_from_memory(bytes)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        self.character.elytra = true;
-        self.character.cape = false;
+        let equipment = BackEquipment::new(atlas, BackEquipmentKind::Elytra);
+        if let Some(character) = &mut self.character {
+            character.equip(equipment);
+        } else {
+            let mut character = Character::from_back_equipment(equipment);
+            character.posture = self
+                .pending_posture
+                .take()
+                .unwrap_or(DefaultPostures::STAND);
+            self.character = Some(character);
+        }
         log::info!("Elytra loaded");
         Ok(())
     }
 
     /// Disable elytra rendering.
     pub fn clear_elytra(&mut self) {
-        self.character.elytra = false;
+        self.clear_back_equipment(BackEquipmentKind::Elytra);
         log::info!("Elytra cleared");
     }
 
     /// Set posture by preset. `"stand"`, `"wave"`, `"walking"`, `"running"`, `"flying"`.
     pub fn set_posture(&mut self, preset: &str) -> Result<(), JsValue> {
-        self.character.posture = match preset {
+        let posture = match preset {
             "stand" => DefaultPostures::STAND,
             "wave" => DefaultPostures::WAVE,
             "walking" => DefaultPostures::WALKING,
@@ -101,33 +131,54 @@ impl CanvasRenderer {
             "flying" => DefaultPostures::FLYING,
             other => return Err(JsValue::from_str(&format!("unknown posture: '{other}'"))),
         };
-        self.character.cape_pitch = self.character.posture.cape_pitch;
+        if let Some(character) = &mut self.character {
+            character.posture = posture;
+        } else {
+            self.pending_posture = Some(posture);
+        }
         Ok(())
     }
 
     /// Override elytra pitch and opening angle in degrees.
     pub fn set_elytra_angles(&mut self, pitch: f32, spread: f32) {
-        self.character.posture.elytra_pitch = pitch;
-        self.character.posture.elytra_roll = spread;
+        if let Some(character) = &mut self.character {
+            character.posture.elytra_pitch = pitch;
+            character.posture.elytra_roll = spread;
+        } else {
+            let posture = self.pending_posture.get_or_insert(DefaultPostures::STAND);
+            posture.elytra_pitch = pitch;
+            posture.elytra_roll = spread;
+        }
     }
 
     /// Current elytra pitch in degrees.
     pub fn elytra_pitch(&self) -> f32 {
-        self.character.posture.elytra_pitch
+        self.character
+            .as_ref()
+            .map(|character| character.posture.elytra_pitch)
+            .or_else(|| self.pending_posture.map(|posture| posture.elytra_pitch))
+            .unwrap_or(DefaultPostures::STAND.elytra_pitch)
     }
 
     /// Current elytra opening angle in degrees.
     pub fn elytra_spread(&self) -> f32 {
-        self.character.posture.elytra_roll
+        self.character
+            .as_ref()
+            .map(|character| character.posture.elytra_roll)
+            .or_else(|| self.pending_posture.map(|posture| posture.elytra_roll))
+            .unwrap_or(DefaultPostures::STAND.elytra_roll)
     }
 
     /// Set arm width. `"classic"` (4px) or `"slim"` (3px).
     pub fn set_skin_type(&mut self, skin_type: &str) -> Result<(), JsValue> {
-        self.character.skin_type = match skin_type {
+        self.skin_type = match skin_type {
             "classic" => SkinType::Classic,
             "slim" => SkinType::Slim,
             other => return Err(JsValue::from_str(&format!("unknown skin type: '{other}'"))),
         };
+        if let Some(body) = self.character.as_mut().and_then(Character::body_mut) {
+            body.set_skin_type(self.skin_type);
+        }
         Ok(())
     }
 
@@ -152,13 +203,13 @@ impl CanvasRenderer {
     /// Offscreen render at high resolution, return PNG bytes for download.
     /// Renders at the given size independently of the canvas.
     pub async fn capture_frame(&self, width: u32, height: u32) -> Result<Vec<u8>, JsValue> {
-        let skin = self
-            .skin
+        let character = self
+            .character
             .as_ref()
-            .ok_or_else(|| JsValue::from_str("no skin loaded"))?;
+            .ok_or_else(|| JsValue::from_str("no character resources loaded"))?;
         let image_buffer = self
             .inner
-            .render_async(&self.character, skin, &self.camera, width, height)
+            .render_async(character, &self.camera, width, height)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let mut png_bytes = Vec::new();
@@ -171,13 +222,39 @@ impl CanvasRenderer {
 
     /// Present one frame to the canvas. Call in a rAF loop at 60fps.
     pub fn render_frame(&self) -> Result<(), JsValue> {
-        let skin = self
-            .skin
+        let character = self
+            .character
             .as_ref()
-            .ok_or_else(|| JsValue::from_str("no skin loaded"))?;
+            .ok_or_else(|| JsValue::from_str("no character resources loaded"))?;
         self.inner
-            .render_frame(&self.character, skin, &self.camera)
+            .render_frame(character, &self.camera)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         Ok(())
+    }
+}
+
+impl CanvasRenderer {
+    fn clear_back_equipment(&mut self, kind: BackEquipmentKind) {
+        let should_clear = self
+            .character
+            .as_ref()
+            .and_then(Character::back_equipment)
+            .is_some_and(|equipment| equipment.kind() == kind);
+        if !should_clear {
+            return;
+        }
+
+        let only_back_equipment = self
+            .character
+            .as_ref()
+            .is_some_and(|character| character.body().is_none());
+        if only_back_equipment {
+            self.pending_posture = self.character.as_ref().map(|character| character.posture);
+            self.character = None;
+        } else if let Some(character) = &mut self.character {
+            character
+                .unequip()
+                .expect("body-backed character can remove back equipment");
+        }
     }
 }

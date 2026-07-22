@@ -5,19 +5,21 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon::camera::Camera;
-use eidolon::character::{Character, DefaultPostures, Posture, SkinType};
+use eidolon::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
 use eidolon::model::Model;
 use eidolon::renderer::{OutputFormat, Renderer};
-use eidolon::texture::Texture;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
 }
 
-fn character_with_skin(renderer: &Renderer) -> (Character, Texture) {
-    let mut c = Character::new();
-    c.skin_type = SkinType::Classic;
+fn character_with_skin(renderer: &Renderer) -> Character {
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("Failed to load body");
+    let mut c = Character::from_body(body);
     c.posture = Posture {
         cape_pitch: 10.8,
         body_pitch: 0.0,
@@ -33,10 +35,7 @@ fn character_with_skin(renderer: &Renderer) -> (Character, Texture) {
         left_leg_pitch: 0.0,
         right_leg_pitch: 0.0,
     };
-    let skin = renderer
-        .load_texture("resources/bingling_sama.png")
-        .expect("Failed to load skin");
-    (c, skin)
+    c
 }
 
 fn camera_default() -> Camera {
@@ -48,11 +47,142 @@ fn camera_default() -> Camera {
 }
 
 #[test]
+fn cape_can_render_without_body() {
+    let renderer = make_renderer();
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    let character =
+        Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("standalone cape render failed");
+
+    assert!(
+        image.pixels().any(|pixel| pixel[3] > 0),
+        "standalone cape should produce visible pixels"
+    );
+}
+
+#[test]
+fn elytra_can_render_without_body() {
+    let renderer = make_renderer();
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    let character =
+        Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
+
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("standalone elytra render failed");
+
+    assert!(
+        image.pixels().any(|pixel| pixel[3] > 0),
+        "standalone elytra should produce visible pixels"
+    );
+}
+
+#[test]
+fn removing_the_only_visible_resource_is_rejected() {
+    let renderer = make_renderer();
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    let mut character =
+        Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+
+    assert!(matches!(
+        character.unequip(),
+        Err(CharacterError::WouldBecomeEmpty)
+    ));
+    assert!(character.back_equipment().is_some());
+}
+
+#[test]
+fn removing_a_missing_resource_is_idempotent() {
+    let renderer = make_renderer();
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    let mut equipment_only =
+        Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+    assert!(equipment_only
+        .remove_body()
+        .expect("remove body failed")
+        .is_none());
+
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("load body failed");
+    let mut body_only = Character::from_body(body);
+    assert!(body_only.unequip().expect("unequip failed").is_none());
+}
+
+#[test]
+fn removing_the_only_body_is_rejected() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("load body failed");
+    let mut character = Character::from_body(body);
+
+    assert!(matches!(
+        character.remove_body(),
+        Err(CharacterError::WouldBecomeEmpty)
+    ));
+    assert!(character.body().is_some());
+}
+
+#[test]
+fn body_is_owned_by_character_and_renders() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("load body failed");
+    let character = Character::from_body(body);
+
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("body render failed");
+
+    assert!(image.pixels().any(|pixel| pixel[3] > 0));
+}
+
+#[test]
+fn cloned_character_reuses_resources_with_the_same_renderer() {
+    let renderer = make_renderer();
+    let character = character_with_skin(&renderer);
+    let cloned = character.clone();
+
+    renderer
+        .render(&cloned, &camera_default(), 200, 150)
+        .expect("cloned character should render in its resource context");
+}
+
+#[test]
+fn character_resources_cannot_cross_renderer_contexts() {
+    let source_renderer = make_renderer();
+    let target_renderer = make_renderer();
+    let body = source_renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("load body failed");
+    let character = Character::from_body(body);
+
+    let error = target_renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect_err("cross-context render should fail");
+
+    assert!(error.to_string().contains("different renderer context"));
+}
+
+#[test]
 fn render_produces_correct_dimensions() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
     let image = renderer
-        .render(&character, &skin, &camera_default(), 800, 600)
+        .render(&character, &camera_default(), 800, 600)
         .expect("Render failed");
     assert_eq!(image.width(), 800);
     assert_eq!(image.height(), 600);
@@ -61,9 +191,9 @@ fn render_produces_correct_dimensions() {
 #[test]
 fn render_output_not_blank() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
     let image = renderer
-        .render(&character, &skin, &camera_default(), 800, 600)
+        .render(&character, &camera_default(), 800, 600)
         .expect("Render failed");
 
     let non_bg: usize = image
@@ -80,14 +210,14 @@ fn render_output_not_blank() {
 #[test]
 fn nametag_renders_above_the_player() {
     let renderer = make_renderer();
-    let (mut character, skin) = character_with_skin(&renderer);
+    let mut character = character_with_skin(&renderer);
     let without_nametag = renderer
-        .render(&character, &skin, &camera_default(), 400, 300)
+        .render(&character, &camera_default(), 400, 300)
         .expect("render without nametag failed");
 
     character.nametag = Some("Steve".to_owned());
     let with_nametag = renderer
-        .render(&character, &skin, &camera_default(), 400, 300)
+        .render(&character, &camera_default(), 400, 300)
         .expect("render with nametag failed");
 
     let changed_pixels: Vec<(u32, u32)> = without_nametag
@@ -108,7 +238,7 @@ fn nametag_renders_above_the_player() {
 #[test]
 fn nametag_see_through_only_reveals_occluded_pixels() {
     let renderer = make_renderer();
-    let (mut character, skin) = character_with_skin(&renderer);
+    let mut character = character_with_skin(&renderer);
     character.posture = DefaultPostures::FLYING;
     let back_camera = Camera {
         yaw: 0.0,
@@ -116,18 +246,18 @@ fn nametag_see_through_only_reveals_occluded_pixels() {
         scale: 1.0,
     };
     let without_nametag = renderer
-        .render(&character, &skin, &back_camera, 400, 300)
+        .render(&character, &back_camera, 400, 300)
         .expect("render without nametag failed");
 
     character.nametag = Some("BinglingTX".to_owned());
     character.nametag_see_through = false;
     let fully_occluded = renderer
-        .render(&character, &skin, &back_camera, 400, 300)
+        .render(&character, &back_camera, 400, 300)
         .expect("render with full nametag occlusion failed");
 
     character.nametag_see_through = true;
     let translucent_occlusion = renderer
-        .render(&character, &skin, &back_camera, 400, 300)
+        .render(&character, &back_camera, 400, 300)
         .expect("render with translucent nametag occlusion failed");
 
     let revealed_pixels = without_nametag
@@ -145,12 +275,11 @@ fn nametag_see_through_only_reveals_occluded_pixels() {
 #[test]
 fn different_camera_angle_produces_different_output() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
 
     let front = renderer
         .render(
             &character,
-            &skin,
             &Camera {
                 yaw: 90.0,
                 pitch: 90.0,
@@ -163,7 +292,6 @@ fn different_camera_angle_produces_different_output() {
     let back = renderer
         .render(
             &character,
-            &skin,
             &Camera {
                 yaw: 270.0,
                 pitch: 90.0,
@@ -181,8 +309,8 @@ fn different_camera_angle_produces_different_output() {
 
 #[test]
 fn enabling_elytra_changes_the_back_view() {
-    let mut renderer = make_renderer();
-    let (mut character, skin) = character_with_skin(&renderer);
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
     let back_camera = Camera {
         yaw: 0.0,
         pitch: 90.0,
@@ -190,15 +318,15 @@ fn enabling_elytra_changes_the_back_view() {
     };
 
     let without_elytra = renderer
-        .render(&character, &skin, &back_camera, 200, 150)
+        .render(&character, &back_camera, 200, 150)
         .expect("render without elytra failed");
 
-    renderer
-        .load_elytra_texture("resources/Turtle_Cape.png")
-        .expect("load elytra texture failed");
-    character.elytra = true;
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
     let with_elytra = renderer
-        .render(&character, &skin, &back_camera, 200, 150)
+        .render(&character, &back_camera, 200, 150)
         .expect("render with elytra failed");
 
     assert_ne!(without_elytra.as_raw(), with_elytra.as_raw());
@@ -206,25 +334,25 @@ fn enabling_elytra_changes_the_back_view() {
 
 #[test]
 fn flying_posture_changes_the_elytra_back_view() {
-    let mut renderer = make_renderer();
-    let (mut character, skin) = character_with_skin(&renderer);
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
     let back_camera = Camera {
         yaw: 0.0,
         pitch: 90.0,
         scale: 1.0,
     };
-    renderer
-        .load_elytra_texture("resources/Turtle_Cape.png")
-        .expect("load elytra texture failed");
-    character.elytra = true;
+    let atlas = renderer
+        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .expect("load back equipment atlas failed");
+    character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
 
     character.posture = DefaultPostures::STAND;
     let folded = renderer
-        .render(&character, &skin, &back_camera, 200, 150)
+        .render(&character, &back_camera, 200, 150)
         .expect("render folded elytra failed");
     character.posture = DefaultPostures::FLYING;
     let flying = renderer
-        .render(&character, &skin, &back_camera, 200, 150)
+        .render(&character, &back_camera, 200, 150)
         .expect("render flying elytra failed");
 
     assert_ne!(folded.as_raw(), flying.as_raw());
@@ -232,9 +360,9 @@ fn flying_posture_changes_the_elytra_back_view() {
 
 #[test]
 fn elytra_rejects_non_cape_atlas_dimensions() {
-    let mut renderer = make_renderer();
+    let renderer = make_renderer();
     let error = renderer
-        .load_elytra_texture("resources/bingling_sama.png")
+        .load_back_equipment_atlas("resources/bingling_sama.png")
         .expect_err("square skin must not be accepted as an elytra atlas");
 
     assert!(error.to_string().contains("64x32"));
@@ -243,14 +371,13 @@ fn elytra_rejects_non_cape_atlas_dimensions() {
 #[test]
 fn render_to_image_saves_to_disk() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.png");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
         .render_to_image(
             &character,
-            &skin,
             &camera_default(),
             tmp_str,
             (200, 150),
@@ -269,14 +396,13 @@ fn render_to_image_saves_to_disk() {
 #[test]
 fn webp_output_format_works() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.webp");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
         .render_to_image(
             &character,
-            &skin,
             &camera_default(),
             tmp_str,
             (200, 150),
@@ -293,9 +419,9 @@ fn webp_output_format_works() {
 }
 
 #[test]
-fn load_texture_invalid_path_returns_error() {
+fn load_body_invalid_path_returns_error() {
     let renderer = make_renderer();
-    let result = renderer.load_texture("nonexistent_skin_xyz.png");
+    let result = renderer.load_body("nonexistent_skin_xyz.png", SkinType::Classic);
     match result {
         Ok(_) => panic!("Expected error for nonexistent path"),
         Err(e) => {
@@ -364,30 +490,14 @@ fn load_model_from_bytes_invalid_data_errors() {
 }
 
 #[test]
-fn load_texture_raw_no_conversion() {
-    let renderer = make_renderer();
-    // bingling_sama.png is single-layer (64×32); raw load keeps it as-is.
-    let skin = renderer
-        .load_texture_raw("resources/bingling_sama.png")
-        .expect("load_texture_raw failed");
-    // Verify we can render with it (validates GPU resources built correctly).
-    let character = Character::new();
-    let image = renderer
-        .render(&character, &skin, &camera_default(), 200, 150)
-        .expect("Render with raw texture failed");
-    assert!(image.width() > 0);
-}
-
-#[test]
 fn render_to_image_no_extension_auto_adjusts() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
     let tmp = std::env::temp_dir().join("eidolon_auto_ext_noext");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
     renderer
         .render_to_image(
             &character,
-            &skin,
             &camera_default(),
             tmp_str,
             (100, 75),
@@ -454,30 +564,30 @@ fn camera_extreme_values_produce_finite_matrices() {
 }
 
 #[test]
-fn load_texture_auto_converts_single_layer_skin() {
+fn load_body_auto_converts_single_layer_skin() {
     // SSSSSteven.png is 64×32 (single-layer, width == 2×height).
-    // load_texture must detect this and auto-convert to 64×64 via single2double.
+    // load_body must detect this and auto-convert to 64×64 via single2double.
     let renderer = make_renderer();
-    let skin = renderer
-        .load_texture("resources/SSSSSteven.png")
+    let body = renderer
+        .load_body("resources/SSSSSteven.png", SkinType::Classic)
         .expect("Failed to load single-layer skin");
-    let character = Character::new();
+    let character = Character::from_body(body);
     let image = renderer
-        .render(&character, &skin, &camera_default(), 200, 150)
+        .render(&character, &camera_default(), 200, 150)
         .expect("Render with auto-converted skin failed");
     assert!(image.width() > 0);
 }
 
 #[test]
-fn load_texture_corrupted_png_errors() {
+fn load_body_corrupted_png_errors() {
     let renderer = make_renderer();
     let tmp = std::env::temp_dir().join("eidolon_corrupt_test.png");
     std::fs::write(&tmp, b"this is not a valid PNG image").expect("write temp file");
     let tmp_str = tmp.to_str().expect("temp path not UTF-8");
-    let result = renderer.load_texture(tmp_str);
+    let result = renderer.load_body(tmp_str, SkinType::Classic);
     std::fs::remove_file(&tmp).ok();
     match result {
-        Ok(_) => panic!("Expected error for corrupted PNG in load_texture"),
+        Ok(_) => panic!("Expected error for corrupted PNG in load_body"),
         Err(e) => {
             let msg = e.to_string();
             assert!(
@@ -519,11 +629,10 @@ fn load_model_from_bytes_missing_required_part_errors() {
 #[test]
 fn render_to_image_png_save_error() {
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
     // Write to a directory that doesn't exist — save_with_format fails
     let result = renderer.render_to_image(
         &character,
-        &skin,
         &camera_default(),
         "/nonexistent_dir_xyz_eidolon_test/output.png",
         (100, 75),
@@ -546,15 +655,15 @@ fn depth_texture_cache_hit_on_repeated_same_dimensions() {
     // First render allocates depth texture. Second render with same
     // dimensions must reuse the cached depth texture (cache hit path).
     let renderer = make_renderer();
-    let (character, skin) = character_with_skin(&renderer);
+    let character = character_with_skin(&renderer);
     let size = (200, 150);
     let cam = camera_default();
 
     let img1 = renderer
-        .render(&character, &skin, &cam, size.0, size.1)
+        .render(&character, &cam, size.0, size.1)
         .expect("First render failed");
     let img2 = renderer
-        .render(&character, &skin, &cam, size.0, size.1)
+        .render(&character, &cam, size.0, size.1)
         .expect("Second render (cache-hit) failed");
 
     assert_eq!(img1.width(), size.0);
@@ -566,38 +675,46 @@ fn depth_texture_cache_hit_on_repeated_same_dimensions() {
 #[test]
 fn model_switching_slim_and_classic_in_same_renderer() {
     let renderer = make_renderer();
-    let skin = renderer
-        .load_texture("resources/bingling_sama.png")
-        .expect("Failed to load skin");
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("Failed to load body");
     let cam = camera_default();
-
-    let mut character = Character::new();
+    let mut character = Character::from_body(body);
 
     // Slim
-    character.skin_type = SkinType::Slim;
+    character
+        .body_mut()
+        .expect("character should have a body")
+        .set_skin_type(SkinType::Slim);
     renderer
-        .render(&character, &skin, &cam, 200, 150)
+        .render(&character, &cam, 200, 150)
         .expect("Slim render failed");
 
     // Classic
-    character.skin_type = SkinType::Classic;
+    character
+        .body_mut()
+        .expect("character should have a body")
+        .set_skin_type(SkinType::Classic);
     renderer
-        .render(&character, &skin, &cam, 200, 150)
+        .render(&character, &cam, 200, 150)
         .expect("Classic render failed");
 
     // Back to Slim
-    character.skin_type = SkinType::Slim;
+    character
+        .body_mut()
+        .expect("character should have a body")
+        .set_skin_type(SkinType::Slim);
     renderer
-        .render(&character, &skin, &cam, 200, 150)
+        .render(&character, &cam, 200, 150)
         .expect("Slim re-render failed");
 }
 
 #[test]
 fn render_all_posture_presets_with_both_skin_types() {
     let renderer = make_renderer();
-    let skin = renderer
-        .load_texture("resources/bingling_sama.png")
-        .expect("Failed to load skin");
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("Failed to load body");
     let cam = camera_default();
     let postures = [
         DefaultPostures::STAND,
@@ -608,11 +725,14 @@ fn render_all_posture_presets_with_both_skin_types() {
 
     for skin_type in [SkinType::Classic, SkinType::Slim] {
         for (i, posture) in postures.iter().enumerate() {
-            let mut character = Character::new();
-            character.skin_type = skin_type;
+            let mut character = Character::from_body(body.clone());
+            character
+                .body_mut()
+                .expect("character should have a body")
+                .set_skin_type(skin_type);
             character.posture = *posture;
             let img = renderer
-                .render(&character, &skin, &cam, 160, 120)
+                .render(&character, &cam, 160, 120)
                 .unwrap_or_else(|e| panic!("render failed for {:?} posture {}: {e}", skin_type, i));
             assert!(
                 img.width() > 0,

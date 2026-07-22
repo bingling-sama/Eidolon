@@ -8,15 +8,17 @@ Provides:
 - Headless image output (PNG / WebP) and windowed preview
 */
 
+pub mod back_equipment;
+pub mod body;
 pub mod camera;
-pub mod cape;
+mod cape;
 pub mod character;
 pub mod constants;
 pub mod converter;
-pub mod elytra;
+mod elytra;
 pub mod error;
 pub mod model;
 pub mod renderer;
-pub mod texture;
+mod texture;
 
 pub use renderer::OutputFormat;

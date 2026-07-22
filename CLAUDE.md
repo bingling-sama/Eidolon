@@ -61,9 +61,11 @@ src/
 ├── constants.rs    # WGSL vertex + fragment shaders
 ├── camera.rs       # Camera: yaw/pitch/scale → view + projection matrices
 ├── model.rs        # OBJ loader: parses named objects into BodyParts (main + layer meshes)
-├── texture.rs      # Skin texture: loads PNG, auto-converts single→double layer
+├── body.rs         # Body: Renderer-bound Skin + classic/slim geometry selection
+├── back_equipment.rs # Shared atlas + Cape/Elytra presentation selection
+├── texture.rs      # Private PNG upload and single→double conversion
 ├── converter.rs    # single2double(): mirrors right-leg/arm regions to left side
-├── character.rs    # Character: skin_type, posture (body/joint/back-equipment angles), position, rotation
+├── character.rs    # Character: Body/Back equipment ownership, posture, position, rotation
 └── renderer/
     ├── mod.rs      # Renderer: headless + windowed, shared pipeline
     ├── pipeline.rs # Render pipeline creation from WGSL shader
@@ -74,8 +76,8 @@ src/
 ### Data flow
 
 1. **CLI** (`main.rs`) parses subcommand → creates `Renderer` (one-time, expensive — initializes wgpu device + compiles shaders + loads both OBJs)
-2. `Renderer::load_texture()` → `Texture::load_from_file()` loads PNG, auto-detects single-layer (width == height×2) and converts to double-layer via `converter::single2double()`
-3. `Renderer::render()` sets up off-screen framebuffer, selects slim/classic model, iterates body parts (head, body, arms, legs) applying pivot-point rotations from `character.posture`, draws with shaders, reads pixels back as `ImageBuffer`
+2. `Renderer::load_body()` loads and uploads a Skin, auto-detects single-layer (width == height×2), converts it via `converter::single2double()`, and returns a Renderer-bound `Body`
+3. The caller builds a non-empty `Character` from a Body or Back equipment; `Renderer::render()` draws its optional Body and Back equipment using `character.posture`, then reads pixels back as `ImageBuffer`
 4. `Renderer::render_to_image()` wraps `render()` and saves with `image` crate (PNG or WebP). Output filename extension is auto-adjusted to match the requested format.
 
 ### Key design details
@@ -85,7 +87,8 @@ src/
 - **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward. `body_pitch` rotates the full model around its center; elytra share a central upper-back pivot and mirror yaw/roll between wings.
 - **Single→double layer conversion**: `converter::single2double()` mirrors right-side arm/leg regions horizontally to create left-side overlays in the bottom half of a square texture. Source regions defined as pixel rectangles for 64px reference, scaled by an HD ratio for larger skins.
 - **Output formats**: PNG and WebP via `OutputFormat` enum. Format is inferred from the output filename extension.
-- **Error handling**: Public API returns `EidolonError` (typed enum: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`). Skin texture is passed as `&Texture` to render methods — the compiler guarantees it's loaded before rendering.
+- **Resource ownership**: Character owns Body and optional Back equipment. Clones share immutable GPU resources through `Arc`; a different Renderer must reload them.
+- **Error handling**: Public API returns `EidolonError` (typed enum: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, `Surface`).
 - **Logging**: Uses `env_logger` (`RUST_LOG` env var controls level).
 
 ## Agent skills

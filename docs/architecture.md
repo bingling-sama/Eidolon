@@ -9,13 +9,15 @@ image output.
 - `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
+- `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
+- `src/back_equipment.rs` defines the shared Back equipment atlas and Cape/Elytra presentation.
 - `src/camera.rs` computes view and projection matrices for an orbit camera.
-- `src/cape.rs` and `src/elytra.rs` build back-equipment meshes using skinview3d atlas mappings.
-- `src/character.rs` defines skin geometry selection, posture presets (0° = neutral for all joints),
-  and character transforms.
+- Private `src/cape.rs` and `src/elytra.rs` build Renderer-owned geometry using skinview3d atlas mappings.
+- `src/character.rs` defines resource ownership, posture presets (0° = neutral for all joints),
+  and character transforms. A Character always contains a Body or Back equipment.
 - `src/model.rs` loads the classic and slim OBJ meshes from `resources/`. Supports loading from
   file path or in-memory bytes.
-- `src/texture.rs` loads PNG skins and expands legacy single-layer skins when required.
+- Private `src/texture.rs` uploads PNG atlases and expands legacy single-layer Skins when required.
 - `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
 - `src/renderer/` contains the shared `wgpu` renderer split into submodules:
   - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
@@ -30,11 +32,12 @@ image output.
 For `cargo run -- render skin.png`, the flow is:
 
 1. `src/main.rs` parses CLI options into `SceneArgs`.
-2. `character_and_camera_from_scene` builds a `Character` and `Camera`.
+2. `scene_state_and_camera_from_scene` resolves resource-independent scene state and a `Camera`.
 3. `Renderer::new` creates a headless `wgpu` device, queue, render pipeline, and loads both OBJ
    model variants.
-4. `Renderer::load_texture` reads the PNG skin. If the image has `width == height * 2`, it is
-   converted to a square double-layer atlas before upload via `converter::single2double`.
+4. `Renderer::load_body` reads the PNG Skin, converts a legacy atlas when needed, uploads it, and
+   returns a Renderer-context-bound `Body`. The CLI then constructs a `Character` and optionally
+   equips a shared Back equipment atlas as Cape or Elytra.
 5. `Renderer::render_to_image` renders to an off-screen `Rgba8Unorm` texture, copies the padded
    GPU rows into a CPU buffer, strips padding, and saves the image as PNG or WebP. The output
    filename extension is auto-adjusted to match the format.
@@ -88,14 +91,17 @@ The public API returns `EidolonError` (not `Box<dyn Error>`). Variants:
 | `Texture(String)` | Skin PNG decode or upload failures |
 | `Conversion(String)` | Single→double layer conversion errors |
 | `InvalidPath(String)` | Null bytes or unresolvable paths |
+| `Surface(wgpu::SurfaceError)` | Window surface acquisition or presentation failures |
 
 Internal `pub(crate)` functions in `readback.rs` and `uniforms.rs` also use `EidolonError`.
 
 ## Current Limits
 
-- Skin textures are loaded from PNG files only.
-- Cape and elytra textures must use a 2:1 cape atlas (64x32 or an HD multiple), and applications
-  should enable only one back-equipment type at a time.
+- Skins and Back equipment atlases are loaded from PNG paths or PNG bytes.
+- Cape and Elytra share one 2:1 Back equipment atlas (64x32 or an HD multiple) and are selected by
+  `BackEquipmentKind`. Either presentation can render without a Body.
+- Character GPU resources are bound to the Renderer that loaded them. Clones share immutable GPU
+  allocations through `Arc`; a different Renderer must load its own resources.
 - The renderer expects a usable `wgpu` backend. Headless rendering still creates a GPU adapter.
 - Model loading requires the exact object names listed above.
 - Nametags are single-line and render at most 64 Unicode characters.

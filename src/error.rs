@@ -17,6 +17,8 @@ pub enum EidolonError {
     Conversion(String),
     /// Path contains null bytes or is otherwise invalid.
     InvalidPath(String),
+    /// Window surface acquisition or presentation failure.
+    Surface(wgpu::SurfaceError),
 }
 
 impl fmt::Display for EidolonError {
@@ -28,6 +30,7 @@ impl fmt::Display for EidolonError {
             Self::Texture(msg) => write!(f, "Texture error: {msg}"),
             Self::Conversion(msg) => write!(f, "Conversion error: {msg}"),
             Self::InvalidPath(msg) => write!(f, "Invalid path: {msg}"),
+            Self::Surface(error) => write!(f, "Surface error: {error}"),
         }
     }
 }
@@ -44,6 +47,12 @@ impl std::error::Error for EidolonError {
 impl From<std::io::Error> for EidolonError {
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<wgpu::SurfaceError> for EidolonError {
+    fn from(error: wgpu::SurfaceError) -> Self {
+        Self::Surface(error)
     }
 }
 
@@ -115,6 +124,15 @@ mod tests {
         let e: EidolonError = io.into();
         assert!(matches!(e, EidolonError::Io(_)));
         assert!(e.to_string().contains("I/O error"));
+    }
+
+    #[test]
+    fn surface_error_conversion_preserves_recovery_kind() {
+        let error: EidolonError = wgpu::SurfaceError::Lost.into();
+        assert!(matches!(
+            error,
+            EidolonError::Surface(wgpu::SurfaceError::Lost)
+        ));
     }
 
     #[test]

@@ -18,20 +18,19 @@ Then import the library crate as `eidolon`.
 ```rust
 use eidolon::{
     camera::Camera,
-    character::Character,
+    character::{Character, SkinType},
     renderer::{OutputFormat, Renderer},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
 
-    let character = Character::new();                     // classic arms, stand pose
-    let skin = renderer.load_texture("skin.png")?;        // auto-converts single→double layer
-    let camera = Camera::new();                           // yaw=180, pitch=90, scale=1.0
+    let body = renderer.load_body("skin.png", SkinType::Classic)?;
+    let character = Character::from_body(body);           // stand posture by default
+    let camera = Camera::new();                            // yaw=180, pitch=90, scale=1.0
 
     renderer.render_to_image(
         &character,
-        &skin,
         &camera,
         "output.png",
         (800, 600),
@@ -43,9 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 Key points:
-- `Character` no longer holds the skin texture. Pass `&Texture` to render methods — the compiler guarantees it's loaded before rendering.
+- `Character` owns its per-character visual resources. It must contain a `Body` or Back equipment.
+- `Body` combines a Skin with `SkinType`; single-layer Skins are expanded automatically when loaded.
+- Cloning a `Character`, `Body`, or `BackEquipmentAtlas` shares immutable GPU resources. Resources can only be rendered by the `Renderer` that loaded them; load them again for another Renderer.
 - `Camera::new()` defaults: yaw 180° (front view), pitch 90° (level), scale 1.0.
-- Single-layer skins are expanded to double-layer automatically when loaded.
 - `OutputFormat` supports `Png` and `WebP`. Format is inferred from the filename extension by `render_to_image`.
 
 ## Error Handling
@@ -53,41 +53,39 @@ Key points:
 The public API returns `EidolonError`, a typed enum:
 
 ```rust
-use eidolon::error::EidolonError;
+use eidolon::{character::SkinType, error::EidolonError};
 
-match renderer.load_texture("skin.png") {
-    Ok(skin) => { /* ... */ }
+match renderer.load_body("skin.png", SkinType::Classic) {
+    Ok(body) => { /* ... */ }
     Err(EidolonError::Io(e)) => eprintln!("File error: {e}"),
     Err(EidolonError::Texture(msg)) => eprintln!("Texture error: {msg}"),
     Err(e) => eprintln!("Other error: {e}"),
 }
 ```
 
-Variants: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`. The `Io` variant wraps `std::io::Error` and exposes it via `Error::source()`.
+Variants: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, and `Surface`. The `Io` variant wraps `std::io::Error`; `Surface` preserves `wgpu::SurfaceError` so a window loop can recover from `Lost` and exit on `OutOfMemory`.
 
 ## Custom Pose Example
 
 ```rust
 use eidolon::{
+    back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, SkinType, Posture},
     renderer::{OutputFormat, Renderer},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut renderer = Renderer::new()?;
-
-    let mut character = Character::new();
-    character.skin_type = SkinType::Slim;
+    let renderer = Renderer::new()?;
+    let body = renderer.load_body("skin.png", SkinType::Slim)?;
+    let atlas = renderer.load_back_equipment_atlas("cape.png")?;
+    let mut character = Character::from_body(body);
     character.nametag = Some("Steve".to_owned());
     character.nametag_see_through = false; // optional: fully hide occluded pixels
     character.posture = DefaultPostures::WAVE;
     character.rotation.y = 20.0;    // 20° around Y axis
-    character.cape = true;
-    character.cape_pitch = 10.8;    // degrees around the top-back attachment edge
-    renderer.load_cape_texture("cape.png")?;
-
-    let skin = renderer.load_texture("skin.png")?;
+    character.posture.cape_pitch = 10.8;
+    character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
 
     let camera = Camera {
         yaw: 210.0,
@@ -97,7 +95,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     renderer.render_to_image(
         &character,
-        &skin,
         &camera,
         "wave.png",
         (1024, 1024),
@@ -164,10 +161,11 @@ use winit::window::Window;
 
 let window = Arc::new(/* winit Window */);
 let renderer = Renderer::new_windowed(window)?;
-let skin = renderer.load_texture("skin.png")?;
+let body = renderer.load_body("skin.png", SkinType::Classic)?;
+let character = Character::from_body(body);
 
 // In your event loop:
-renderer.render_frame(&character, &skin, &camera)?;
+renderer.render_frame(&character, &camera)?;
 ```
 
 ## Notes
@@ -186,14 +184,16 @@ renderer.render_frame(&character, &skin, &camera)?;
   `Camera::scale`.
   Occluded pixels render at 25% opacity by default, followed by the normal depth-tested pass. Set
   `Character::nametag_see_through` to `false` to hide occluded pixels completely.
-- Call `Renderer::load_cape_texture()` and set `Character::cape` to render a cape; there is no
-  built-in default texture. `Character::cape_pitch` rotates it around the top-back shoulder
+- Load a shared atlas with `Renderer::load_back_equipment_atlas()`, then construct
+  `BackEquipment::new(atlas, BackEquipmentKind::Cape)` or `BackEquipmentKind::Elytra`. Changing
+  `BackEquipment::kind` switches presentation without reloading the atlas.
+- A Character may contain Back equipment without a Body, so Cape and Elytra can render alone in
+  the same player coordinate system. `Posture::cape_pitch` rotates Cape around the top-back
   attachment edge; the skinview3d-compatible default is `10.8` degrees.
-- Call `Renderer::load_elytra_texture()` and set `Character::elytra` to render elytra. Elytra use
-  the same 2:1 cape atlas format (64x32 or an HD multiple). Postures control both wings through
+- Elytra use the same 2:1 Back equipment atlas format (64x32 or an HD multiple). Postures control both wings through
   `elytra_pitch`, `elytra_yaw`, and `elytra_roll`; both wings rotate around the central upper-back
   attachment, and the right wing mirrors the left wing's yaw and roll. `DefaultPostures::FLYING`
   uses `20°` pitch and a `60°` spread; applications can construct other
-  snapshots with the same fields. Applications should enable either cape or elytra, not both.
+  snapshots with the same fields. `BackEquipmentKind` makes Cape and Elytra mutually exclusive.
 
 ![Elytra rendered from the rear](elytra-preview.png)

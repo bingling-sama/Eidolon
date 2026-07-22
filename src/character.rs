@@ -1,13 +1,23 @@
+use crate::back_equipment::BackEquipment;
+use crate::body::Body;
+pub use crate::body::SkinType;
 use cgmath::Vector3;
+use std::fmt;
 
-/// Arm width variant: classic (4×4 arms) vs slim (3×4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SkinType {
-    /// Steve-style wide arms (`classic.obj`).
-    Classic,
-    /// Alex-style slim arms (`slim.obj`).
-    Slim,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CharacterError {
+    WouldBecomeEmpty,
 }
+
+impl fmt::Display for CharacterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::WouldBecomeEmpty => write!(f, "a character must have a body or back equipment"),
+        }
+    }
+}
+
+impl std::error::Error for CharacterError {}
 
 /// Joint angles in degrees. 0° = neutral (no rotation from bind pose).
 ///
@@ -133,14 +143,11 @@ impl DefaultPostures {
     };
 }
 
-/// Scene object: pose, skin type, and world-space transform.
-///
-/// Skin texture is managed separately — pass it to [`crate::renderer::Renderer::render`]
-/// alongside the character.
+/// A non-empty player-aligned appearance and its scene state.
 #[derive(Debug, Clone)]
 pub struct Character {
-    /// Chooses `classic.obj` vs `slim.obj` arm geometry.
-    pub skin_type: SkinType,
+    body: Option<Body>,
+    back_equipment: Option<BackEquipment>,
     /// Optional player name rendered above the model. `None` hides the nametag.
     pub nametag: Option<String>,
     /// Whether an occluded nametag remains visible at reduced opacity.
@@ -150,33 +157,85 @@ pub struct Character {
     pub position: Vector3<f32>,
     /// World-space rotation in degrees (Euler X, then Y, then Z) applied before joint matrices.
     pub rotation: Vector3<f32>,
-    /// Whether to render the cape texture configured on the renderer.
-    pub cape: bool,
-    /// Whether to render the elytra texture configured on the renderer.
-    pub elytra: bool,
-    /// Cape rotation around its top attachment edge (X axis), in degrees.
-    pub cape_pitch: f32,
 }
 
-impl Default for Character {
-    fn default() -> Self {
+impl Character {
+    fn with_visuals(body: Option<Body>, back_equipment: Option<BackEquipment>) -> Self {
+        debug_assert!(body.is_some() || back_equipment.is_some());
         Self {
-            skin_type: SkinType::Classic,
+            body,
+            back_equipment,
             nametag: None,
             nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
-            cape: false,
-            elytra: false,
-            cape_pitch: 10.8,
         }
     }
-}
 
-impl Character {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn from_body(body: Body) -> Self {
+        Self::with_visuals(Some(body), None)
+    }
+
+    pub fn from_back_equipment(back_equipment: BackEquipment) -> Self {
+        Self::with_visuals(None, Some(back_equipment))
+    }
+
+    pub fn body(&self) -> Option<&Body> {
+        self.body.as_ref()
+    }
+
+    pub fn body_mut(&mut self) -> Option<&mut Body> {
+        self.body.as_mut()
+    }
+
+    pub fn attach_body(&mut self, body: Body) -> Option<Body> {
+        self.body.replace(body)
+    }
+
+    pub fn remove_body(&mut self) -> Result<Option<Body>, CharacterError> {
+        if self.body.is_none() {
+            return Ok(None);
+        }
+        if self.back_equipment.is_none() {
+            return Err(CharacterError::WouldBecomeEmpty);
+        }
+        Ok(self.body.take())
+    }
+
+    pub fn back_equipment(&self) -> Option<&BackEquipment> {
+        self.back_equipment.as_ref()
+    }
+
+    pub fn back_equipment_mut(&mut self) -> Option<&mut BackEquipment> {
+        self.back_equipment.as_mut()
+    }
+
+    pub fn equip(&mut self, back_equipment: BackEquipment) -> Option<BackEquipment> {
+        self.back_equipment.replace(back_equipment)
+    }
+
+    pub fn unequip(&mut self) -> Result<Option<BackEquipment>, CharacterError> {
+        if self.back_equipment.is_none() {
+            return Ok(None);
+        }
+        if self.body.is_none() {
+            return Err(CharacterError::WouldBecomeEmpty);
+        }
+        Ok(self.back_equipment.take())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn empty_for_test() -> Self {
+        Self {
+            body: None,
+            back_equipment: None,
+            nametag: None,
+            nametag_see_through: true,
+            posture: DefaultPostures::STAND,
+            position: Vector3::new(0.0, 0.0, 0.0),
+            rotation: Vector3::new(0.0, 0.0, 0.0),
+        }
     }
 }
 
@@ -193,12 +252,12 @@ mod tests {
 
     #[test]
     fn nametag_is_hidden_by_default() {
-        assert_eq!(Character::new().nametag, None);
+        assert_eq!(Character::empty_for_test().nametag, None);
     }
 
     #[test]
     fn nametag_uses_translucent_occlusion_by_default() {
-        assert!(Character::new().nametag_see_through);
+        assert!(Character::empty_for_test().nametag_see_through);
     }
 
     #[test]
@@ -307,9 +366,8 @@ mod tests {
     }
 
     #[test]
-    fn character_new_defaults() {
-        let c = Character::new();
-        assert_eq!(c.skin_type, SkinType::Classic);
+    fn character_scene_defaults() {
+        let c = Character::empty_for_test();
         assert_eq!(c.posture.head_yaw, 0.0);
         assert_eq!(c.position.x, 0.0);
         assert_eq!(c.position.y, 0.0);
@@ -317,37 +375,17 @@ mod tests {
         assert_eq!(c.rotation.x, 0.0);
         assert_eq!(c.rotation.y, 0.0);
         assert_eq!(c.rotation.z, 0.0);
-        assert!(!c.cape);
-        assert!(!c.elytra);
-        assert_eq!(c.cape_pitch, 10.8);
-    }
-
-    #[test]
-    fn character_default_equals_new() {
-        let c1 = Character::new();
-        let c2 = Character::default();
-        assert_eq!(c1.skin_type, c2.skin_type);
-        assert_eq!(c1.position.x, c2.position.x);
-        assert_eq!(c1.rotation.x, c2.rotation.x);
-        assert_eq!(c1.cape_pitch, c2.cape_pitch);
+        assert_eq!(c.posture.cape_pitch, 10.8);
     }
 
     #[test]
     fn character_mutation() {
-        let mut c = Character::new();
-        c.skin_type = SkinType::Slim;
+        let mut c = Character::empty_for_test();
         c.posture = DefaultPostures::RUNNING;
         c.position = Vector3::new(1.0, 2.0, 3.0);
         c.rotation = Vector3::new(45.0, 90.0, 0.0);
-        c.cape = true;
-        c.elytra = true;
-        c.cape_pitch = 24.0;
-        assert_eq!(c.skin_type, SkinType::Slim);
         assert_eq!(c.posture.right_leg_pitch, -74.48);
         assert_eq!(c.position.y, 2.0);
         assert_eq!(c.rotation.x, 45.0);
-        assert!(c.cape);
-        assert!(c.elytra);
-        assert_eq!(c.cape_pitch, 24.0);
     }
 }

@@ -180,7 +180,7 @@ pub(crate) fn compute_cape_uniform(
 ) -> Uniforms {
     let base = compute_base_model_matrix(character, camera);
     // skinview3d uses -Z for the back; this renderer uses +Z, so invert pitch.
-    let cape_rotation = Matrix4::from_angle_x(Rad(-character.cape_pitch.to_radians()));
+    let cape_rotation = Matrix4::from_angle_x(Rad(-character.posture.cape_pitch.to_radians()));
     let model = base
         * Matrix4::from_translation(CAPE_PIVOT)
         * cape_rotation
@@ -237,8 +237,8 @@ mod tests {
 
     #[test]
     fn cape_rotation_keeps_attachment_axis_fixed() {
-        let mut character = Character::new();
-        character.cape_pitch = 45.0;
+        let mut character = Character::empty_for_test();
+        character.posture.cape_pitch = 45.0;
         let camera = Camera::default();
         let uniform = compute_cape_uniform(&character, &camera, 800, 600);
         let model: Matrix4<f32> = uniform.model.into();
@@ -252,8 +252,8 @@ mod tests {
 
     #[test]
     fn positive_cape_pitch_moves_the_hanging_cape_backwards() {
-        let mut character = Character::new();
-        character.cape_pitch = 10.8;
+        let mut character = Character::empty_for_test();
+        character.posture.cape_pitch = 10.8;
         let camera = Camera::default();
         let uniform = compute_cape_uniform(&character, &camera, 800, 600);
         let model: Matrix4<f32> = uniform.model.into();
@@ -270,7 +270,7 @@ mod tests {
             crate::character::DefaultPostures::STAND,
             crate::character::DefaultPostures::FLYING,
         ] {
-            let mut character = Character::new();
+            let mut character = Character::empty_for_test();
             character.posture = posture;
             let uniforms = compute_elytra_uniforms(&character, &camera, 800, 600);
             let base = compute_base_model_matrix(&character, &camera);
@@ -290,8 +290,8 @@ mod tests {
     #[test]
     fn flying_posture_spreads_both_elytra_wings() {
         let camera = Camera::default();
-        let standing = Character::new();
-        let mut flying = Character::new();
+        let standing = Character::empty_for_test();
+        let mut flying = Character::empty_for_test();
         flying.posture = crate::character::DefaultPostures::FLYING;
 
         let standing_uniforms = compute_elytra_uniforms(&standing, &camera, 800, 600);
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn elytra_rotation_uses_upstream_local_xyz_order() {
-        let mut character = Character::new();
+        let mut character = Character::empty_for_test();
         character.posture.elytra_pitch = 23.0;
         character.posture.elytra_yaw = 17.0;
         character.posture.elytra_roll = 41.0;
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn flying_posture_rotates_the_player_horizontally_around_its_center() {
-        let mut character = Character::new();
+        let mut character = Character::empty_for_test();
         character.posture = crate::character::DefaultPostures::FLYING;
         let uniforms = compute_body_part_uniforms(&character, &Camera::default(), 800, 600);
         let body_model: Matrix4<f32> = uniforms[5].model.into();

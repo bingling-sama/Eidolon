@@ -3,9 +3,11 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
+    back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, Posture, SkinType},
     converter,
+    error::EidolonError,
     renderer::{OutputFormat, Renderer},
 };
 use winit::application::ApplicationHandler;
@@ -156,19 +158,30 @@ struct SceneArgs {
     rot_z: f32,
 }
 
-fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
-    let mut character = Character::new();
-    character.skin_type = if scene.slim {
-        SkinType::Slim
-    } else {
-        SkinType::Classic
-    };
-    character.nametag = scene.nametag.clone();
-    character.nametag_see_through = !scene.disable_nametag_see_through;
-    character.cape = scene.cape.is_some();
-    character.elytra = scene.elytra.is_some();
+#[derive(Debug)]
+struct SceneState {
+    skin_type: SkinType,
+    nametag: Option<String>,
+    nametag_see_through: bool,
+    back_equipment_kind: Option<BackEquipmentKind>,
+    posture: Posture,
+    position: cgmath::Vector3<f32>,
+    rotation: cgmath::Vector3<f32>,
+}
+
+impl SceneState {
+    fn apply_to(&self, character: &mut Character) {
+        character.nametag = self.nametag.clone();
+        character.nametag_see_through = self.nametag_see_through;
+        character.posture = self.posture;
+        character.position = self.position;
+        character.rotation = self.rotation;
+    }
+}
+
+fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Camera) {
     let base: Posture = scene.posture.into();
-    character.posture = Posture {
+    let posture = Posture {
         cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
         body_pitch: base.body_pitch,
         elytra_pitch: scene.elytra_pitch.unwrap_or(base.elytra_pitch),
@@ -183,16 +196,49 @@ fn character_and_camera_from_scene(scene: &SceneArgs) -> (Character, Camera) {
         left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
         right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
     };
-    character.cape_pitch = character.posture.cape_pitch;
-    character.position = cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z);
-    character.rotation = cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z);
+    let state = SceneState {
+        skin_type: if scene.slim {
+            SkinType::Slim
+        } else {
+            SkinType::Classic
+        },
+        nametag: scene.nametag.clone(),
+        nametag_see_through: !scene.disable_nametag_see_through,
+        back_equipment_kind: scene
+            .cape
+            .as_ref()
+            .map(|_| BackEquipmentKind::Cape)
+            .or_else(|| scene.elytra.as_ref().map(|_| BackEquipmentKind::Elytra)),
+        posture,
+        position: cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z),
+        rotation: cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z),
+    };
 
     let camera = Camera {
         yaw: scene.cam_yaw,
         pitch: scene.cam_pitch,
         scale: scene.cam_zoom,
     };
-    (character, camera)
+    (state, camera)
+}
+
+fn load_character(
+    renderer: &Renderer,
+    skin_path: &str,
+    scene: &SceneArgs,
+) -> Result<(Character, Camera), EidolonError> {
+    let (state, camera) = scene_state_and_camera_from_scene(scene);
+    let body = renderer.load_body(skin_path, state.skin_type)?;
+    let mut character = Character::from_body(body);
+    state.apply_to(&mut character);
+
+    let atlas_path = scene.cape.as_deref().or(scene.elytra.as_deref());
+    if let (Some(path), Some(kind)) = (atlas_path, state.back_equipment_kind) {
+        let atlas = renderer.load_back_equipment_atlas(path)?;
+        character.equip(BackEquipment::new(atlas, kind));
+    }
+
+    Ok((character, camera))
 }
 
 /// Infer OutputFormat from filename extension. Unknown / missing → Png.
@@ -250,8 +296,8 @@ enum Command {
 struct PreviewApp {
     renderer: Option<Renderer>,
     window: Option<Arc<Window>>,
-    character: Character,
-    skin: Option<eidolon::texture::Texture>,
+    character: Option<Character>,
+    scene_state: SceneState,
     camera: Camera,
     texture_path: String,
     cape_texture_path: Option<String>,
@@ -279,8 +325,14 @@ impl PreviewInteraction {
         }
     }
 
-    fn cursor_moved(&mut self, x: f64, y: f64, character: &mut Character, camera: &mut Camera) {
-        self.base_position.get_or_insert(character.position);
+    fn cursor_moved(
+        &mut self,
+        x: f64,
+        y: f64,
+        position: &mut cgmath::Vector3<f32>,
+        camera: &mut Camera,
+    ) {
+        self.base_position.get_or_insert(*position);
         if let Some((last_x, last_y)) = self.last_cursor {
             let dx = (x - last_x) as f32;
             let dy = (y - last_y) as f32;
@@ -292,18 +344,18 @@ impl PreviewInteraction {
                 camera.yaw -= dx * 0.4;
                 camera.pitch = (camera.pitch + dy * 0.4).clamp(1.0, 179.0);
             }
-            self.update_pan(character, camera);
+            self.update_pan(position, camera);
         }
         self.last_cursor = Some((x, y));
     }
 
-    fn scroll(&mut self, delta: f32, character: &mut Character, camera: &mut Camera) {
-        self.base_position.get_or_insert(character.position);
+    fn scroll(&mut self, delta: f32, position: &mut cgmath::Vector3<f32>, camera: &mut Camera) {
+        self.base_position.get_or_insert(*position);
         camera.scale = (camera.scale * 1.1_f32.powf(delta)).clamp(0.1, 10.0);
-        self.update_pan(character, camera);
+        self.update_pan(position, camera);
     }
 
-    fn update_pan(&self, character: &mut Character, camera: &Camera) {
+    fn update_pan(&self, position: &mut cgmath::Vector3<f32>, camera: &Camera) {
         let Some(base) = self.base_position else {
             return;
         };
@@ -316,7 +368,7 @@ impl PreviewInteraction {
             -yaw.cos() * pitch.sin(),
         );
         let distance_per_pixel = 0.005 / camera.scale;
-        character.position = base + (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
+        *position = base + (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
     }
 }
 
@@ -333,25 +385,26 @@ impl ApplicationHandler for PreviewApp {
 
         let mut renderer =
             Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
-        self.skin = Some(
-            renderer
-                .load_texture(&self.texture_path)
-                .expect("Failed to load skin texture"),
-        );
-        if let Some(path) = &self.cape_texture_path {
-            renderer
-                .load_cape_texture(path)
-                .expect("Failed to load cape texture");
-        }
-        if let Some(path) = &self.elytra_texture_path {
-            renderer
-                .load_elytra_texture(path)
-                .expect("Failed to load elytra texture");
+        let body = renderer
+            .load_body(&self.texture_path, self.scene_state.skin_type)
+            .expect("Failed to load body");
+        let mut character = Character::from_body(body);
+        self.scene_state.apply_to(&mut character);
+        let atlas_path = self
+            .cape_texture_path
+            .as_deref()
+            .or(self.elytra_texture_path.as_deref());
+        if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
+            let atlas = renderer
+                .load_back_equipment_atlas(path)
+                .expect("Failed to load back equipment atlas");
+            character.equip(BackEquipment::new(atlas, kind));
         }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
 
         self.renderer = Some(renderer);
+        self.character = Some(character);
         self.window = Some(window);
     }
 
@@ -378,12 +431,14 @@ impl ApplicationHandler for PreviewApp {
                     .mouse_input(button, state == ElementState::Pressed);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.interaction.cursor_moved(
-                    position.x,
-                    position.y,
-                    &mut self.character,
-                    &mut self.camera,
-                );
+                if let Some(character) = &mut self.character {
+                    self.interaction.cursor_moved(
+                        position.x,
+                        position.y,
+                        &mut character.position,
+                        &mut self.camera,
+                    );
+                }
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }
@@ -393,17 +448,19 @@ impl ApplicationHandler for PreviewApp {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(position) => position.y as f32 / 50.0,
                 };
-                self.interaction
-                    .scroll(lines, &mut self.character, &mut self.camera);
+                if let Some(character) = &mut self.character {
+                    self.interaction
+                        .scroll(lines, &mut character.position, &mut self.camera);
+                }
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }
             }
             WindowEvent::RedrawRequested => {
-                if let (Some(renderer), Some(skin)) = (&self.renderer, &self.skin) {
-                    match renderer.render_frame(&self.character, skin, &self.camera) {
+                if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
+                    match renderer.render_frame(character, &self.camera) {
                         Ok(()) => {}
-                        Err(wgpu::SurfaceError::Lost) => {
+                        Err(EidolonError::Surface(wgpu::SurfaceError::Lost)) => {
                             if let Some(window) = &self.window {
                                 let size = window.inner_size();
                                 if let Some(r) = &mut self.renderer {
@@ -411,7 +468,7 @@ impl ApplicationHandler for PreviewApp {
                                 }
                             }
                         }
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                        Err(EidolonError::Surface(wgpu::SurfaceError::OutOfMemory)) => {
                             event_loop.exit();
                         }
                         Err(e) => log::error!("Render error: {:?}", e),
@@ -434,14 +491,14 @@ mod tests {
     #[test]
     fn preview_left_drag_pans_without_rotating() {
         let mut interaction = PreviewInteraction::default();
-        let mut character = Character::new();
+        let mut position = cgmath::Vector3::new(0.0, 0.0, 0.0);
         let mut camera = Camera::default();
 
         interaction.mouse_input(winit::event::MouseButton::Left, true);
-        interaction.cursor_moved(100.0, 100.0, &mut character, &mut camera);
-        interaction.cursor_moved(120.0, 110.0, &mut character, &mut camera);
+        interaction.cursor_moved(100.0, 100.0, &mut position, &mut camera);
+        interaction.cursor_moved(120.0, 110.0, &mut position, &mut camera);
 
-        assert_ne!(character.position, cgmath::Vector3::new(0.0, 0.0, 0.0));
+        assert_ne!(position, cgmath::Vector3::new(0.0, 0.0, 0.0));
         assert_eq!(camera.yaw, 180.0);
         assert_eq!(camera.pitch, 90.0);
     }
@@ -449,67 +506,67 @@ mod tests {
     #[test]
     fn preview_right_drag_rotates_in_pointer_direction_and_clamps_pitch() {
         let mut interaction = PreviewInteraction::default();
-        let mut character = Character::new();
+        let mut position = cgmath::Vector3::new(0.0, 0.0, 0.0);
         let mut camera = Camera::default();
 
         interaction.mouse_input(winit::event::MouseButton::Right, true);
-        interaction.cursor_moved(100.0, 100.0, &mut character, &mut camera);
-        interaction.cursor_moved(120.0, -1000.0, &mut character, &mut camera);
+        interaction.cursor_moved(100.0, 100.0, &mut position, &mut camera);
+        interaction.cursor_moved(120.0, -1000.0, &mut position, &mut camera);
 
         assert_eq!(camera.yaw, 172.0);
         assert_eq!(camera.pitch, 1.0);
-        assert_eq!(character.position, cgmath::Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(position, cgmath::Vector3::new(0.0, 0.0, 0.0));
     }
 
     #[test]
     fn preview_scroll_zooms_with_safe_limits() {
         let mut interaction = PreviewInteraction::default();
-        let mut character = Character::new();
+        let mut position = cgmath::Vector3::new(0.0, 0.0, 0.0);
         let mut camera = Camera::default();
 
-        interaction.scroll(1.0, &mut character, &mut camera);
+        interaction.scroll(1.0, &mut position, &mut camera);
         assert!(camera.scale > 1.0);
 
-        interaction.scroll(-1000.0, &mut character, &mut camera);
+        interaction.scroll(-1000.0, &mut position, &mut camera);
         assert_eq!(camera.scale, 0.1);
 
-        interaction.scroll(1000.0, &mut character, &mut camera);
+        interaction.scroll(1000.0, &mut position, &mut camera);
         assert_eq!(camera.scale, 10.0);
     }
 
     #[test]
     fn preview_pan_stays_in_view_plane_after_rotation() {
         let mut interaction = PreviewInteraction::default();
-        let mut character = Character::new();
+        let mut position = cgmath::Vector3::new(0.0, 0.0, 0.0);
         let mut camera = Camera::default();
 
         interaction.mouse_input(MouseButton::Left, true);
-        interaction.cursor_moved(0.0, 0.0, &mut character, &mut camera);
-        interaction.cursor_moved(20.0, 10.0, &mut character, &mut camera);
+        interaction.cursor_moved(0.0, 0.0, &mut position, &mut camera);
+        interaction.cursor_moved(20.0, 10.0, &mut position, &mut camera);
         interaction.mouse_input(MouseButton::Left, false);
-        let before = character.position;
+        let before = position;
 
         interaction.mouse_input(MouseButton::Right, true);
-        interaction.cursor_moved(220.0, -40.0, &mut character, &mut camera);
+        interaction.cursor_moved(220.0, -40.0, &mut position, &mut camera);
 
-        assert_ne!(character.position, before);
-        assert_ne!(character.position.z, 0.0);
+        assert_ne!(position, before);
+        assert_ne!(position.z, 0.0);
     }
 
     #[test]
     fn preview_pan_offset_scales_with_zoom() {
         let mut interaction = PreviewInteraction::default();
-        let mut character = Character::new();
+        let mut position = cgmath::Vector3::new(0.0, 0.0, 0.0);
         let mut camera = Camera::default();
 
         interaction.mouse_input(MouseButton::Left, true);
-        interaction.cursor_moved(0.0, 0.0, &mut character, &mut camera);
-        interaction.cursor_moved(20.0, 0.0, &mut character, &mut camera);
-        let before = character.position.x.abs();
+        interaction.cursor_moved(0.0, 0.0, &mut position, &mut camera);
+        interaction.cursor_moved(20.0, 0.0, &mut position, &mut camera);
+        let before = position.x.abs();
 
-        interaction.scroll(1.0, &mut character, &mut camera);
+        interaction.scroll(1.0, &mut position, &mut camera);
 
-        assert!(character.position.x.abs() < before);
+        assert!(position.x.abs() < before);
     }
 
     // ── parse_positive_scale ──
@@ -616,7 +673,7 @@ mod tests {
         assert_eq!(posture.head_pitch, 45.0);
     }
 
-    // ── character_and_camera_from_scene ──
+    // ── scene_state_and_camera_from_scene ──
 
     fn default_scene() -> SceneArgs {
         SceneArgs {
@@ -651,10 +708,10 @@ mod tests {
 
     #[test]
     fn scene_defaults_classic_stand() {
-        let (c, cam) = character_and_camera_from_scene(&default_scene());
-        assert_eq!(c.skin_type, SkinType::Classic);
-        assert_eq!(c.posture.head_yaw, 0.0);
-        assert_eq!(c.posture.head_pitch, 0.0);
+        let (state, cam) = scene_state_and_camera_from_scene(&default_scene());
+        assert_eq!(state.skin_type, SkinType::Classic);
+        assert_eq!(state.posture.head_yaw, 0.0);
+        assert_eq!(state.posture.head_pitch, 0.0);
         assert_eq!(cam.yaw, 180.0);
         assert_eq!(cam.pitch, 90.0);
         assert_eq!(cam.scale, 1.0);
@@ -664,44 +721,44 @@ mod tests {
     fn scene_slim_skin_type() {
         let mut scene = default_scene();
         scene.slim = true;
-        let (c, _) = character_and_camera_from_scene(&scene);
-        assert_eq!(c.skin_type, SkinType::Slim);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.skin_type, SkinType::Slim);
     }
 
     #[test]
     fn scene_nametag_is_passed_to_character() {
         let mut scene = default_scene();
         scene.nametag = Some("Steve".to_owned());
-        let (character, _) = character_and_camera_from_scene(&scene);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
 
-        assert_eq!(character.nametag.as_deref(), Some("Steve"));
+        assert_eq!(state.nametag.as_deref(), Some("Steve"));
     }
 
     #[test]
     fn scene_can_disable_nametag_see_through() {
-        let default_character = character_and_camera_from_scene(&default_scene()).0;
-        assert!(default_character.nametag_see_through);
+        let default_state = scene_state_and_camera_from_scene(&default_scene()).0;
+        assert!(default_state.nametag_see_through);
 
         let mut scene = default_scene();
         scene.disable_nametag_see_through = true;
-        let character = character_and_camera_from_scene(&scene).0;
-        assert!(!character.nametag_see_through);
+        let state = scene_state_and_camera_from_scene(&scene).0;
+        assert!(!state.nametag_see_through);
     }
 
     #[test]
     fn scene_cape_path_enables_cape_rendering() {
         let mut scene = default_scene();
         scene.cape = Some("cape.png".to_owned());
-        let (character, _) = character_and_camera_from_scene(&scene);
-        assert!(character.cape);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.back_equipment_kind, Some(BackEquipmentKind::Cape));
     }
 
     #[test]
     fn scene_elytra_path_enables_elytra_rendering() {
         let mut scene = default_scene();
         scene.elytra = Some("elytra.png".to_owned());
-        let (character, _) = character_and_camera_from_scene(&scene);
-        assert!(character.elytra);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.back_equipment_kind, Some(BackEquipmentKind::Elytra));
     }
 
     #[test]
@@ -710,7 +767,7 @@ mod tests {
         scene.cam_yaw = 45.0;
         scene.cam_pitch = 30.0;
         scene.cam_zoom = 2.5;
-        let (_, cam) = character_and_camera_from_scene(&scene);
+        let (_, cam) = scene_state_and_camera_from_scene(&scene);
         assert_eq!(cam.yaw, 45.0);
         assert_eq!(cam.pitch, 30.0);
         assert_eq!(cam.scale, 2.5);
@@ -720,24 +777,24 @@ mod tests {
     fn scene_posture_wave_overrides_base() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;
-        let (c, _) = character_and_camera_from_scene(&scene);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
         assert!(
-            c.posture.left_arm_pitch > 0.0,
+            state.posture.left_arm_pitch > 0.0,
             "Wave posture: left arm raised"
         );
         assert_eq!(
-            c.posture.right_arm_pitch, 0.0,
+            state.posture.right_arm_pitch, 0.0,
             "Wave posture: right arm still"
         );
-        assert_eq!(c.cape_pitch, 10.8);
+        assert_eq!(state.posture.cape_pitch, 10.8);
     }
 
     #[test]
     fn scene_running_uses_running_cape_pitch() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Running;
-        let (character, _) = character_and_camera_from_scene(&scene);
-        assert_eq!(character.cape_pitch, 54.0);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.posture.cape_pitch, 54.0);
     }
 
     #[test]
@@ -745,8 +802,8 @@ mod tests {
         let mut scene = default_scene();
         scene.posture = PostureCli::Running;
         scene.cape_pitch = Some(25.0);
-        let (character, _) = character_and_camera_from_scene(&scene);
-        assert_eq!(character.cape_pitch, 25.0);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.posture.cape_pitch, 25.0);
     }
 
     #[test]
@@ -755,10 +812,10 @@ mod tests {
         scene.posture = PostureCli::Stand;
         scene.head_yaw = Some(42.0);
         scene.left_leg_pitch = Some(-15.0);
-        let (c, _) = character_and_camera_from_scene(&scene);
-        assert_eq!(c.posture.head_yaw, 42.0);
-        assert_eq!(c.posture.left_leg_pitch, -15.0);
-        assert_eq!(c.posture.head_pitch, 0.0); // not overridden
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.posture.head_yaw, 42.0);
+        assert_eq!(state.posture.left_leg_pitch, -15.0);
+        assert_eq!(state.posture.head_pitch, 0.0); // not overridden
     }
 
     #[test]
@@ -770,13 +827,13 @@ mod tests {
         scene.rot_x = 10.0;
         scene.rot_y = 20.0;
         scene.rot_z = 30.0;
-        let (c, _) = character_and_camera_from_scene(&scene);
-        assert_eq!(c.position.x, 1.0);
-        assert_eq!(c.position.y, 2.0);
-        assert_eq!(c.position.z, 3.0);
-        assert_eq!(c.rotation.x, 10.0);
-        assert_eq!(c.rotation.y, 20.0);
-        assert_eq!(c.rotation.z, 30.0);
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+        assert_eq!(state.position.x, 1.0);
+        assert_eq!(state.position.y, 2.0);
+        assert_eq!(state.position.z, 3.0);
+        assert_eq!(state.rotation.x, 10.0);
+        assert_eq!(state.rotation.y, 20.0);
+        assert_eq!(state.rotation.z, 30.0);
     }
 
     // ── CLI arg parsing ──
@@ -929,9 +986,9 @@ mod tests {
             assert_eq!(scene.elytra_pitch, Some(18.0));
             assert_eq!(scene.elytra_spread, Some(42.0));
 
-            let (character, _) = character_and_camera_from_scene(&scene);
-            assert_eq!(character.posture.elytra_pitch, 18.0);
-            assert_eq!(character.posture.elytra_roll, 42.0);
+            let (state, _) = scene_state_and_camera_from_scene(&scene);
+            assert_eq!(state.posture.elytra_pitch, 18.0);
+            assert_eq!(state.posture.elytra_roll, 42.0);
         }
     }
 
@@ -1145,31 +1202,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             info!("Creating renderer...");
-            let mut renderer = Renderer::new()?;
+            let renderer = Renderer::new()?;
             info!("Renderer ready");
 
-            let (character, camera) = character_and_camera_from_scene(&scene);
-
-            info!("Loading skin: {}", skin);
-            let skin_texture = renderer.load_texture(&skin)?;
-            info!("Skin loaded");
-
-            if let Some(cape_path) = &scene.cape {
-                info!("Loading cape: {}", cape_path);
-                renderer.load_cape_texture(cape_path)?;
-                info!("Cape loaded");
-            }
-            if let Some(elytra_path) = &scene.elytra {
-                info!("Loading elytra: {}", elytra_path);
-                renderer.load_elytra_texture(elytra_path)?;
-                info!("Elytra loaded");
-            }
+            info!("Loading character resources");
+            let (character, camera) = load_character(&renderer, &skin, &scene)?;
+            info!("Character resources loaded");
 
             info!("Rendering...");
             let output_format = format_from_filename(&output);
             renderer.render_to_image(
                 &character,
-                &skin_texture,
                 &camera,
                 &output,
                 (viewport.width, viewport.height),
@@ -1184,14 +1227,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             viewport,
             scene,
         } => {
-            let (character, camera) = character_and_camera_from_scene(&scene);
+            let (scene_state, camera) = scene_state_and_camera_from_scene(&scene);
 
             let event_loop = EventLoop::new()?;
             let mut app = PreviewApp {
                 renderer: None,
                 window: None,
-                character,
-                skin: None,
+                character: None,
+                scene_state,
                 camera,
                 texture_path: skin,
                 cape_texture_path: scene.cape,

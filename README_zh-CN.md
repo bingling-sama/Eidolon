@@ -72,9 +72,8 @@ use eidolon::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
 
-    let mut character = Character::new();
-    character.skin_type = SkinType::Classic;
-    character.skin = Some(renderer.load_texture("resources/bingling_sama.png")?);
+    let body = renderer.load_body("resources/bingling_sama.png", SkinType::Classic)?;
+    let character = Character::from_body(body);
 
     let camera = Camera::new();
     renderer.render_to_image(

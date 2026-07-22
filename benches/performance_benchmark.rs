@@ -1,5 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use eidolon::{camera::Camera, character::Character, renderer::Renderer, OutputFormat};
+use eidolon::{
+    camera::Camera,
+    character::{Character, SkinType},
+    renderer::Renderer,
+    OutputFormat,
+};
 use std::fs;
 
 fn performance_benchmark(c: &mut Criterion) {
@@ -7,10 +12,10 @@ fn performance_benchmark(c: &mut Criterion) {
     fs::create_dir_all(output_dir).expect("Failed to create output directory");
 
     let renderer = Renderer::new().expect("Failed to create renderer");
-    let character = Character::new();
-    let skin = renderer
-        .load_texture("resources/bingling_sama.png")
-        .expect("Failed to load skin texture");
+    let body = renderer
+        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .expect("Failed to load body");
+    let character = Character::from_body(body);
 
     let mut camera = Camera {
         yaw: 180.0,
@@ -31,7 +36,6 @@ fn performance_benchmark(c: &mut Criterion) {
                 renderer
                     .render_to_image(
                         &character,
-                        &skin,
                         &camera,
                         &filename,
                         (800, 600),

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use eidolon::{
+    back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, Posture, SkinType},
     renderer::{OutputFormat, Renderer},
@@ -37,17 +38,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&out_dir)?;
 
     // ── one-time setup: create renderer + load skin ──────────────────
-    let mut renderer = Renderer::new()?;
-    let skin = renderer.load_texture("resources/bingling_sama.png")?;
-    renderer.load_cape_texture("resources/Turtle_Cape.png")?;
-    renderer.load_elytra_texture("resources/Turtle_Cape.png")?;
+    let renderer = Renderer::new()?;
+    let body = renderer.load_body("resources/bingling_sama.png", SkinType::Classic)?;
+    let back_equipment_atlas = renderer.load_back_equipment_atlas("resources/Turtle_Cape.png")?;
 
     // ── helper: render + save ────────────────────────────────────────
     let save = |name: &str, character: &Character, camera: &Camera, format: OutputFormat| {
         let path = out_dir.join(name);
         renderer.render_to_image(
             character,
-            &skin,
             camera,
             &path.display().to_string(),
             (800, 600),
@@ -62,8 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 1. classic + stand (PNG) ─────────────────────────────────────
     println!("classic-stand");
-    let mut character = Character::new();
-    character.skin_type = SkinType::Slim;
+    let mut character = Character::from_body(body);
     character.posture = DefaultPostures::STAND;
     save(
         "classic-stand.png",
@@ -84,7 +82,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 3. slim + walking, angled camera ─────────────────────────────
     println!("slim-walking");
-    character.skin_type = SkinType::Slim;
+    character
+        .body_mut()
+        .expect("character has a body")
+        .set_skin_type(SkinType::Slim);
     character.posture = DefaultPostures::WALKING;
     let cam = Camera {
         yaw: 200.0,
@@ -96,7 +97,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 4. slim + running, zoomed out ────────────────────────────────
     println!("slim-running");
     character.posture = DefaultPostures::RUNNING;
-    character.cape_pitch = character.posture.cape_pitch;
     let cam = Camera {
         yaw: 160.0,
         pitch: 85.0,
@@ -106,8 +106,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 5. slim + running + cape, rear camera ────────────────────────
     println!("slim-running-cape");
-    character.cape = true;
-    character.cape_pitch = character.posture.cape_pitch;
+    character.equip(BackEquipment::new(
+        back_equipment_atlas,
+        BackEquipmentKind::Cape,
+    ));
     let cam = Camera {
         yaw: 0.0,
         pitch: 90.0,
@@ -132,7 +134,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         left_leg_pitch: 20.0,
         right_leg_pitch: -20.0,
     };
-    character.cape_pitch = character.posture.cape_pitch;
     let cam = Camera {
         yaw: 180.0,
         pitch: 90.0,
@@ -142,8 +143,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // -- 7. elytra, rear camera ---------------------------------------
     println!("slim-elytra");
-    character.cape = false;
-    character.elytra = true;
+    character
+        .back_equipment_mut()
+        .expect("character has back equipment")
+        .set_kind(BackEquipmentKind::Elytra);
     character.posture = DefaultPostures::FLYING;
     let rear_cam = Camera { yaw: 0.0, ..cam };
     save("slim-elytra.png", &character, &rear_cam, OutputFormat::Png)?;

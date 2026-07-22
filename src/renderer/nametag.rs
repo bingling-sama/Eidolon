@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn nametag_billboard_anchor_follows_character_position() {
-        let mut character = Character::new();
+        let mut character = Character::empty_for_test();
         character.position = Vector3::new(1.0, 2.0, 3.0);
         let uniform = compute_nametag_uniform(&character, &Camera::default(), 800, 600);
         let model: Matrix4<f32> = uniform.model.into();
@@ -328,7 +328,7 @@ mod tests {
             crate::character::DefaultPostures::STAND,
             crate::character::DefaultPostures::FLYING,
         ] {
-            let mut character = Character::new();
+            let mut character = Character::empty_for_test();
             character.posture = posture;
             character.position = Vector3::new(1.0, 2.0, 3.0);
             character.rotation = Vector3::new(10.0, 25.0, 5.0);

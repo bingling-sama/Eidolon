@@ -8,10 +8,12 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 - `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
-- `src/cape.rs` 和 `src/elytra.rs` 使用 skinview3d 图集映射构建背部装备网格。
-- `src/character.rs` 定义皮肤几何类型、姿势预设和角色变换。
+- `src/body.rs` 定义持有 Skin 与 classic/slim 几何选择的 `Body`。
+- `src/back_equipment.rs` 定义披风与鞘翅共享的后背装备图集及呈现形式。
+- 私有的 `src/cape.rs` 和 `src/elytra.rs` 使用 skinview3d 图集映射构建 Renderer 持有的网格。
+- `src/character.rs` 定义资源所有权、姿势预设和角色变换；Character 始终至少包含 Body 或后背装备。
 - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型。
-- `src/texture.rs` 加载 PNG 皮肤，并在需要时自动展开旧版单层皮肤。
+- 私有的 `src/texture.rs` 上传 PNG 图集，并在需要时自动展开旧版单层 Skin。
 - `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、输出编码、读回、管线和 uniform 逻辑。
 - `src/utils/converter.rs` 实现单层皮肤图集到双层图集的转换。
 - `benches/performance_benchmark.rs` 使用 Criterion 批量渲染图片做基准测试。
@@ -21,10 +23,10 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 执行 `cargo run -- render ...` 时，流程如下：
 
 1. `src/main.rs` 将命令行参数解析为 `SceneArgs`。
-2. `character_and_camera_from_scene` 构造 `Character` 和 `Camera`。
+2. `scene_state_and_camera_from_scene` 解析与资源无关的场景状态和 `Camera`。
 3. `Renderer::new` 创建无窗口 `wgpu` device、queue、渲染管线，并加载两套 OBJ 模型。
-4. `Renderer::load_texture` 读取 PNG 皮肤。如果图片满足 `width == height * 2`，会先转换为
-   正方形双层图集再上传到 GPU。
+4. `Renderer::load_body` 读取 PNG Skin，必要时转换旧版图集，上传后返回绑定当前 Renderer
+   上下文的 `Body`。CLI 再构造 Character，并可选加载共享后背装备图集作为披风或鞘翅。
 5. `Renderer::render_to_image` 渲染到离屏 `Rgba8Unorm` 纹理，将带 padding 的 GPU 行数据复制
    到 CPU buffer，去除 padding 后保存为 PNG 或 WebP。
 
@@ -62,8 +64,10 @@ billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AAB
 
 ## 当前限制
 
-- 皮肤纹理仅支持从 PNG 文件加载。
-- 披风与鞘翅使用 2:1 披风图集（64×32 或等比例高清图集）；启用前需分别加载对应纹理，
-  场景中应只选择一种背部装备。
+- Skin 与后背装备图集可从 PNG 路径或 PNG 字节加载。
+- 披风与鞘翅共享一个 2:1 后背装备图集（64×32 或等比例高清图集），由
+  `BackEquipmentKind` 选择呈现形式；两者都可以脱离 Body 独立渲染。
+- Character 的 GPU 资源绑定创建它们的 Renderer。克隆通过 `Arc` 共享不可变 GPU 资源；
+  另一个 Renderer 必须重新加载资源。
 - nametag 仅支持单行，最多渲染 64 个 Unicode 字符。
 - 渲染器需要可用的 `wgpu` 后端。无窗口渲染同样需要创建 GPU adapter。
