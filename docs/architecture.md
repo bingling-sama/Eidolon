@@ -55,10 +55,12 @@ normal depth-tested pass; the collision box is 1.8 world units tall and the defa
 For `preview`, the same scene data and pipeline are used, but `Renderer::new_windowed` creates a
 window surface and `render_frame` presents each frame to the swapchain.
 
-For `animate`, the CLI samples one natural `AnimationPreset` cycle uniformly, applies explicit
-Posture overrides, renders each frame, and immediately submits its RGBA buffer to the selected
-encoder. GIF delays and WebP timestamps use cumulative rounding so fractional frame durations do
-not drift. The Renderer remains responsible only for individual frames.
+The CLI uses `--posture` as a shared action selector. Static rendering samples a representative
+frame from its matching `AnimationPreset`; preview starts paused on the same frame and continues
+that preset when playback begins. For `animate`, the CLI samples the selected preset's natural
+cycle uniformly, applies explicit Posture overrides, renders each frame, and immediately submits
+its RGBA buffer to the selected encoder. GIF delays and WebP timestamps use cumulative rounding so
+fractional frame durations do not drift. The Renderer remains responsible only for individual frames.
 
 ## Model And Skin Assumptions
 

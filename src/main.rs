@@ -8,7 +8,7 @@ use eidolon::{
     animation::AnimationPreset,
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
-    character::{Character, DefaultPostures, Posture, SkinType},
+    character::{Character, Posture, SkinType},
     converter,
     error::EidolonError,
     renderer::{OutputFormat, Renderer},
@@ -39,7 +39,7 @@ struct Args {
     command: Command,
 }
 
-#[derive(Clone, Copy, ValueEnum, Debug)]
+#[derive(Clone, Copy, ValueEnum, Debug, PartialEq, Eq)]
 enum PostureCli {
     Stand,
     Wave,
@@ -48,36 +48,44 @@ enum PostureCli {
     Flying,
 }
 
-#[derive(Clone, Copy, ValueEnum, Debug, PartialEq, Eq)]
-enum AnimationCli {
-    Idle,
-    Walk,
-    Run,
-    Wave,
-    Fly,
+impl PostureCli {
+    #[cfg(test)]
+    const ALL: [Self; 5] = [
+        Self::Stand,
+        Self::Wave,
+        Self::Walking,
+        Self::Running,
+        Self::Flying,
+    ];
+
+    const fn animation_preset(self) -> AnimationPreset {
+        match self {
+            PostureCli::Stand => AnimationPreset::Idle,
+            PostureCli::Wave => AnimationPreset::Wave,
+            PostureCli::Walking => AnimationPreset::Walk,
+            PostureCli::Running => AnimationPreset::Run,
+            PostureCli::Flying => AnimationPreset::Fly,
+        }
+    }
+
+    /// Phase used for static rendering and the initial paused preview.
+    fn sample_time(self) -> std::time::Duration {
+        match self {
+            Self::Walking | Self::Running => self.animation_preset().cycle_duration() / 4,
+            Self::Stand | Self::Wave | Self::Flying => std::time::Duration::ZERO,
+        }
+    }
 }
 
-impl From<AnimationCli> for AnimationPreset {
-    fn from(value: AnimationCli) -> Self {
-        match value {
-            AnimationCli::Idle => Self::Idle,
-            AnimationCli::Walk => Self::Walk,
-            AnimationCli::Run => Self::Run,
-            AnimationCli::Wave => Self::Wave,
-            AnimationCli::Fly => Self::Fly,
-        }
+impl From<PostureCli> for AnimationPreset {
+    fn from(value: PostureCli) -> Self {
+        value.animation_preset()
     }
 }
 
 impl From<PostureCli> for Posture {
     fn from(value: PostureCli) -> Self {
-        match value {
-            PostureCli::Stand => DefaultPostures::STAND,
-            PostureCli::Wave => DefaultPostures::WAVE,
-            PostureCli::Walking => DefaultPostures::WALKING,
-            PostureCli::Running => DefaultPostures::RUNNING,
-            PostureCli::Flying => DefaultPostures::FLYING,
-        }
+        value.animation_preset().sample(value.sample_time())
     }
 }
 
@@ -182,7 +190,7 @@ struct SceneArgs {
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     cam_zoom: f32,
 
-    /// Posture preset: stand, wave, walking, running, flying.
+    /// Action posture: stand, wave, walking, running, flying.
     #[arg(long, value_enum, default_value_t = PostureCli::Stand)]
     posture: PostureCli,
 
@@ -377,7 +385,7 @@ enum Command {
         #[command(flatten)]
         scene: SceneArgs,
     },
-    /// Render one animation cycle to GIF or Animated WebP.
+    /// Render the selected posture's animation cycle to GIF or Animated WebP.
     Animate {
         /// Path to the skin PNG file.
         skin: String,
@@ -385,10 +393,6 @@ enum Command {
         /// Output animation path (.gif or .webp).
         #[arg(value_parser = parse_animation_output)]
         output: PathBuf,
-
-        /// Procedural animation preset.
-        #[arg(long, value_enum, conflicts_with = "posture")]
-        animation: AnimationCli,
 
         /// Frames per second.
         #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..=60))]
@@ -418,10 +422,6 @@ enum Command {
 
         #[command(flatten)]
         scene: SceneArgs,
-
-        /// Start with a procedural animation instead of a static posture.
-        #[arg(long, value_enum, conflicts_with = "posture")]
-        animation: Option<AnimationCli>,
     },
     /// Convert a legacy single-layer skin atlas to a square double-layer atlas.
     Convert {
@@ -469,6 +469,12 @@ impl PreviewPlayback {
             active: playing,
             last_tick: None,
         }
+    }
+
+    fn from_posture(posture: PostureCli) -> Self {
+        let mut playback = Self::new(posture.animation_preset(), false);
+        playback.elapsed = posture.sample_time();
+        playback
     }
 
     fn tick(&mut self, now: std::time::Instant) {
@@ -923,10 +929,14 @@ mod tests {
     // ── PostureCli → Posture ──
 
     #[test]
-    fn posture_cli_to_posture() {
-        let p: Posture = PostureCli::Stand.into();
-        assert_eq!(p.head_yaw, 0.0);
-        assert_eq!(p.left_leg_pitch, 0.0);
+    fn posture_cli_samples_a_representative_animation_frame() {
+        for posture in PostureCli::ALL {
+            let sampled: Posture = posture.into();
+            assert_eq!(
+                sampled,
+                posture.animation_preset().sample(posture.sample_time())
+            );
+        }
     }
 
     #[test]
@@ -956,11 +966,12 @@ mod tests {
     fn posture_cli_flying_spreads_elytra() {
         let posture: Posture = PostureCli::Flying.into();
 
-        assert_eq!(posture.elytra_pitch, 20.0);
-        assert_eq!(posture.elytra_yaw, 0.0);
-        assert_eq!(posture.elytra_roll, 60.0);
+        assert_eq!(
+            posture,
+            AnimationPreset::Fly.sample(std::time::Duration::ZERO)
+        );
         assert_eq!(posture.body_pitch, -90.0);
-        assert_eq!(posture.head_pitch, 45.0);
+        assert!(posture.elytra_roll > 45.0);
     }
 
     // ── scene_state_and_camera_from_scene ──
@@ -1076,15 +1087,15 @@ mod tests {
             state.posture.right_arm_pitch, 0.0,
             "Wave posture: right arm still"
         );
-        assert_eq!(state.posture.cape_pitch, 10.8);
+        assert_eq!(state.posture, PostureCli::Wave.into());
     }
 
     #[test]
-    fn scene_running_uses_running_cape_pitch() {
+    fn scene_running_uses_representative_run_frame() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Running;
         let (state, _) = scene_state_and_camera_from_scene(&scene);
-        assert_eq!(state.posture.cape_pitch, 54.0);
+        assert_eq!(state.posture, PostureCli::Running.into());
     }
 
     #[test]
@@ -1184,29 +1195,21 @@ mod tests {
 
     #[test]
     fn cli_animate_minimal_uses_documented_defaults() {
-        let args = Args::try_parse_from([
-            "eidolon",
-            "animate",
-            "skin.png",
-            "out.gif",
-            "--animation",
-            "idle",
-        ])
-        .expect("minimal animate parse");
+        let args = Args::try_parse_from(["eidolon", "animate", "skin.png", "out.gif"])
+            .expect("minimal animate parse");
         match args.command {
             Command::Animate {
                 skin,
                 output,
-                animation,
                 fps,
                 speed,
                 loop_count,
                 viewport,
-                ..
+                scene,
             } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(output, PathBuf::from("out.gif"));
-                assert_eq!(animation, AnimationCli::Idle);
+                assert_eq!(scene.posture, PostureCli::Stand);
                 assert_eq!(fps, 30);
                 assert_eq!(speed, 1.0);
                 assert_eq!(loop_count, 0);
@@ -1218,36 +1221,25 @@ mod tests {
     }
 
     #[test]
-    fn cli_animate_rejects_posture_and_animation_together() {
-        assert!(Args::try_parse_from([
-            "eidolon",
-            "animate",
-            "skin.png",
-            "out.webp",
-            "--posture",
-            "wave",
-            "--animation",
-            "run",
-        ])
-        .is_err());
+    fn cli_rejects_the_removed_animation_option() {
+        for command in ["animate", "preview"] {
+            let mut args = vec!["eidolon", command, "skin.png"];
+            if command == "animate" {
+                args.push("out.webp");
+            }
+            args.extend(["--animation", "run"]);
+            assert!(Args::try_parse_from(args).is_err());
+        }
     }
 
     #[test]
     fn cli_animate_accepts_output_in_parent_directory() {
-        assert!(Args::try_parse_from([
-            "eidolon",
-            "animate",
-            "skin.png",
-            "../out.gif",
-            "--animation",
-            "idle",
-        ])
-        .is_ok());
+        assert!(Args::try_parse_from(["eidolon", "animate", "skin.png", "../out.gif",]).is_ok());
     }
 
     #[test]
-    fn cli_animate_rejects_static_posture_even_with_default_animation() {
-        assert!(Args::try_parse_from([
+    fn cli_animate_selects_its_action_with_posture() {
+        let args = Args::try_parse_from([
             "eidolon",
             "animate",
             "skin.png",
@@ -1255,7 +1247,11 @@ mod tests {
             "--posture",
             "wave",
         ])
-        .is_err());
+        .expect("posture should select the exported action");
+        let Command::Animate { scene, .. } = args.command else {
+            panic!("Expected Animate");
+        };
+        assert_eq!(scene.posture.animation_preset(), AnimationPreset::Wave);
     }
 
     #[test]
@@ -1265,8 +1261,8 @@ mod tests {
             "animate",
             "skin.png",
             "out.gif",
-            "--animation",
-            "walk",
+            "--posture",
+            "walking",
         ];
         for invalid_tail in [
             ["--fps", "0"],
@@ -1281,22 +1277,14 @@ mod tests {
             assert!(Args::try_parse_from(base.into_iter().chain(invalid_tail)).is_err());
         }
 
-        assert!(Args::try_parse_from([
-            "eidolon",
-            "animate",
-            "skin.png",
-            "out.png",
-            "--animation",
-            "idle",
-        ])
-        .is_err());
+        assert!(Args::try_parse_from(["eidolon", "animate", "skin.png", "out.png",]).is_err());
         assert!(Args::try_parse_from([
             "eidolon",
             "animate",
             "skin.png",
             "out.webp",
-            "--animation",
-            "fly",
+            "--posture",
+            "flying",
             "--fps",
             "60",
             "--speed",
@@ -1576,26 +1564,45 @@ mod tests {
     }
 
     #[test]
-    fn cli_preview_accepts_animation_and_rejects_a_static_posture_with_it() {
-        let args =
-            Args::try_parse_from(["eidolon", "preview", "skin.png", "--animation", "run"]).unwrap();
-        match args.command {
-            Command::Preview { animation, .. } => {
-                assert_eq!(animation, Some(AnimationCli::Run));
-            }
-            _ => panic!("Expected Preview"),
-        }
+    fn preview_posture_selects_the_animation_used_when_playback_starts() {
+        let args = Args::try_parse_from(["eidolon", "preview", "skin.png", "--posture", "flying"])
+            .expect("flying preview should parse");
 
-        assert!(Args::try_parse_from([
-            "eidolon",
-            "preview",
-            "skin.png",
-            "--animation",
-            "walk",
-            "--posture",
-            "wave",
-        ])
-        .is_err());
+        let Command::Preview { scene, .. } = args.command else {
+            panic!("Expected Preview");
+        };
+        let static_posture: Posture = scene.posture.into();
+        let mut playback = PreviewPlayback::from_posture(scene.posture);
+
+        assert_eq!(scene.posture, PostureCli::Flying);
+        assert_eq!(playback.preset, AnimationPreset::Fly);
+        assert!(!playback.playing);
+        assert_eq!(playback.sample(), None);
+
+        playback.toggle(std::time::Instant::now());
+        assert_eq!(playback.sample(), Some(static_posture));
+    }
+
+    #[test]
+    fn preview_starts_every_animation_from_its_static_representative_frame() {
+        for posture in PostureCli::ALL {
+            let static_posture: Posture = posture.into();
+            let mut playback = PreviewPlayback::from_posture(posture);
+
+            playback.toggle(std::time::Instant::now());
+
+            assert_eq!(playback.sample(), Some(static_posture), "{posture:?}");
+        }
+    }
+
+    #[test]
+    fn cli_preview_selects_its_action_with_posture() {
+        let args = Args::try_parse_from(["eidolon", "preview", "skin.png", "--posture", "running"])
+            .expect("posture should select the preview action");
+        let Command::Preview { scene, .. } = args.command else {
+            panic!("Expected Preview");
+        };
+        assert_eq!(scene.posture.animation_preset(), AnimationPreset::Run);
     }
 
     #[test]
@@ -1696,13 +1703,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Animate {
             skin,
             output,
-            animation,
             fps,
             speed,
             loop_count,
             viewport,
             scene,
         } => {
+            let preset = scene.posture.animation_preset();
             let renderer = Renderer::new()?;
             let (mut character, camera) = load_character(&renderer, &skin, &scene)?;
             export_animation(
@@ -1711,7 +1718,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &camera,
                 &output,
                 AnimationExportOptions {
-                    preset: animation.into(),
+                    preset,
                     fps,
                     speed,
                     loop_count,
@@ -1726,10 +1733,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             skin,
             viewport,
             scene,
-            animation,
         } => {
             let (scene_state, camera) = scene_state_and_camera_from_scene(&scene);
             let posture_overrides = PostureOverrides::from(&scene);
+            let playback = PreviewPlayback::from_posture(scene.posture);
 
             let event_loop = EventLoop::new()?;
             let mut app = PreviewApp {
@@ -1743,10 +1750,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 elytra_atlas_path: scene.elytra,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
                 interaction: PreviewInteraction::default(),
-                playback: PreviewPlayback::new(
-                    animation.map(Into::into).unwrap_or(AnimationPreset::Idle),
-                    animation.is_some(),
-                ),
+                playback,
                 posture_overrides,
             };
             event_loop.run_app(&mut app)?;

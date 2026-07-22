@@ -41,9 +41,10 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 `preview` 使用同一套场景数据和渲染管线，但 `Renderer::new_windowed` 会创建窗口 surface，
 `render_frame` 每帧提交到 swapchain。
 
-`animate` 会在一个自然周期内均匀采样 `AnimationPreset`，应用显式 Posture 覆盖，逐帧渲染并
-立即将 RGBA buffer 交给所选编码器。GIF 延迟和 WebP 时间戳使用累计取整以避免漂移；
-Renderer 仍然只负责单帧渲染。
+CLI 使用 `--posture` 作为统一动作选择器。静态渲染采用对应 `AnimationPreset` 的代表帧；
+preview 初始暂停在同一帧，开始播放后继续该 preset。`animate` 会在所选 preset 的自然周期内
+均匀采样，应用显式 Posture 覆盖，逐帧渲染并立即将 RGBA buffer 交给编码器。GIF 延迟和
+WebP 时间戳使用累计取整以避免漂移；Renderer 仍然只负责单帧渲染。
 
 ## 模型与皮肤约定
 
