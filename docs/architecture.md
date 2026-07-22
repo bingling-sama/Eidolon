@@ -44,6 +44,12 @@ For `cargo run -- render skin.png`, the flow is:
    more RGBA frames, and writes PNG, WebP, GIF, or Animated WebP. Extension normalization preserves
    the parent directory and returns the final written path.
 
+For each offscreen frame, Renderer creates the render target and submits the render pass. The private
+`renderer::readback` module then owns a second ordered submission that copies the completed texture
+into a mapped buffer, removes row padding, and returns RGBA pixels. Native mapping waits
+synchronously for `Renderer::render`; wasm mapping waits asynchronously for `Renderer::render_async`.
+Both adapters share the same layout validation and padding-removal implementation.
+
 When `Character::nametag` is set, the Renderer rasterizes a single-line label texture and stores
 the generated GPU resource in that Character. Character clones share the cached resource via `Arc`.
 The anchor transforms the player collision box, computes its scene-space AABB, and places the label

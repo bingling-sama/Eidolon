@@ -744,6 +744,7 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        readback::validate_dimensions(width, height)?;
         let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Render Target"),
             size: wgpu::Extent3d {
@@ -759,9 +760,6 @@ impl Renderer {
             view_formats: &[],
         });
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let (output_buffer, padded_bytes_per_row) =
-            readback::create_output_buffer(&self.device, width, height)?;
 
         let mut encoder = self
             .device
@@ -781,24 +779,9 @@ impl Renderer {
             height,
         );
 
-        readback::copy_render_target_to_buffer(
-            &mut encoder,
-            &render_texture,
-            &output_buffer,
-            width,
-            height,
-            padded_bytes_per_row,
-        );
-
         self.queue.submit(Some(encoder.finish()));
 
-        readback::map_output_buffer_to_rgba(
-            &self.device,
-            &output_buffer,
-            width,
-            height,
-            padded_bytes_per_row,
-        )
+        readback::read_texture_to_rgba(&self.device, &self.queue, &render_texture, width, height)
     }
 
     /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
@@ -814,6 +797,7 @@ impl Renderer {
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
         self.validate_character_context(character)?;
+        readback::validate_dimensions(width, height)?;
         let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Render Target"),
             size: wgpu::Extent3d {
@@ -829,9 +813,6 @@ impl Renderer {
             view_formats: &[],
         });
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let (output_buffer, padded_bytes_per_row) =
-            readback::create_output_buffer(&self.device, width, height)?;
 
         let mut encoder = self
             .device
@@ -851,25 +832,10 @@ impl Renderer {
             height,
         );
 
-        readback::copy_render_target_to_buffer(
-            &mut encoder,
-            &render_texture,
-            &output_buffer,
-            width,
-            height,
-            padded_bytes_per_row,
-        );
-
         self.queue.submit(Some(encoder.finish()));
 
-        readback::map_output_buffer_to_rgba_async(
-            &self.device,
-            &output_buffer,
-            width,
-            height,
-            padded_bytes_per_row,
-        )
-        .await
+        readback::read_texture_to_rgba(&self.device, &self.queue, &render_texture, width, height)
+            .await
     }
 
     /// Present one frame to the window surface (expects `new_windowed`).

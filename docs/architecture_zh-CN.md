@@ -32,6 +32,11 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 5. `output::write_output` 解析输出路径和意图，向 Renderer 请求一帧或多帧 RGBA 数据，
    然后写入 PNG、WebP、GIF 或 Animated WebP。扩展名调整会保留父目录，并返回最终写入路径。
 
+每个离屏帧由 Renderer 创建 render target 并提交 render pass。私有的 `renderer::readback`
+模块随后执行第二次有序提交：将完成的 texture 复制到 mapped buffer、移除行 padding，并返回
+RGBA 像素。native 为 `Renderer::render` 同步等待 map，wasm 为 `Renderer::render_async`
+异步等待；两个 adapter 共用相同的 layout 校验和去 padding 实现。
+
 设置 `Character::nametag` 后，Renderer 会将单行文本光栅化为 GPU 资源并存入该 Character；
 克隆 Character 时通过 `Arc` 共享缓存资源。之后通过不受光照影响的 billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
 上方。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位，二者都会随 `Camera::scale` 缩放。
