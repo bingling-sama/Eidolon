@@ -19,8 +19,10 @@ Then import the library crate as `eidolon`.
 use eidolon::{
     camera::Camera,
     character::{Character, SkinType},
-    renderer::{OutputFormat, Renderer},
+    output::{write_output, OutputIntent, StaticFormat},
+    renderer::Renderer,
 };
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
@@ -29,12 +31,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let character = Character::from_body(body);           // stand posture by default
     let camera = Camera::new();                            // yaw=180, pitch=90, scale=1.0
 
-    renderer.render_to_image(
-        &character,
-        &camera,
+    write_output(
         "output.png",
-        (800, 600),
-        OutputFormat::Png,
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (800, 600),
+        },
+        |_: Duration| renderer.render(&character, &camera, 800, 600),
     )?;
 
     Ok(())
@@ -46,7 +49,8 @@ Key points:
 - `Body` combines a Skin with `SkinType`; single-layer Skins are expanded automatically when loaded.
 - Cloning a `Character`, `Body`, or `BackEquipmentAtlas` shares immutable GPU resources. Resources can only be rendered by the `Renderer` that loaded them; load them again for another Renderer.
 - `Camera::new()` defaults: yaw 180° (front view), pitch 90° (level), scale 1.0.
-- `OutputFormat` supports `Png` and `WebP`. Format is inferred from the filename extension by `render_to_image`.
+- `StaticFormat` supports `Png` and `WebP`. `OutputIntent` makes the requested format explicit; the output module normalizes the filename extension and returns the final path.
+- `AnimationFormat` supports `Gif` and animated `WebP`. `OutputIntent::Animation` accepts an `AnimationPreset`, FPS, speed multiplier, loop count, and frame producer, then returns the final path.
 
 ## Error Handling
 
@@ -63,7 +67,7 @@ match renderer.load_body("skin.png", SkinType::Classic) {
 }
 ```
 
-Variants: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, and `Surface`. The `Io` variant wraps `std::io::Error`; `Surface` preserves `wgpu::SurfaceError` so a window loop can recover from `Lost` and exit on `OutOfMemory`.
+Variants: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, `Output`, and `Surface`. The `Io` variant wraps `std::io::Error`; `Output` covers output validation, encoding, and write failures; `Surface` preserves `wgpu::SurfaceError` so a window loop can recover from `Lost` and exit on `OutOfMemory`.
 
 ## Custom Pose Example
 
@@ -72,8 +76,10 @@ use eidolon::{
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, SkinType, Posture},
-    renderer::{OutputFormat, Renderer},
+    output::{write_output, OutputIntent, StaticFormat},
+    renderer::Renderer,
 };
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
@@ -93,12 +99,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scale: 1.2,
     };
 
-    renderer.render_to_image(
-        &character,
-        &camera,
+    write_output(
         "wave.png",
-        (1024, 1024),
-        OutputFormat::Png,
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (1024, 1024),
+        },
+        |_: Duration| renderer.render(&character, &camera, 1024, 1024),
     )?;
 
     Ok(())

@@ -6,13 +6,11 @@ mod readback;
 mod uniforms;
 
 use std::cell::RefCell;
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
-use image::{ImageBuffer, ImageFormat, Rgba};
+use image::{ImageBuffer, Rgba};
 #[cfg(not(target_arch = "wasm32"))]
 use winit::window::Window;
 
@@ -35,61 +33,6 @@ use uniforms::{
 };
 
 static NEXT_RENDERER_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
-
-/// Image format for [`Renderer::render_to_image`].
-#[derive(Debug, Clone, Copy)]
-pub enum OutputFormat {
-    Png,
-    WebP,
-}
-
-impl OutputFormat {
-    pub fn as_image_format(&self) -> ImageFormat {
-        match self {
-            OutputFormat::Png => ImageFormat::Png,
-            OutputFormat::WebP => ImageFormat::WebP,
-        }
-    }
-
-    /// File extension without the dot: `"png"` or `"webp"`.
-    pub fn extension(&self) -> &'static str {
-        match self {
-            OutputFormat::Png => "png",
-            OutputFormat::WebP => "webp",
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn output_format_png_as_image_format() {
-        assert_eq!(OutputFormat::Png.as_image_format(), ImageFormat::Png);
-    }
-
-    #[test]
-    fn output_format_webp_as_image_format() {
-        assert_eq!(OutputFormat::WebP.as_image_format(), ImageFormat::WebP);
-    }
-
-    #[test]
-    fn output_format_png_extension() {
-        assert_eq!(OutputFormat::Png.extension(), "png");
-    }
-
-    #[test]
-    fn output_format_webp_extension() {
-        assert_eq!(OutputFormat::WebP.extension(), "webp");
-    }
-
-    #[test]
-    fn output_format_debug() {
-        assert!(format!("{:?}", OutputFormat::Png).contains("Png"));
-        assert!(format!("{:?}", OutputFormat::WebP).contains("WebP"));
-    }
-}
 
 pub struct Renderer {
     context_id: u64,
@@ -989,44 +932,5 @@ impl Renderer {
             config.height = height;
             surface.configure(&self.device, config);
         }
-    }
-
-    /// Calls [`Renderer::render`], then saves using [`OutputFormat`].
-    ///
-    /// The file extension is automatically adjusted to match the output format
-    /// (e.g. `"skin.png"` with `WebP` becomes `"skin.webp"`).
-    /// The output path is validated to reject null bytes before writing.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn render_to_image(
-        &self,
-        character: &Character,
-        camera: &Camera,
-        filename: &str,
-        size: (u32, u32),
-        format: OutputFormat,
-    ) -> Result<(), EidolonError> {
-        if filename.contains('\0') {
-            return Err(EidolonError::invalid_path(
-                "output filename contains null bytes",
-            ));
-        }
-
-        // Auto-adjust extension to match the requested format.
-        let adjusted = match Path::new(filename).extension() {
-            Some(ext) if ext == format.extension() => filename.to_string(),
-            _ => {
-                let stem = Path::new(filename)
-                    .file_stem()
-                    .map(|s| s.to_string_lossy())
-                    .unwrap_or_else(|| filename.into());
-                format!("{}.{}", stem, format.extension())
-            }
-        };
-
-        let image_buffer = self.render(character, camera, size.0, size.1)?;
-        image_buffer
-            .save_with_format(&adjusted, format.as_image_format())
-            .map_err(|e| EidolonError::texture(format!("failed to save image: {e}")))?;
-        Ok(())
     }
 }

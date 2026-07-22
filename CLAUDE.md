@@ -43,7 +43,7 @@ MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
 
 ## Architecture
 
-This is a **Minecraft skin off-screen renderer** — it loads a player skin PNG and 3D OBJ model, renders them via wgpu to an off-screen framebuffer, and saves the result as PNG/WebP.
+This is a **Minecraft skin off-screen renderer** — it loads a player skin PNG and 3D OBJ model, renders them via wgpu to an off-screen framebuffer, and writes static or animated PNG/WebP/GIF output.
 
 ### Crate identity
 
@@ -78,7 +78,7 @@ src/
 1. **CLI** (`main.rs`) parses subcommand → creates `Renderer` (one-time, expensive — initializes wgpu device + compiles shaders + loads both OBJs)
 2. `Renderer::load_body()` loads and uploads a Skin, auto-detects single-layer (width == height×2), converts it via `converter::single2double()`, and returns a Renderer-bound `Body`
 3. The caller builds a non-empty `Character` from a Body or Back equipment; `Renderer::render()` draws its optional Body and Back equipment using `character.posture`, then reads pixels back as `ImageBuffer`
-4. `Renderer::render_to_image()` wraps `render()` and saves with `image` crate (PNG or WebP). Output filename extension is auto-adjusted to match the requested format.
+4. `output::write_output()` owns output intent, path resolution, animation timing, encoding, and file writing. It asks `Renderer::render()` for RGBA frames and normalizes the final extension while preserving parent directories.
 
 ### Key design details
 
@@ -86,9 +86,9 @@ src/
 - **Pivot-point articulation**: Each limb rotates around a hardcoded pivot (e.g., right arm pivot at `(0.3125, 1.375, 0.0)`). The transform formula is `base × translate(pivot) × rotate × translate(-pivot)`.
 - **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward. `body_pitch` rotates the full model around its center; the Elytra pair shares a central upper-back pivot and mirrors yaw/roll on the right.
 - **Single→double layer conversion**: `converter::single2double()` mirrors right-side arm/leg regions horizontally to create left-side overlays in the bottom half of a square texture. Source regions defined as pixel rectangles for 64px reference, scaled by an HD ratio for larger skins.
-- **Output formats**: PNG and WebP via `OutputFormat` enum. Format is inferred from the output filename extension.
+- **Output formats**: Static PNG/WebP and animated GIF/Animated WebP via `output::OutputIntent`. Explicit format is authoritative; filename extensions are normalized case-insensitively.
 - **Resource ownership**: Character owns Body and optional Back equipment. Clones share immutable GPU resources through `Arc`; a different Renderer must reload them.
-- **Error handling**: Public API returns `EidolonError` (typed enum: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, `Surface`).
+- **Error handling**: Public API returns `EidolonError` (typed enum: `Io`, `Gpu`, `Model`, `Texture`, `Conversion`, `InvalidPath`, `Output`, `Surface`).
 - **Logging**: Uses `env_logger` (`RUST_LOG` env var controls level).
 
 ## Agent skills

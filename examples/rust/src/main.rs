@@ -12,7 +12,8 @@ use eidolon::{
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, Posture, SkinType},
-    renderer::{OutputFormat, Renderer},
+    output::{write_output, OutputIntent, StaticFormat},
+    renderer::Renderer,
 };
 
 /// Repo root, derived from `CARGO_MANIFEST_DIR` (works via `cargo run`).
@@ -43,16 +44,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let back_equipment_atlas = renderer.load_back_equipment_atlas("resources/Turtle_Cape.png")?;
 
     // ── helper: render + save ────────────────────────────────────────
-    let save = |name: &str, character: &Character, camera: &Camera, format: OutputFormat| {
+    let save = |name: &str, character: &Character, camera: &Camera, format: StaticFormat| {
         let path = out_dir.join(name);
-        renderer.render_to_image(
-            character,
-            camera,
-            &path.display().to_string(),
-            (800, 600),
-            format,
+        let written = write_output(
+            &path,
+            OutputIntent::Static {
+                format,
+                size: (800, 600),
+            },
+            |_: std::time::Duration| renderer.render(character, camera, 800, 600),
         )?;
-        println!("  -> {}", path.display());
+        println!("  -> {}", written.display());
         Ok::<(), eidolon::error::EidolonError>(())
     };
 
@@ -67,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "classic-stand.png",
         &character,
         &default_cam,
-        OutputFormat::Png,
+        StaticFormat::Png,
     )?;
 
     // ── 2. classic + wave (WebP) ─────────────────────────────────────
@@ -77,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "classic-wave.webp",
         &character,
         &default_cam,
-        OutputFormat::WebP,
+        StaticFormat::WebP,
     )?;
 
     // ── 3. slim + walking, angled camera ─────────────────────────────
@@ -92,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pitch: 95.0,
         scale: 1.2,
     };
-    save("slim-walking.png", &character, &cam, OutputFormat::Png)?;
+    save("slim-walking.png", &character, &cam, StaticFormat::Png)?;
 
     // ── 4. slim + running, zoomed out ────────────────────────────────
     println!("slim-running");
@@ -102,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pitch: 85.0,
         scale: 0.8,
     };
-    save("slim-running.png", &character, &cam, OutputFormat::Png)?;
+    save("slim-running.png", &character, &cam, StaticFormat::Png)?;
 
     // ── 5. slim + running + cape, rear camera ────────────────────────
     println!("slim-running-cape");
@@ -115,7 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pitch: 90.0,
         scale: 0.9,
     };
-    save("slim-running-cape.png", &character, &cam, OutputFormat::Png)?;
+    save("slim-running-cape.png", &character, &cam, StaticFormat::Png)?;
 
     // ── 6. custom posture (per-joint) + cape ─────────────────────────
     println!("custom-posture");
@@ -139,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pitch: 90.0,
         scale: 1.0,
     };
-    save("custom-posture.png", &character, &cam, OutputFormat::Png)?;
+    save("custom-posture.png", &character, &cam, StaticFormat::Png)?;
 
     // -- 7. elytra, rear camera ---------------------------------------
     println!("slim-elytra");
@@ -149,7 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .set_kind(BackEquipmentKind::Elytra);
     character.posture = DefaultPostures::FLYING;
     let rear_cam = Camera { yaw: 0.0, ..cam };
-    save("slim-elytra.png", &character, &rear_cam, OutputFormat::Png)?;
+    save("slim-elytra.png", &character, &rear_cam, StaticFormat::Png)?;
 
     println!("\nDone — {} images in {}", 7, out_dir.display());
     Ok(())

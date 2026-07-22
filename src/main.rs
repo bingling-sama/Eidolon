@@ -1,5 +1,3 @@
-mod animation_export;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -11,7 +9,8 @@ use eidolon::{
     character::{Character, Posture, SkinType},
     converter,
     error::EidolonError,
-    renderer::{OutputFormat, Renderer},
+    output::{write_output, OutputIntent},
+    renderer::Renderer,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -19,10 +18,6 @@ use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
-
-#[cfg(test)]
-use animation_export::AnimationTiming;
-use animation_export::{export_animation, AnimationExportOptions};
 
 /// Minecraft skin renderer and skin-atlas utilities.
 #[derive(Parser, Debug)]
@@ -106,18 +101,6 @@ fn parse_animation_speed(s: &str) -> Result<f32, String> {
     }
 }
 
-fn parse_animation_output(s: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(s);
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase);
-    match extension.as_deref() {
-        Some("gif" | "webp") => Ok(path),
-        _ => Err("animation output must end in .gif or .webp".to_owned()),
-    }
-}
-
 #[derive(Parser, Debug)]
 struct ViewportArgs {
     /// Output image or window width in pixels.
@@ -151,7 +134,7 @@ fn resolve_render_output(
     output: Option<String>,
     viewport: &ViewportArgs,
     animation: &RenderAnimationArgs,
-) -> Result<(String, Option<PathBuf>), String> {
+) -> Result<String, String> {
     let output = output.unwrap_or_else(|| {
         if animation.animate {
             "output.webp".to_owned()
@@ -161,14 +144,13 @@ fn resolve_render_output(
     });
 
     if !animation.animate {
-        return Ok((output, None));
+        return Ok(output);
     }
     if viewport.width > 2_048 || viewport.height > 2_048 {
         return Err("animated output dimensions must not exceed 2048 pixels".to_owned());
     }
 
-    let path = parse_animation_output(&output)?;
-    Ok((output, Some(path)))
+    Ok(output)
 }
 
 /// Shared scene parameters for render and preview.
@@ -380,17 +362,6 @@ fn load_character(
     }
 
     Ok((character, camera))
-}
-
-/// Infer OutputFormat from filename extension. Unknown / missing → Png.
-fn format_from_filename(filename: &str) -> OutputFormat {
-    match std::path::Path::new(filename)
-        .extension()
-        .and_then(|e| e.to_str())
-    {
-        Some("webp") => OutputFormat::WebP,
-        _ => OutputFormat::Png,
-    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -894,41 +865,6 @@ mod tests {
         assert!(parse_positive_scale("").is_err());
     }
 
-    // ── format_from_filename ──
-
-    #[test]
-    fn format_from_filename_webp() {
-        assert!(matches!(
-            format_from_filename("out.webp"),
-            OutputFormat::WebP
-        ));
-        assert!(matches!(
-            format_from_filename("/tmp/x.webp"),
-            OutputFormat::WebP
-        ));
-    }
-
-    #[test]
-    fn format_from_filename_png() {
-        assert!(matches!(format_from_filename("out.png"), OutputFormat::Png));
-    }
-
-    #[test]
-    fn format_from_filename_no_extension_defaults_png() {
-        assert!(matches!(format_from_filename("output"), OutputFormat::Png));
-        assert!(matches!(
-            format_from_filename("/tmp/noext"),
-            OutputFormat::Png
-        ));
-        assert!(matches!(format_from_filename(""), OutputFormat::Png));
-    }
-
-    #[test]
-    fn format_from_filename_unknown_extension_defaults_png() {
-        assert!(matches!(format_from_filename("out.jpg"), OutputFormat::Png));
-        assert!(matches!(format_from_filename("out.bmp"), OutputFormat::Png));
-    }
-
     // ── PostureCli → Posture ──
 
     #[test]
@@ -1138,20 +1074,6 @@ mod tests {
     }
 
     #[test]
-    fn animation_timing_samples_one_cycle_without_repeating_the_endpoint() {
-        let timing = AnimationTiming::new(AnimationPreset::Walk, 30, 1.0);
-
-        assert_eq!(timing.frame_count(), 30);
-        assert_eq!(timing.sample_time(0), std::time::Duration::ZERO);
-        assert!(timing.sample_time(29) < AnimationPreset::Walk.cycle_duration());
-        assert_eq!(timing.webp_timestamp_ms(30), 1_000);
-        assert_eq!(
-            (0..30).map(|frame| timing.gif_delay_cs(frame)).sum::<u32>(),
-            100
-        );
-    }
-
-    #[test]
     fn scene_world_position_and_rotation() {
         let mut scene = default_scene();
         scene.pos_x = 1.0;
@@ -1219,7 +1141,7 @@ mod tests {
                 assert_eq!(animation.loop_count, 0);
                 assert_eq!(
                     resolve_render_output(output, &viewport, &animation).unwrap(),
-                    ("output.webp".to_owned(), Some(PathBuf::from("output.webp")))
+                    "output.webp".to_owned()
                 );
             }
             _ => panic!("Expected Render"),
@@ -1300,7 +1222,16 @@ mod tests {
         else {
             panic!("Expected Render");
         };
-        assert!(resolve_render_output(output, &viewport, &animation).is_err());
+        let output = resolve_render_output(output, &viewport, &animation).unwrap();
+        assert!(OutputIntent::animation_from_path(
+            std::path::Path::new(&output),
+            AnimationPreset::Walk,
+            animation.fps,
+            animation.speed,
+            animation.loop_count,
+            (viewport.width, viewport.height),
+        )
+        .is_err());
 
         let oversized = Args::try_parse_from([
             "eidolon",
@@ -1729,14 +1660,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             scene,
             animation,
         } => {
-            let (output, animation_output) =
-                match resolve_render_output(output, &viewport, &animation) {
-                    Ok(resolved) => resolved,
-                    Err(message) => {
-                        error!("{message}");
-                        return Err(message.into());
-                    }
-                };
+            let output = match resolve_render_output(output, &viewport, &animation) {
+                Ok(resolved) => resolved,
+                Err(message) => {
+                    error!("{message}");
+                    return Err(message.into());
+                }
+            };
 
             // Reject output paths that attempt directory traversal.
             if std::path::Path::new(&output)
@@ -1748,6 +1678,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "output path must not contain '..' (directory traversal)",
                 ));
             }
+
+            let output_path = PathBuf::from(&output);
+            let output_intent = if animation.animate {
+                OutputIntent::animation_from_path(
+                    &output_path,
+                    scene.posture.animation_preset(),
+                    animation.fps,
+                    animation.speed,
+                    animation.loop_count,
+                    (viewport.width, viewport.height),
+                )?
+            } else {
+                OutputIntent::static_from_path(&output_path, (viewport.width, viewport.height))
+            };
 
             info!("Minecraft skin renderer");
             info!("Skin: {}", skin);
@@ -1764,34 +1708,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (mut character, camera) = load_character(&renderer, &skin, &scene)?;
             info!("Character resources loaded");
 
-            if let Some(output) = animation_output {
-                export_animation(
-                    &renderer,
-                    &mut character,
-                    &camera,
-                    &output,
-                    AnimationExportOptions {
-                        preset: scene.posture.animation_preset(),
-                        fps: animation.fps,
-                        speed: animation.speed,
-                        loop_count: animation.loop_count,
-                        size: (viewport.width, viewport.height),
-                    },
-                    |posture| apply_posture_overrides(posture, &scene),
-                )?;
-                info!("Done. Saved animation: {}", output.display());
-            } else {
-                info!("Rendering...");
-                let output_format = format_from_filename(&output);
-                renderer.render_to_image(
-                    &character,
-                    &camera,
-                    &output,
-                    (viewport.width, viewport.height),
-                    output_format,
-                )?;
-                info!("Done. Saved: {}", output);
-            }
+            info!("Rendering...");
+            let mut frame_producer = |time| {
+                if animation.animate {
+                    let sampled = scene.posture.animation_preset().sample(time);
+                    character.posture = apply_posture_overrides(sampled, &scene);
+                }
+                renderer.render(&character, &camera, viewport.width, viewport.height)
+            };
+            let written = write_output(&output_path, output_intent, &mut frame_producer)?;
+            info!("Done. Saved: {}", written.display());
             Ok(())
         }
         Command::Preview {

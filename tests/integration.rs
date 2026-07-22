@@ -9,7 +9,8 @@ use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon::camera::Camera;
 use eidolon::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
 use eidolon::model::Model;
-use eidolon::renderer::{OutputFormat, Renderer};
+use eidolon::output::{write_output, OutputIntent, StaticFormat};
+use eidolon::renderer::Renderer;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
@@ -369,53 +370,53 @@ fn elytra_rejects_non_cape_atlas_dimensions() {
 }
 
 #[test]
-fn render_to_image_saves_to_disk() {
+fn output_saves_static_png_to_disk() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.png");
-    let tmp_str = tmp.to_str().expect("temp path not UTF-8");
-    renderer
-        .render_to_image(
-            &character,
-            &camera_default(),
-            tmp_str,
-            (200, 150),
-            OutputFormat::Png,
-        )
-        .expect("render_to_image failed");
+    let resolved = write_output(
+        &tmp,
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (200, 150),
+        },
+        |_: std::time::Duration| renderer.render(&character, &camera_default(), 200, 150),
+    )
+    .expect("output failed");
 
-    assert!(tmp.exists(), "Output file not created: {:?}", tmp);
+    assert_eq!(resolved, tmp);
+    assert!(resolved.exists(), "Output file not created: {:?}", resolved);
     assert!(
-        std::fs::metadata(&tmp).unwrap().len() > 0,
+        std::fs::metadata(&resolved).unwrap().len() > 0,
         "Output file empty"
     );
-    std::fs::remove_file(&tmp).ok();
+    std::fs::remove_file(&resolved).ok();
 }
 
 #[test]
-fn webp_output_format_works() {
+fn output_writes_static_webp() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
 
     let tmp = std::env::temp_dir().join("eidolon_test_output.webp");
-    let tmp_str = tmp.to_str().expect("temp path not UTF-8");
-    renderer
-        .render_to_image(
-            &character,
-            &camera_default(),
-            tmp_str,
-            (200, 150),
-            OutputFormat::WebP,
-        )
-        .expect("render_to_image (webp) failed");
+    let resolved = write_output(
+        &tmp,
+        OutputIntent::Static {
+            format: StaticFormat::WebP,
+            size: (200, 150),
+        },
+        |_: std::time::Duration| renderer.render(&character, &camera_default(), 200, 150),
+    )
+    .expect("output failed");
 
-    assert!(tmp.exists(), "WebP output file not created");
+    assert_eq!(resolved, tmp);
+    assert!(resolved.exists(), "WebP output file not created");
     assert!(
-        std::fs::metadata(&tmp).unwrap().len() > 0,
+        std::fs::metadata(&resolved).unwrap().len() > 0,
         "WebP output empty"
     );
-    std::fs::remove_file(&tmp).ok();
+    std::fs::remove_file(&resolved).ok();
 }
 
 #[test]
@@ -490,25 +491,23 @@ fn load_model_from_bytes_invalid_data_errors() {
 }
 
 #[test]
-fn render_to_image_no_extension_auto_adjusts() {
+fn output_extension_adjustment_preserves_parent_directory() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
     let tmp = std::env::temp_dir().join("eidolon_auto_ext_noext");
-    let tmp_str = tmp.to_str().expect("temp path not UTF-8");
-    renderer
-        .render_to_image(
-            &character,
-            &camera_default(),
-            tmp_str,
-            (100, 75),
-            OutputFormat::WebP,
-        )
-        .expect("render_to_image no-ext failed");
-    // Extension adjustment strips directory; file saved to CWD.
-    let cwd_file = std::path::Path::new("eidolon_auto_ext_noext.webp");
-    assert!(cwd_file.exists(), "expected {cwd_file:?} to exist");
-    assert!(std::fs::metadata(cwd_file).unwrap().len() > 0);
-    std::fs::remove_file(cwd_file).ok();
+    let resolved = write_output(
+        &tmp,
+        OutputIntent::Static {
+            format: StaticFormat::WebP,
+            size: (100, 75),
+        },
+        |_: std::time::Duration| renderer.render(&character, &camera_default(), 100, 75),
+    )
+    .expect("output extension adjustment failed");
+    assert_eq!(resolved, tmp.with_extension("webp"));
+    assert!(resolved.exists(), "expected {resolved:?} to exist");
+    assert!(std::fs::metadata(&resolved).unwrap().len() > 0);
+    std::fs::remove_file(resolved).ok();
 }
 
 #[test]
@@ -627,16 +626,16 @@ fn load_model_from_bytes_missing_required_part_errors() {
 }
 
 #[test]
-fn render_to_image_png_save_error() {
+fn output_reports_static_save_error() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
-    // Write to a directory that doesn't exist — save_with_format fails
-    let result = renderer.render_to_image(
-        &character,
-        &camera_default(),
+    let result = write_output(
         "/nonexistent_dir_xyz_eidolon_test/output.png",
-        (100, 75),
-        OutputFormat::Png,
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (100, 75),
+        },
+        |_: std::time::Duration| renderer.render(&character, &camera_default(), 100, 75),
     );
     match result {
         Ok(_) => panic!("Expected error when writing to nonexistent directory"),

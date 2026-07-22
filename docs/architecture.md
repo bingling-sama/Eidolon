@@ -2,13 +2,13 @@
 
 Eidolon is split into a small CLI binary and a reusable rendering library. The binary parses scene
 options and delegates frame rendering to the library. The library owns GPU setup, skin loading,
-model loading, and static image output; the binary owns CLI-specific animated file encoding.
+model loading, frame rendering, and rendered-output policy.
 
 ## Crate Layout
 
 - `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
 - `src/animation.rs` provides stateless procedural `AnimationPreset` sampling into complete Postures.
-- `src/animation_export.rs` is the CLI adapter for streaming GIF and Animated WebP encoding.
+- `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
 - `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
@@ -40,9 +40,9 @@ For `cargo run -- render skin.png`, the flow is:
 4. `Renderer::load_body` reads the PNG Skin, converts a legacy atlas when needed, uploads it, and
    returns a Renderer-context-bound `Body`. The CLI then constructs a `Character` and optionally
    equips a shared Back equipment atlas as Cape or Elytra.
-5. `Renderer::render_to_image` renders to an off-screen `Rgba8Unorm` texture, copies the padded
-   GPU rows into a CPU buffer, strips padding, and saves the image as PNG or WebP. The output
-   filename extension is auto-adjusted to match the format.
+5. `output::write_output` resolves the requested output path and intent, asks Renderer for one or
+   more RGBA frames, and writes PNG, WebP, GIF, or Animated WebP. Extension normalization preserves
+   the parent directory and returns the final written path.
 
 When `Character::nametag` is set, the Renderer rasterizes a single-line label texture and stores
 the generated GPU resource in that Character. Character clones share the cached resource via `Arc`.
@@ -58,10 +58,9 @@ window surface and `render_frame` presents each frame to the swapchain.
 The CLI uses `--posture` as a shared action selector. Static rendering samples a representative
 frame from its matching `AnimationPreset`; preview starts paused on the same frame and continues
 that preset when playback begins. For `render --animate`, the CLI samples the selected preset's
-natural cycle uniformly, applies explicit Posture overrides, renders each frame, and immediately
-submits its RGBA buffer to the selected encoder. GIF delays and WebP timestamps use cumulative
-rounding so fractional frame durations do not drift. The Renderer remains responsible only for
-individual frames.
+natural cycle uniformly, applies explicit Posture overrides in its frame producer, and passes each
+RGBA frame to `output::write_output`. GIF delays and WebP timestamps use cumulative rounding so
+fractional frame durations do not drift. The Renderer remains responsible only for individual frames.
 
 ## Model And Skin Assumptions
 
@@ -102,6 +101,7 @@ The public API returns `EidolonError` (not `Box<dyn Error>`). Variants:
 | `Texture(String)` | Skin PNG decode or upload failures |
 | `Conversion(String)` | Single→double layer conversion errors |
 | `InvalidPath(String)` | Null bytes or unresolvable paths |
+| `Output(String)` | Output validation, encoding, or write failures |
 | `Surface(wgpu::SurfaceError)` | Window surface acquisition or presentation failures |
 
 Internal `pub(crate)` functions in `readback.rs` and `uniforms.rs` also use `EidolonError`.

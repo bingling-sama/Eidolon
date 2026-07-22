@@ -17,6 +17,8 @@ pub enum EidolonError {
     Conversion(String),
     /// Path contains null bytes or is otherwise invalid.
     InvalidPath(String),
+    /// Output path, format, encoding, or write failure.
+    Output(String),
     /// Window surface acquisition or presentation failure.
     Surface(wgpu::SurfaceError),
 }
@@ -30,6 +32,7 @@ impl fmt::Display for EidolonError {
             Self::Texture(msg) => write!(f, "Texture error: {msg}"),
             Self::Conversion(msg) => write!(f, "Conversion error: {msg}"),
             Self::InvalidPath(msg) => write!(f, "Invalid path: {msg}"),
+            Self::Output(msg) => write!(f, "Output error: {msg}"),
             Self::Surface(error) => write!(f, "Surface error: {error}"),
         }
     }
@@ -77,6 +80,10 @@ impl EidolonError {
     pub fn invalid_path(msg: impl Into<String>) -> Self {
         Self::InvalidPath(msg.into())
     }
+
+    pub fn output(msg: impl Into<String>) -> Self {
+        Self::Output(msg.into())
+    }
 }
 
 #[cfg(test)]
@@ -116,6 +123,13 @@ mod tests {
         let e = EidolonError::invalid_path("null byte in path");
         assert!(matches!(e, EidolonError::InvalidPath(_)));
         assert_eq!(e.to_string(), "Invalid path: null byte in path");
+    }
+
+    #[test]
+    fn output_constructor() {
+        let e = EidolonError::output("encoder failed");
+        assert!(matches!(e, EidolonError::Output(_)));
+        assert_eq!(e.to_string(), "Output error: encoder failed");
     }
 
     #[test]
@@ -160,6 +174,9 @@ mod tests {
 
         let e = EidolonError::invalid_path("boom");
         assert!(std::error::Error::source(&e).is_none());
+
+        let e = EidolonError::output("boom");
+        assert!(std::error::Error::source(&e).is_none());
     }
 
     #[test]
@@ -185,6 +202,10 @@ mod tests {
         assert_eq!(
             EidolonError::InvalidPath("nul".into()).to_string(),
             "Invalid path: nul"
+        );
+        assert_eq!(
+            EidolonError::Output("write failed".into()).to_string(),
+            "Output error: write failed"
         );
     }
 

@@ -1,13 +1,13 @@
 # 架构说明
 
 Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负责解析场景参数并调用库完成单帧
-渲染。库负责 GPU 初始化、皮肤加载、模型加载与静态图片输出；命令行负责动画文件编码。
+渲染。库负责 GPU 初始化、皮肤加载、模型加载、单帧渲染与输出策略。
 
 ## Crate 结构
 
 - `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
 - `src/animation.rs` 提供无状态的程序化 `AnimationPreset`，采样结果为完整 Posture。
-- `src/animation_export.rs` 是流式编码 GIF 和 Animated WebP 的 CLI adapter。
+- `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
 - `src/body.rs` 定义持有 Skin 与 classic/slim 几何选择的 `Body`。
@@ -16,7 +16,7 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 - `src/character.rs` 定义资源所有权、姿势预设和角色变换；Character 始终至少包含 Body 或后背装备。
 - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型。
 - 私有的 `src/texture.rs` 上传 PNG 图集，并在需要时自动展开旧版单层 Skin。
-- `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、静态图片输出、读回、管线和 uniform 逻辑。
+- `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、读回、管线和 uniform 逻辑。
 - `src/converter.rs` 实现单层皮肤图集到双层图集的转换。
 - `benches/performance_benchmark.rs` 使用 Criterion 测量批量渲染和单周期动画导出。
 
@@ -29,8 +29,8 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 3. `Renderer::new` 创建无窗口 `wgpu` device、queue、渲染管线，并加载两套 OBJ 模型。
 4. `Renderer::load_body` 读取 PNG Skin，必要时转换旧版图集，上传后返回绑定当前 Renderer
    上下文的 `Body`。CLI 再构造 Character，并可选加载共享后背装备图集作为披风或鞘翅。
-5. `Renderer::render_to_image` 渲染到离屏 `Rgba8Unorm` 纹理，将带 padding 的 GPU 行数据复制
-   到 CPU buffer，去除 padding 后保存为 PNG 或 WebP。
+5. `output::write_output` 解析输出路径和意图，向 Renderer 请求一帧或多帧 RGBA 数据，
+   然后写入 PNG、WebP、GIF 或 Animated WebP。扩展名调整会保留父目录，并返回最终写入路径。
 
 设置 `Character::nametag` 后，Renderer 会将单行文本光栅化为 GPU 资源并存入该 Character；
 克隆 Character 时通过 `Arc` 共享缓存资源。之后通过不受光照影响的 billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
@@ -43,8 +43,8 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 
 CLI 使用 `--posture` 作为统一动作选择器。静态渲染采用对应 `AnimationPreset` 的代表帧；
 preview 初始暂停在同一帧，开始播放后继续该 preset。`render --animate` 会在所选 preset 的
-自然周期内均匀采样，应用显式 Posture 覆盖，逐帧渲染并立即将 RGBA buffer 交给编码器。
-GIF 延迟和 WebP 时间戳使用累计取整以避免漂移；Renderer 仍然只负责单帧渲染。
+自然周期内均匀采样，在 frame producer 中应用显式 Posture 覆盖，逐帧渲染并交给
+`output::write_output`。GIF 延迟和 WebP 时间戳使用累计取整以避免漂移；Renderer 仍然只负责单帧渲染。
 
 ## 模型与皮肤约定
 

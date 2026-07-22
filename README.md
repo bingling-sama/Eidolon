@@ -80,8 +80,10 @@ Eidolon can be used as a Rust library. Minimal example:
 use eidolon::{
     camera::Camera,
     character::{Character, SkinType},
-    renderer::{OutputFormat, Renderer},
+    output::{write_output, OutputIntent, StaticFormat},
+    renderer::Renderer,
 };
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = Renderer::new()?;
@@ -90,12 +92,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let character = Character::from_body(body);
     let camera = Camera::new();
 
-    renderer.render_to_image(
-        &character,
-        &camera,
+    write_output(
         "output.png",
-        (800, 600),
-        OutputFormat::Png,
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (800, 600),
+        },
+        |_: Duration| renderer.render(&character, &camera, 800, 600),
     )?;
 
     Ok(())
