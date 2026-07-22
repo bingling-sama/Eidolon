@@ -17,7 +17,7 @@ use std::io::BufReader;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
-/// GPU skin texture.
+/// GPU image atlas.
 ///
 /// Wraps wgpu resources; consumed by the renderer via its bind group.
 /// Fields are private — no wgpu types leak to library consumers.
@@ -55,7 +55,7 @@ impl Texture {
 
     /// Load a texture from memory without applying legacy skin-atlas conversion.
     ///
-    /// This is intended for non-skin atlases such as 64x32 cape textures,
+    /// This is intended for non-Skin atlases such as 64x32 Back equipment atlases,
     /// whose aspect ratio would otherwise be mistaken for a legacy player skin.
     pub(crate) fn load_from_memory_raw(
         device: &wgpu::Device,

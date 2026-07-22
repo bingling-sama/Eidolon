@@ -24,7 +24,7 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a cape or elytra texture. Elytra pitch and spread can be adjusted independently after choosing a posture.
+Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a Back equipment atlas for Cape or Elytra presentation. Elytra pitch and spread can be adjusted independently after choosing a posture.
 
 ## How It Works
 

@@ -1,7 +1,7 @@
 //! Hardcoded elytra geometry using bs-community/skinview3d's atlas mapping.
 //!
 //! Each wing uses a 12x22x2 pixel box whose UVs map to the 10x20x2 elytra
-//! region of a 64x32 cape texture. The major wing faces reverse their V
+//! region of a 64x32 Back equipment atlas. The major faces reverse their V
 //! direction within that atlas region while the narrow side strips retain
 //! their atlas direction. Width and height retain skinview3d's
 //! expanded silhouette, while depth follows the atlas's two-pixel side strip.

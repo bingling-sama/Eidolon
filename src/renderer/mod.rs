@@ -584,14 +584,14 @@ impl Renderer {
         }
 
         let equipment = character.back_equipment();
-        let cape_texture = equipment
+        let cape_atlas = equipment
             .filter(|equipment| equipment.kind() == BackEquipmentKind::Cape)
             .map(|equipment| equipment.atlas().texture.as_ref());
-        let elytra_texture = equipment
+        let elytra_atlas = equipment
             .filter(|equipment| equipment.kind() == BackEquipmentKind::Elytra)
             .map(|equipment| equipment.atlas().texture.as_ref());
 
-        if cape_texture.is_some() {
+        if cape_atlas.is_some() {
             let cape_uniform = compute_cape_uniform(character, camera, width, height);
             let offset = (CAPE_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
             self.queue.write_buffer(
@@ -601,7 +601,7 @@ impl Renderer {
             );
         }
 
-        if elytra_texture.is_some() {
+        if elytra_atlas.is_some() {
             let elytra_uniforms = compute_elytra_uniforms(character, camera, width, height);
             for (index, uniform) in [LEFT_ELYTRA_UNIFORM_INDEX, RIGHT_ELYTRA_UNIFORM_INDEX]
                 .into_iter()
@@ -715,19 +715,19 @@ impl Renderer {
                 }
             }
 
-            if let Some(cape_texture) = cape_texture {
+            if let Some(cape_atlas) = cape_atlas {
                 render_pass.set_bind_group(
                     0,
                     &self.uniform_bind_group,
                     &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
-                render_pass.set_bind_group(1, &cape_texture.bind_group, &[]);
+                render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
                 render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
             }
 
-            if let Some(elytra_texture) = elytra_texture {
-                render_pass.set_bind_group(1, &elytra_texture.bind_group, &[]);
+            if let Some(elytra_atlas) = elytra_atlas {
+                render_pass.set_bind_group(1, &elytra_atlas.bind_group, &[]);
                 for (index, wing) in [
                     (LEFT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.left_wing),
                     (RIGHT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.right_wing),

@@ -300,8 +300,8 @@ struct PreviewApp {
     scene_state: SceneState,
     camera: Camera,
     texture_path: String,
-    cape_texture_path: Option<String>,
-    elytra_texture_path: Option<String>,
+    cape_atlas_path: Option<String>,
+    elytra_atlas_path: Option<String>,
     initial_size: PhysicalSize<u32>,
     interaction: PreviewInteraction,
 }
@@ -391,9 +391,9 @@ impl ApplicationHandler for PreviewApp {
         let mut character = Character::from_body(body);
         self.scene_state.apply_to(&mut character);
         let atlas_path = self
-            .cape_texture_path
+            .cape_atlas_path
             .as_deref()
-            .or(self.elytra_texture_path.as_deref());
+            .or(self.elytra_atlas_path.as_deref());
         if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
             let atlas = renderer
                 .load_back_equipment_atlas(path)
@@ -1237,8 +1237,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 scene_state,
                 camera,
                 texture_path: skin,
-                cape_texture_path: scene.cape,
-                elytra_texture_path: scene.elytra,
+                cape_atlas_path: scene.cape,
+                elytra_atlas_path: scene.elytra,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
                 interaction: PreviewInteraction::default(),
             };

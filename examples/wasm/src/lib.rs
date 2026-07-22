@@ -94,7 +94,7 @@ impl CanvasRenderer {
         log::info!("Cape cleared");
     }
 
-    /// Load an elytra texture from PNG bytes and enable elytra rendering.
+    /// Load a Back equipment atlas from PNG bytes and select Elytra presentation.
     pub fn load_elytra(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
         let atlas = self
             .inner

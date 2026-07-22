@@ -10,7 +10,7 @@ Eidolon 是一个使用 Rust 编写的 Minecraft 皮肤渲染器。它可以把�
 ## 功能
 
 - 加载并渲染 Minecraft 玩家模型
-- 支持皮肤贴图映射
+- 支持 Skin 图集映射
 - 使用 wgpu 进行 3D 渲染
 - 输出 PNG 或 WebP 图片
 - 可配置相机、姿势和输出尺寸

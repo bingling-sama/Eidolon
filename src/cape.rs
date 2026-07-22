@@ -1,7 +1,7 @@
 //! Hardcoded cape geometry from bs-community/skinview3d.
 //!
 //! Cape is a BoxGeometry(10, 16, 1) in pixel units — 10px wide, 16px tall,
-//! 1px deep. UVs map to a 64×32 cape texture using the same layout as
+//! 1px deep. UVs map to a 64×32 Back equipment atlas using the same layout as
 //! skinview3d's `setCapeUVs`.
 //!
 //! Voxel box → 6 faces × 2 triangles = 12 tris = 36 non-indexed vertices.

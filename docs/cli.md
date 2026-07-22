@@ -26,7 +26,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
 | `--nametag <TEXT>` | Render a Minecraft-style player name above the model | *(hidden)* |
 | `--disable-nametag-see-through` | Fully hide nametag pixels occluded by scene geometry | *(translucent when occluded)* |
-| `--cape <PNG>` | Render a cape using the specified cape texture | *(no cape)* |
+| `--cape <PNG>` | Render a Cape using the specified Back equipment atlas | *(no cape)* |
 | `--elytra <PNG>` | Render elytra using a 2:1 cape atlas (64x32 or HD) | *(no elytra)* |
 | `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
 | `--elytra-pitch <DEG>` | Override the selected posture's elytra pitch | *(posture value)* |
@@ -70,7 +70,7 @@ eidolon render skin.png --nametag Steve
 # Fully hide nametag pixels behind the player or scene geometry
 eidolon render skin.png --nametag Steve --disable-nametag-see-through
 
-# Render with an explicit cape texture
+# Render Cape with an explicit Back equipment atlas
 eidolon render skin.png --cape cape.png --cape-pitch 25
 
 # Render elytra with custom pitch and opening angle (mutually exclusive with --cape)
