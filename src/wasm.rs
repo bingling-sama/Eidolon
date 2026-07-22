@@ -3,7 +3,7 @@
 //! Build with `wasm-pack build --target bundler --features wasm`, then import from JS.
 //! Requires a browser with WebGPU support (Chrome 113+, Edge 113+, Firefox Nightly).
 
-use crate::animation::AnimationPreset;
+use crate::animation::{AnimationPreset, AnimationTimeline, LoopMode};
 use crate::back_equipment::{BackEquipment, BackEquipmentKind};
 use crate::camera::Camera;
 use crate::character::{Character, DefaultPostures, Posture, SkinType};
@@ -30,8 +30,7 @@ pub struct CanvasRenderer {
     pending_posture: Option<Posture>,
     skin_type: SkinType,
     camera: Camera,
-    animation: AnimationPreset,
-    animation_time: Duration,
+    timeline: AnimationTimeline,
     elytra_override: Option<(f32, f32)>,
 }
 
@@ -49,8 +48,7 @@ impl CanvasRenderer {
             pending_posture: Some(DefaultPostures::STAND),
             skin_type: SkinType::Classic,
             camera: Camera::default(),
-            animation: AnimationPreset::Idle,
-            animation_time: Duration::ZERO,
+            timeline: AnimationTimeline::new(AnimationPreset::Idle),
             elytra_override: None,
         })
     }
@@ -149,27 +147,76 @@ impl CanvasRenderer {
 
     /// Select a procedural animation and reset it to phase zero.
     pub fn set_animation(&mut self, preset: &str) -> Result<(), JsValue> {
-        self.animation = parse_animation(preset)?;
-        self.animation_time = Duration::ZERO;
+        self.timeline.set_preset(parse_animation(preset)?);
         self.apply_animation_sample();
         Ok(())
     }
 
-    /// Sample the selected animation at a JS-owned playback time in seconds.
+    /// Seek the selected animation to an explicit position in seconds.
+    ///
+    /// Kept for compatibility with older browser clients; new clients should
+    /// use `advance_animation` and the playback controls below.
     pub fn sample_animation(&mut self, time_seconds: f64) -> Result<(), JsValue> {
-        if !time_seconds.is_finite() || time_seconds < 0.0 {
-            return Err(JsValue::from_str(
-                "animation time must be finite and non-negative",
-            ));
-        }
-        self.animation_time = Duration::from_secs_f64(time_seconds);
+        self.timeline.seek_to(duration_from_seconds(
+            time_seconds,
+            "animation time must be finite, non-negative, and representable",
+        )?);
         self.apply_animation_sample();
         Ok(())
     }
 
     /// Natural cycle duration of the selected animation, in seconds.
     pub fn animation_duration(&self) -> f64 {
-        self.animation.cycle_duration().as_secs_f64()
+        self.timeline.duration().as_secs_f64()
+    }
+
+    /// Advance playback by a browser-provided frame delta in seconds.
+    pub fn advance_animation(&mut self, delta_seconds: f64) -> Result<(), JsValue> {
+        self.timeline.advance(duration_from_seconds(
+            delta_seconds,
+            "animation delta must be finite, non-negative, and representable",
+        )?);
+        self.apply_animation_sample();
+        Ok(())
+    }
+
+    /// Start or pause playback.
+    pub fn set_animation_playing(&mut self, playing: bool) {
+        if playing {
+            self.timeline.play();
+        } else {
+            self.timeline.pause();
+        }
+    }
+
+    /// Set playback speed; values are clamped to the core timeline range.
+    pub fn set_animation_speed(&mut self, speed: f32) {
+        self.timeline.set_speed(speed);
+    }
+
+    /// Select looping (`true`) or one-shot (`false`) playback.
+    pub fn set_animation_loop(&mut self, looping: bool) {
+        self.timeline.set_loop_mode(if looping {
+            LoopMode::Loop
+        } else {
+            LoopMode::Once
+        });
+        self.apply_animation_sample();
+    }
+
+    /// Current playback position in seconds.
+    pub fn animation_time(&self) -> f64 {
+        self.timeline.position().as_secs_f64()
+    }
+
+    /// Whether the timeline is currently playing.
+    pub fn animation_playing(&self) -> bool {
+        self.timeline.is_playing()
+    }
+
+    /// Whether a one-shot timeline has reached its final pose.
+    pub fn animation_finished(&self) -> bool {
+        self.timeline.is_finished()
     }
 
     /// Override elytra pitch and opening angle in degrees.
@@ -268,7 +315,7 @@ impl CanvasRenderer {
 
 impl CanvasRenderer {
     fn apply_animation_sample(&mut self) {
-        let mut posture = self.animation.sample(self.animation_time);
+        let mut posture = self.timeline.sample();
         if let Some((pitch, spread)) = self.elytra_override {
             posture.elytra_pitch = pitch;
             posture.elytra_roll = spread;
@@ -314,4 +361,8 @@ fn parse_animation(preset: &str) -> Result<AnimationPreset, JsValue> {
         "fly" => Ok(AnimationPreset::Fly),
         other => Err(JsValue::from_str(&format!("unknown animation: '{other}'"))),
     }
+}
+
+fn duration_from_seconds(seconds: f64, message: &str) -> Result<Duration, JsValue> {
+    Duration::try_from_secs_f64(seconds).map_err(|_| JsValue::from_str(message))
 }

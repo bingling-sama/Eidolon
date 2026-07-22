@@ -66,6 +66,10 @@ async function boot() {
     syncBackground();
     renderer.set_animation(animationSelect.value);
     playback.duration = renderer.animation_duration();
+    renderer.set_animation_speed(playback.speed);
+    renderer.set_animation_loop(playback.loop);
+    renderer.set_animation_playing(playback.playing);
+    playback.time = renderer.animation_time();
     updatePlaybackControls();
     setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
     resultDiv.dataset.rendererReady = 'true';
@@ -94,20 +98,19 @@ window.addEventListener('resize', resizeCanvas);
 // ---- rAF render loop ----
 function frame(timestamp) {
   if (renderer) {
-    if (playback.playing && playback.lastTimestamp != null) {
-      playback.time += (timestamp - playback.lastTimestamp) / 1000 * playback.speed;
-      if (playback.time >= playback.duration) {
-        if (playback.loop) {
-          playback.time %= playback.duration;
-        } else {
-          playback.time = Math.max(0, playback.duration - 0.001);
-          playback.playing = false;
-          updatePlayButton();
-        }
+    const wasPlaying = playback.playing;
+    if (playback.lastTimestamp != null) {
+      const deltaSeconds = Math.max(0, (timestamp - playback.lastTimestamp) / 1000);
+      try {
+        renderer.advance_animation(deltaSeconds);
+      } catch (e) {
+        console.error('Animation advance failed:', e);
       }
     }
     playback.lastTimestamp = timestamp;
-    renderer.sample_animation(playback.time);
+    playback.time = renderer.animation_time();
+    playback.playing = renderer.animation_playing();
+    if (playback.playing !== wasPlaying) updatePlayButton();
     if (!elytraOverridden) {
       setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
     }
@@ -133,33 +136,43 @@ document.addEventListener('visibilitychange', () => {
 animationSelect.addEventListener('change', () => {
   if (!renderer) return;
   renderer.set_animation(animationSelect.value);
-  playback.time = 0;
   playback.duration = renderer.animation_duration();
+  playback.time = renderer.animation_time();
   playback.lastTimestamp = null;
   setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
   updatePlaybackControls();
 });
 
 btnPlay.addEventListener('click', () => {
-  playback.playing = !playback.playing;
+  if (!renderer) return;
+  if (renderer.animation_finished()) renderer.sample_animation(0);
+  renderer.set_animation_playing(!renderer.animation_playing());
+  playback.playing = renderer.animation_playing();
   playback.lastTimestamp = null;
   updatePlayButton();
 });
 
 inputTimeline.addEventListener('input', () => {
-  playback.time = Number(inputTimeline.value);
+  const time = Number(inputTimeline.value);
   playback.lastTimestamp = null;
-  if (renderer) renderer.sample_animation(playback.time);
+  if (renderer) {
+    renderer.sample_animation(time);
+    playback.time = renderer.animation_time();
+    playback.playing = renderer.animation_playing();
+  }
+  updatePlayButton();
   updateTimeline();
 });
 
 selectSpeed.addEventListener('change', () => {
   playback.speed = Number(selectSpeed.value);
+  if (renderer) renderer.set_animation_speed(playback.speed);
   playback.lastTimestamp = null;
 });
 
 inputLoop.addEventListener('change', () => {
   playback.loop = inputLoop.checked;
+  if (renderer) renderer.set_animation_loop(playback.loop);
 });
 
 function updatePlaybackControls() {
