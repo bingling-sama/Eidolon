@@ -156,7 +156,8 @@ mod tests {
 
     fn rgba_frame(frame_index: u32) -> Result<Vec<u8>, DynError> {
         let value = 40 + frame_index as u8 * 40;
-        Ok([value, 20, 220, 255].repeat(4))
+        let alpha = 55 + frame_index as u8 * 50;
+        Ok([value, 20, 220, alpha].repeat(4))
     }
 
     #[test]
@@ -173,15 +174,15 @@ mod tests {
         assert_eq!(decoder.repeat(), Repeat::Finite(3));
 
         let mut frame_count = 0;
-        let mut total_delay = 0;
+        let mut delays = Vec::new();
         let mut has_nonzero_pixel = false;
         while let Some(frame) = decoder.read_next_frame().unwrap() {
             frame_count += 1;
-            total_delay += u32::from(frame.delay);
+            delays.push(frame.delay);
             has_nonzero_pixel |= frame.buffer.iter().any(|channel| *channel != 0);
         }
         assert_eq!(frame_count, 4);
-        assert_eq!(total_delay, 100);
+        assert_eq!(delays, [25, 25, 25, 25]);
         assert!(has_nonzero_pixel);
     }
 
@@ -195,9 +196,20 @@ mod tests {
         assert!(format!("{decoder:?}").contains("loop_cnt: 2"));
         let frames: Vec<_> = decoder.into_iter().collect();
         assert_eq!(frames.len(), 4);
-        assert!(frames
-            .iter()
-            .flat_map(|frame| frame.data())
-            .any(|channel| *channel != 0));
+        assert_eq!(
+            frames
+                .iter()
+                .map(|frame| frame.timestamp())
+                .collect::<Vec<_>>(),
+            [250, 500, 750, 1_000]
+        );
+        for (frame_index, frame) in frames.iter().enumerate() {
+            assert_eq!(frame.dimensions(), (2, 2));
+            assert_eq!(
+                frame.data(),
+                rgba_frame(frame_index as u32).unwrap(),
+                "frame {frame_index} should preserve lossless RGBA pixels"
+            );
+        }
     }
 }

@@ -326,8 +326,6 @@
     .icon-btn {
       width: 40px;
       padding: 0;
-      font-size: 16px;
-      line-height: 1;
     }
     .timeline-wrap {
       display: flex;
@@ -343,15 +341,20 @@
       width: 76px;
       font-family: 'Geist Mono', 'SF Mono', monospace;
       font-size: 12px;
+      font-weight: 400;
+      line-height: 16px;
       color: var(--gray-900);
       text-align: right;
     }
     .loop-control {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       height: 40px;
+      font-family: 'Geist Sans', system-ui, sans-serif;
       font-size: 13px;
+      font-weight: 400;
+      line-height: 16px;
       color: var(--gray-900);
       white-space: nowrap;
     }
@@ -601,24 +604,24 @@
         </div>
         <div class="field" style="max-width:120px;flex:0 0 auto">
           <span class="field-label">Elytra</span>
-          <button id="btn-reset-elytra" class="btn btn-secondary">Reset angles</button>
+          <button id="btn-reset-elytra" class="btn btn-secondary">Reset Elytra</button>
         </div>
       </div>
 
       <div class="playback">
-        <button id="btn-play" class="btn btn-primary icon-btn" type="button" aria-label="Pause" title="Pause">&#10074;&#10074;</button>
+        <button id="btn-play" class="btn btn-primary icon-btn" type="button" aria-label="Pause Animation" title="Pause Animation">&#10074;&#10074;</button>
         <div class="timeline-wrap">
-          <input id="input-timeline" class="angle-slider timeline" type="range" min="0" max="4" value="0" step="0.001" aria-label="Animation timeline">
+          <input id="input-timeline" class="angle-slider timeline" type="range" min="0" max="4" value="0" step="0.001" aria-label="Animation Timeline">
           <output id="output-timeline" class="timeline-value" for="input-timeline">0.00 / 4.00</output>
         </div>
-        <select id="select-speed" class="select" aria-label="Playback speed">
+        <select id="select-speed" class="select" aria-label="Playback Speed">
           <option value="0.25">0.25x</option>
           <option value="0.5">0.5x</option>
           <option value="1" selected>1x</option>
           <option value="2">2x</option>
           <option value="4">4x</option>
         </select>
-        <label class="loop-control"><input id="input-loop" type="checkbox" checked> Loop</label>
+        <label class="loop-control"><input id="input-loop" type="checkbox" checked> Loop Animation</label>
       </div>
 
       <!-- Result -->

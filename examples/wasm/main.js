@@ -41,6 +41,7 @@ resultDiv.appendChild(canvas);
 /** @type {CanvasRenderer | null} */
 let renderer = null;
 let skinLoaded = false;
+let elytraOverridden = false;
 
 // Camera state
 const camera = { yaw: 180, pitch: 90, scale: 1.0 };
@@ -62,10 +63,12 @@ async function boot() {
     renderer = await CanvasRenderer.new(canvas);
     resizeCanvas();
     setActivePreset(bgPresets.querySelector('.bg-swatch.transparent'));
+    syncBackground();
     renderer.set_animation(animationSelect.value);
     playback.duration = renderer.animation_duration();
     updatePlaybackControls();
     setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+    resultDiv.dataset.rendererReady = 'true';
     console.log('Renderer ready');
     requestAnimationFrame(frame);
   } catch (e) {
@@ -105,6 +108,9 @@ function frame(timestamp) {
     }
     playback.lastTimestamp = timestamp;
     renderer.sample_animation(playback.time);
+    if (!elytraOverridden) {
+      setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+    }
     updateTimeline();
 
     if (skinLoaded) {
@@ -166,8 +172,8 @@ function updatePlaybackControls() {
 
 function updatePlayButton() {
   btnPlay.innerHTML = playback.playing ? '&#10074;&#10074;' : '&#9654;';
-  btnPlay.setAttribute('aria-label', playback.playing ? 'Pause' : 'Play');
-  btnPlay.title = playback.playing ? 'Pause' : 'Play';
+  btnPlay.setAttribute('aria-label', playback.playing ? 'Pause Animation' : 'Play Animation');
+  btnPlay.title = playback.playing ? 'Pause Animation' : 'Play Animation';
 }
 
 function updateTimeline() {
@@ -189,6 +195,7 @@ function updateElytraAngleOutputs() {
 }
 
 function syncElytraAngles() {
+  elytraOverridden = true;
   updateElytraAngleOutputs();
   const pitch = Number(inputElytraPitch.value);
   const spread = Number(inputElytraSpread.value);
@@ -201,6 +208,7 @@ inputElytraSpread.addEventListener('input', syncElytraAngles);
 btnResetElytra.addEventListener('click', () => {
   if (!renderer) return;
   renderer.reset_elytra_angles();
+  elytraOverridden = false;
   setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
 });
 

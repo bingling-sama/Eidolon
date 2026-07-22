@@ -1,8 +1,8 @@
 # Architecture
 
 Eidolon is split into a small CLI binary and a reusable rendering library. The binary parses scene
-options and delegates to the library; the library owns GPU setup, skin loading, model loading, and
-image output.
+options and delegates frame rendering to the library. The library owns GPU setup, skin loading,
+model loading, and static image output; the binary owns CLI-specific animated file encoding.
 
 ## Crate Layout
 

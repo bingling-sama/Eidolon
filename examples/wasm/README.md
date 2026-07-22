@@ -24,15 +24,18 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a Back equipment atlas for Cape or Elytra presentation. Elytra pitch and spread can be adjusted independently after choosing a posture.
+Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a Back equipment atlas for Cape or Elytra presentation. Choose an animation, play or pause it, adjust its speed and timeline, and toggle looping. Elytra pitch and spread become fixed overrides when adjusted; **Reset Elytra** returns them to animation control.
+
+After building the WASM package, run `npm run test:e2e` to verify desktop and mobile layout, playback, reduced-motion behavior, canvas updates, and Elytra override reset in Chromium.
 
 ## How It Works
 
 1. `wasm-pack` compiles the Rust crate (`src/lib.rs`) to a WASM module + JS glue in `pkg/`
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
-3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; `set_elytra_angles(pitch, spread)` overrides the selected posture, while `elytra_pitch()` and `elytra_spread()` expose the current values
-4. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop
-5. Export captures an offscreen PNG at the selected resolution
+3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; Rust samples the selected procedural animation while JS owns playback time
+4. `set_elytra_angles(pitch, spread)` fixes the wing angles until `reset_elytra_angles()` restores animation-driven values
+5. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop; reduced-motion preferences start playback paused and page visibility changes reset the frame-time baseline
+6. Export captures an offscreen PNG at the selected resolution
 
 ## Files
 
@@ -40,7 +43,7 @@ Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft
 |------|---------|
 | `Cargo.toml` | Rust crate (cdylib) depending on `eidolon` with `wasm` feature |
 | `src/lib.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
-| `index.html` | UI — skin/back-equipment pickers, posture controls, export controls, result canvas |
-| `main.js` | Vanilla JS — calls WASM, handles DOM, camera orbit, back-equipment loading |
+| `index.html` | UI — skin/back-equipment pickers, animation playback, export controls, result canvas |
+| `main.js` | Vanilla JS — owns the playback clock and handles DOM, camera orbit, and resource loading |
 | `vite.config.js` | Vite config with WASM plugins |
 | `package.json` | npm scripts + Vite deps |

@@ -105,12 +105,6 @@ fn parse_animation_speed(s: &str) -> Result<f32, String> {
 
 fn parse_animation_output(s: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(s);
-    if path
-        .components()
-        .any(|component| matches!(component, std::path::Component::ParentDir))
-    {
-        return Err("animation output path must not contain '..' components".to_owned());
-    }
     let extension = path
         .extension()
         .and_then(|extension| extension.to_str())
@@ -1236,6 +1230,10 @@ mod tests {
             "run",
         ])
         .is_err());
+    }
+
+    #[test]
+    fn cli_animate_accepts_output_in_parent_directory() {
         assert!(Args::try_parse_from([
             "eidolon",
             "animate",
@@ -1244,7 +1242,7 @@ mod tests {
             "--animation",
             "idle",
         ])
-        .is_err());
+        .is_ok());
     }
 
     #[test]

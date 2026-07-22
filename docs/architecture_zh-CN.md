@@ -1,11 +1,13 @@
 # 架构说明
 
-Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负责解析场景参数并调用库；库负责
-GPU 初始化、皮肤加载、模型加载与图片输出。
+Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负责解析场景参数并调用库完成单帧
+渲染。库负责 GPU 初始化、皮肤加载、模型加载与静态图片输出；命令行负责动画文件编码。
 
 ## Crate 结构
 
-- `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
+- `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`animate`、`preview`、`convert` 子命令。
+- `src/animation.rs` 提供无状态的程序化 `AnimationPreset`，采样结果为完整 Posture。
+- `src/animation_export.rs` 是流式编码 GIF 和 Animated WebP 的 CLI adapter。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
 - `src/body.rs` 定义持有 Skin 与 classic/slim 几何选择的 `Body`。
@@ -14,9 +16,9 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 - `src/character.rs` 定义资源所有权、姿势预设和角色变换；Character 始终至少包含 Body 或后背装备。
 - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型。
 - 私有的 `src/texture.rs` 上传 PNG 图集，并在需要时自动展开旧版单层 Skin。
-- `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、输出编码、读回、管线和 uniform 逻辑。
-- `src/utils/converter.rs` 实现单层皮肤图集到双层图集的转换。
-- `benches/performance_benchmark.rs` 使用 Criterion 批量渲染图片做基准测试。
+- `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、静态图片输出、读回、管线和 uniform 逻辑。
+- `src/converter.rs` 实现单层皮肤图集到双层图集的转换。
+- `benches/performance_benchmark.rs` 使用 Criterion 测量批量渲染和单周期动画导出。
 
 ## 渲染流程
 
@@ -38,6 +40,10 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 
 `preview` 使用同一套场景数据和渲染管线，但 `Renderer::new_windowed` 会创建窗口 surface，
 `render_frame` 每帧提交到 swapchain。
+
+`animate` 会在一个自然周期内均匀采样 `AnimationPreset`，应用显式 Posture 覆盖，逐帧渲染并
+立即将 RGBA buffer 交给所选编码器。GIF 延迟和 WebP 时间戳使用累计取整以避免漂移；
+Renderer 仍然只负责单帧渲染。
 
 ## 模型与皮肤约定
 

@@ -122,6 +122,22 @@ mod tests {
         ]
     }
 
+    fn assert_close(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < 0.001,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    fn samples(preset: AnimationPreset) -> [Posture; 3] {
+        let cycle = preset.cycle_duration();
+        [
+            preset.sample(Duration::ZERO),
+            preset.sample(cycle / 4),
+            preset.sample(cycle / 2),
+        ]
+    }
+
     #[test]
     fn sampling_a_full_cycle_returns_to_the_start() {
         for preset in AnimationPreset::ALL {
@@ -143,6 +159,51 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn presets_match_their_defining_key_samples() {
+        let [idle_start, idle_quarter, idle_half] = samples(AnimationPreset::Idle);
+        for (sample, expected) in [idle_start, idle_quarter, idle_half]
+            .into_iter()
+            .zip([0.0, 2.5, 0.0])
+        {
+            assert_close(sample.head_yaw, expected);
+        }
+        assert_close(idle_start.cape_pitch, 9.841_149);
+        assert_close(idle_quarter.cape_pitch, 12.555_165);
+        assert_close(idle_half.cape_pitch, 11.758_851);
+
+        let [walk_start, walk_quarter, walk_half] = samples(AnimationPreset::Walk);
+        assert_close(walk_start.left_leg_pitch, 0.0);
+        assert_close(walk_quarter.left_leg_pitch, 35.0);
+        assert_close(walk_half.left_leg_pitch, 0.0);
+        assert_close(walk_quarter.left_arm_pitch, -35.0);
+        assert_close(walk_quarter.cape_pitch, 17.184_336);
+
+        let [run_start, run_quarter, run_half] = samples(AnimationPreset::Run);
+        for sample in [run_start, run_quarter, run_half] {
+            assert_close(sample.body_pitch, -8.0);
+        }
+        assert_close(run_quarter.left_arm_pitch, -70.0);
+        assert_close(run_quarter.left_leg_pitch, 65.0);
+        assert_close(run_half.cape_pitch, 53.738_85);
+
+        let [wave_start, wave_quarter, wave_half] = samples(AnimationPreset::Wave);
+        assert_close(wave_start.left_arm_roll, -28.0);
+        assert_close(wave_quarter.left_arm_roll, -6.0);
+        assert_close(wave_half.left_arm_roll, -28.0);
+        assert_close(wave_quarter.left_arm_pitch, 155.0);
+        assert_close(wave_quarter.head_yaw, -5.0);
+
+        let [fly_start, fly_quarter, fly_half] = samples(AnimationPreset::Fly);
+        for sample in [fly_start, fly_quarter, fly_half] {
+            assert_close(sample.body_pitch, -90.0);
+        }
+        assert_close(fly_start.elytra_pitch, 20.0);
+        assert_close(fly_quarter.elytra_pitch, 23.0);
+        assert_close(fly_half.elytra_pitch, 20.0);
+        assert_close(fly_quarter.elytra_roll, 64.782_39);
     }
 
     #[test]
