@@ -42,7 +42,8 @@ For `cargo run -- render skin.png`, the flow is:
    GPU rows into a CPU buffer, strips padding, and saves the image as PNG or WebP. The output
    filename extension is auto-adjusted to match the format.
 
-When `Character::nametag` is set, the renderer rasterizes and caches a single-line label texture.
+When `Character::nametag` is set, the Renderer rasterizes a single-line label texture and stores
+the generated GPU resource in that Character. Character clones share the cached resource via `Arc`.
 The anchor transforms the player collision box, computes its scene-space AABB, and places the label
 at the AABB's horizontal center just above its highest point. An unlit billboard pipeline draws it
 after the player mesh. The default path draws a 25%-opacity depth-independent pass followed by the
@@ -71,7 +72,7 @@ Textures are sampled with nearest filtering so Minecraft skin pixels stay crisp.
 - **Camera**: yaw and pitch are degrees. `yaw` orbits around the Y axis (0° = front-right, 180° = front). `pitch` is measured from horizontal (90° = level). The eye orbits a fixed look-at point at `(0, 1, 0)` with radius `4.0 / scale`.
 - **Camera scale** (CLI: `--cam-zoom`): positive. Larger = closer. Also scales the model matrix.
 - **Posture**: all joint angles are degrees. 0° = neutral (no rotation from the model's bind pose). Positive yaw turns the head right. Positive pitch tilts the head up / swings limbs forward.
-- **Elytra posture**: both wings rotate around the central upper-back attachment at `(0, 1.5, 0.125)`. Pitch is shared; yaw and roll describe the left wing and are mirrored for the right wing. Local XYZ Euler angles use the upstream `Rz × Ry × Rx` matrix order. `FLYING` uses 20° pitch and a 60° spread.
+- **Elytra posture**: the mirrored pair rotates around the central upper-back attachment at `(0, 1.5, 0.125)`. Pitch is shared; yaw and roll describe the left side and are mirrored on the right. Local XYZ Euler angles use the upstream `Rz × Ry × Rx` matrix order. `FLYING` uses 20° pitch and a 60° spread.
 - **Character rotation**: Euler rotation in X, then Y, then Z order, applied before per-joint matrices.
 - **Pivot articulation**: `body_pitch` rotates the full character around `(0, 1, 0)`. Each limb then rotates around a hardcoded joint pivot (e.g., right arm at `(0.3125, 1.375, 0.0)`). The transform is `base × translate(pivot) × rotate × translate(-pivot)`.
 

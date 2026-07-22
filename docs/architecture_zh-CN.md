@@ -30,8 +30,8 @@ GPU 初始化、皮肤加载、模型加载与图片输出。
 5. `Renderer::render_to_image` 渲染到离屏 `Rgba8Unorm` 纹理，将带 padding 的 GPU 行数据复制
    到 CPU buffer，去除 padding 后保存为 PNG 或 WebP。
 
-设置 `Character::nametag` 后，渲染器会将单行文本光栅化并缓存为纹理，再通过不受光照影响的
-billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
+设置 `Character::nametag` 后，Renderer 会将单行文本光栅化为 GPU 资源并存入该 Character；
+克隆 Character 时通过 `Arc` 共享缓存资源。之后通过不受光照影响的 billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
 上方。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位，二者都会随 `Camera::scale` 缩放。
 默认先绘制 25% 透明度且忽略深度的遮挡层，再绘制正常深度测试层；
 `nametag_see_through = false` 会跳过第一层。

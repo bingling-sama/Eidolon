@@ -84,7 +84,7 @@ src/
 
 - **Two OBJ models** loaded at startup: `resources/slim.obj` (Alex, 3px arms) and `resources/classic.obj` (Steve, 4px arms). Each named object in the OBJ has a main mesh and a "Layer" mesh (for jacket/hat overlay).
 - **Pivot-point articulation**: Each limb rotates around a hardcoded pivot (e.g., right arm pivot at `(0.3125, 1.375, 0.0)`). The transform formula is `base × translate(pivot) × rotate × translate(-pivot)`.
-- **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward. `body_pitch` rotates the full model around its center; elytra share a central upper-back pivot and mirror yaw/roll between wings.
+- **Posture angles**: 0° = neutral for all joints (no rotation from bind pose). Positive yaw = turn right, positive pitch = look up / swing forward. `body_pitch` rotates the full model around its center; the Elytra pair shares a central upper-back pivot and mirrors yaw/roll on the right.
 - **Single→double layer conversion**: `converter::single2double()` mirrors right-side arm/leg regions horizontally to create left-side overlays in the bottom half of a square texture. Source regions defined as pixel rectangles for 64px reference, scaled by an HD ratio for larger skins.
 - **Output formats**: PNG and WebP via `OutputFormat` enum. Format is inferred from the output filename extension.
 - **Resource ownership**: Character owns Body and optional Back equipment. Clones share immutable GPU resources through `Arc`; a different Renderer must reload them.

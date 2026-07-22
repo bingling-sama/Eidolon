@@ -1,5 +1,6 @@
 use ab_glyph::{point, Font, FontRef, ScaleFont};
 use cgmath::{Matrix4, Point3, SquareMatrix, Transform, Vector3, Vector4};
+use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 use crate::camera::Camera;
@@ -55,6 +56,7 @@ pub(crate) fn nametag_passes(see_through: bool) -> &'static [NametagPass] {
 
 pub(crate) struct CachedNametag {
     pub text: String,
+    pub context_id: u64,
     pub texture: Texture,
     pub vertex_buffer: wgpu::Buffer,
     pub vertex_count: u32,
@@ -67,7 +69,8 @@ impl CachedNametag {
         texture_bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         text: &str,
-    ) -> Option<Self> {
+        context_id: u64,
+    ) -> Option<Arc<Self>> {
         let image = rasterize_nametag(text)?;
         let texture = Texture::upload_raw(
             device,
@@ -86,12 +89,13 @@ impl CachedNametag {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        Some(Self {
+        Some(Arc::new(Self {
             text: text.to_owned(),
+            context_id,
             texture,
             vertex_buffer,
             vertex_count: vertices.len() as u32,
-        })
+        }))
     }
 }
 

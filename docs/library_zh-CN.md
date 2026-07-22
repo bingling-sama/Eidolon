@@ -62,8 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Character 可以只有后背装备而没有 Body，因此披风和鞘翅都可以在玩家坐标系中独立渲染。
   `Posture::cape_pitch` 控制披风绕肩部背面顶边旋转，与 skinview3d 一致的默认值为
   `10.8` 度。鞘翅使用同一图集，姿势中的
-  `elytra_pitch`、`elytra_yaw`、`elytra_roll` 控制左翼；两翼绕中央上背连接点旋转，
-  右翼会镜像 yaw 和 roll；
+  `elytra_pitch`、`elytra_yaw`、`elytra_roll` 控制左侧鞘翅；左右两片绕中央上背连接点旋转，
+  右侧会镜像 yaw 和 roll；
   `DefaultPostures::FLYING` 会将玩家整体转至水平，并使用 `20°` pitch 和 `60°` 开合角。
   应用可以用相同字段构造其它开合快照。`BackEquipmentKind` 保证一次只选择一种呈现形式。
 

@@ -113,9 +113,9 @@ Build a `Posture` directly. All angles are degrees, 0° = neutral (no rotation f
 let posture = Posture {
     cape_pitch: 10.8,        // recommended cape angle for this posture
     body_pitch: 0.0,         // whole-character pitch around its center
-    elytra_pitch: 15.0,      // shared wing pitch
-    elytra_yaw: 0.5729578,   // left wing yaw; mirrored on the right
-    elytra_roll: 15.0,       // left wing roll; mirrored on the right
+    elytra_pitch: 15.0,      // shared Elytra pitch
+    elytra_yaw: 0.5729578,   // left-side yaw; mirrored on the right
+    elytra_roll: 15.0,       // left-side roll; mirrored on the right
     head_yaw: 0.0,           // 0° = facing forward, positive = turn right
     head_pitch: 0.0,         // 0° = level, positive = look up
     left_arm_roll: 0.0,      // 0° = neutral
@@ -190,9 +190,10 @@ renderer.render_frame(&character, &camera)?;
 - A Character may contain Back equipment without a Body, so Cape and Elytra can render alone in
   the same player coordinate system. `Posture::cape_pitch` rotates Cape around the top-back
   attachment edge; the skinview3d-compatible default is `10.8` degrees.
-- Elytra use the same 2:1 Back equipment atlas format (64x32 or an HD multiple). Postures control both wings through
-  `elytra_pitch`, `elytra_yaw`, and `elytra_roll`; both wings rotate around the central upper-back
-  attachment, and the right wing mirrors the left wing's yaw and roll. `DefaultPostures::FLYING`
+- Elytra use the same 2:1 Back equipment atlas format (64x32 or an HD multiple). Posture controls
+  the mirrored Elytra pair through `elytra_pitch`, `elytra_yaw`, and `elytra_roll`; both sides
+  rotate around the central upper-back attachment, with yaw and roll mirrored on the right.
+  `DefaultPostures::FLYING`
   uses `20°` pitch and a `60°` spread; applications can construct other
   snapshots with the same fields. `BackEquipmentKind` makes Cape and Elytra mutually exclusive.
 

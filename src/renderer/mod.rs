@@ -1,6 +1,6 @@
 //! WGPU renderer: headless RGBA readback and windowed surface preview, shared skin pipeline.
 
-mod nametag;
+pub(crate) mod nametag;
 mod pipeline;
 mod readback;
 mod uniforms;
@@ -112,7 +112,6 @@ pub struct Renderer {
     surface_pipeline: Option<wgpu::RenderPipeline>,
     nametag_surface_pipeline: Option<wgpu::RenderPipeline>,
     nametag_see_through_surface_pipeline: Option<wgpu::RenderPipeline>,
-    nametag_cache: RefCell<Option<CachedNametag>>,
     /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
     cached_depth_texture: RefCell<Option<(wgpu::Texture, u32, u32)>>,
     /// RGBA clear color for the render pass background. Default: transparent black.
@@ -489,7 +488,6 @@ impl Renderer {
             surface_pipeline,
             nametag_surface_pipeline,
             nametag_see_through_surface_pipeline,
-            nametag_cache: RefCell::new(None),
             cached_depth_texture: RefCell::new(None),
             clear_color: [0.0, 0.0, 0.0, 0.0],
         })
@@ -620,18 +618,19 @@ impl Renderer {
             .as_deref()
             .filter(|text| !text.trim().is_empty());
         if let Some(text) = nametag_text {
-            let needs_rebuild = self
+            let needs_rebuild = character
                 .nametag_cache
                 .borrow()
                 .as_ref()
-                .is_none_or(|cached| cached.text != text);
+                .is_none_or(|cached| cached.text != text || cached.context_id != self.context_id);
             if needs_rebuild {
-                *self.nametag_cache.borrow_mut() = CachedNametag::new(
+                *character.nametag_cache.borrow_mut() = CachedNametag::new(
                     &self.device,
                     &self.queue,
                     &self.texture_bind_group_layout,
                     &self.sampler,
                     text,
+                    self.context_id,
                 );
             }
 
@@ -744,7 +743,7 @@ impl Renderer {
             }
 
             if let Some(text) = nametag_text {
-                let cache = self.nametag_cache.borrow();
+                let cache = character.nametag_cache.borrow();
                 if let Some(cached) = cache.as_ref().filter(|cached| cached.text == text) {
                     render_pass.set_bind_group(
                         0,

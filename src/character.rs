@@ -1,8 +1,11 @@
 use crate::back_equipment::BackEquipment;
 use crate::body::Body;
 pub use crate::body::SkinType;
+use crate::renderer::nametag::CachedNametag;
 use cgmath::Vector3;
+use std::cell::RefCell;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CharacterError {
@@ -144,12 +147,13 @@ impl DefaultPostures {
 }
 
 /// A non-empty player-aligned appearance and its scene state.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Character {
     body: Option<Body>,
     back_equipment: Option<BackEquipment>,
     /// Optional player name rendered above the model. `None` hides the nametag.
     pub nametag: Option<String>,
+    pub(crate) nametag_cache: RefCell<Option<Arc<CachedNametag>>>,
     /// Whether an occluded nametag remains visible at reduced opacity.
     pub nametag_see_through: bool,
     pub posture: Posture,
@@ -166,6 +170,7 @@ impl Character {
             body,
             back_equipment,
             nametag: None,
+            nametag_cache: RefCell::new(None),
             nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
@@ -231,11 +236,26 @@ impl Character {
             body: None,
             back_equipment: None,
             nametag: None,
+            nametag_cache: RefCell::new(None),
             nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
         }
+    }
+}
+
+impl fmt::Debug for Character {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Character")
+            .field("body", &self.body)
+            .field("back_equipment", &self.back_equipment)
+            .field("nametag", &self.nametag)
+            .field("nametag_see_through", &self.nametag_see_through)
+            .field("posture", &self.posture)
+            .field("position", &self.position)
+            .field("rotation", &self.rotation)
+            .finish()
     }
 }
 
