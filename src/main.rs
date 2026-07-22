@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
-    animation::AnimationPreset,
+    animation::{AnimationPreset, AnimationTimeline},
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, Posture, SkinType},
@@ -423,55 +423,43 @@ struct PreviewApp {
 }
 
 struct PreviewPlayback {
-    preset: AnimationPreset,
-    elapsed: std::time::Duration,
-    speed: f32,
-    playing: bool,
-    active: bool,
+    timeline: AnimationTimeline,
     last_tick: Option<std::time::Instant>,
 }
 
 impl PreviewPlayback {
-    const MAX_FRAME_GAP: std::time::Duration = std::time::Duration::from_millis(250);
-
     fn new(preset: AnimationPreset, playing: bool) -> Self {
+        let mut timeline = AnimationTimeline::new(preset);
+        if playing {
+            timeline.play();
+        }
         Self {
-            preset,
-            elapsed: std::time::Duration::ZERO,
-            speed: 1.0,
-            playing,
-            active: playing,
+            timeline,
             last_tick: None,
         }
     }
 
     fn from_posture(posture: PostureCli) -> Self {
         let mut playback = Self::new(posture.animation_preset(), false);
-        playback.elapsed = posture.sample_time();
+        playback.timeline.seek_to(posture.sample_time());
         playback
     }
 
     fn tick(&mut self, now: std::time::Instant) {
         if let Some(previous) = self.last_tick {
             let delta = now.saturating_duration_since(previous);
-            if self.playing && delta <= Self::MAX_FRAME_GAP {
-                let scaled = if self.speed == 1.0 {
-                    delta
-                } else {
-                    std::time::Duration::from_nanos(
-                        (delta.as_nanos() as f64 * f64::from(self.speed)).round() as u64,
-                    )
-                };
-                self.elapsed += scaled;
-            }
+            self.timeline.advance(delta);
         }
         self.last_tick = Some(now);
     }
 
     fn toggle(&mut self, now: std::time::Instant) {
         self.tick(now);
-        self.active = true;
-        self.playing = !self.playing;
+        if self.timeline.is_playing() {
+            self.timeline.pause();
+        } else {
+            self.timeline.play();
+        }
     }
 
     fn suspend(&mut self) {
@@ -479,37 +467,34 @@ impl PreviewPlayback {
     }
 
     fn select(&mut self, preset: AnimationPreset, now: std::time::Instant) {
-        if !self.active {
-            self.playing = true;
-        }
-        self.active = true;
-        self.preset = preset;
-        self.elapsed = std::time::Duration::ZERO;
+        self.timeline.set_preset(preset);
         self.last_tick = Some(now);
     }
 
     fn seek_frames(&mut self, frames: i32) {
-        self.active = true;
-        let cycle = self.preset.cycle_duration().as_secs_f64();
-        let seconds = (self.elapsed.as_secs_f64() + f64::from(frames) / 30.0).rem_euclid(cycle);
-        self.elapsed = std::time::Duration::from_secs_f64(seconds);
+        let delta = std::time::Duration::from_secs_f64(f64::from(frames.unsigned_abs()) / 30.0);
+        if frames.is_negative() {
+            self.timeline.seek_back(delta);
+        } else {
+            self.timeline.seek_by(delta);
+        }
     }
 
     fn set_speed(&mut self, speed: f32) {
-        self.speed = speed.clamp(0.25, 4.0);
+        self.timeline.set_speed(speed);
     }
 
     fn adjust_speed(&mut self, factor: f32) {
-        self.set_speed(self.speed * factor);
+        self.set_speed(self.timeline.speed() * factor);
     }
 
     #[cfg(test)]
     fn elapsed(&self) -> std::time::Duration {
-        self.elapsed
+        self.timeline.position()
     }
 
-    fn sample(&self) -> Option<Posture> {
-        self.active.then(|| self.preset.sample(self.elapsed))
+    fn sample(&self) -> Posture {
+        self.timeline.sample()
     }
 }
 
@@ -690,10 +675,8 @@ impl ApplicationHandler for PreviewApp {
             WindowEvent::Focused(_) => self.playback.suspend(),
             WindowEvent::RedrawRequested => {
                 self.playback.tick(std::time::Instant::now());
-                if let Some(posture) = self.playback.sample() {
-                    if let Some(character) = &mut self.character {
-                        character.posture = self.posture_overrides.apply(posture);
-                    }
+                if let Some(character) = &mut self.character {
+                    character.posture = self.posture_overrides.apply(self.playback.sample());
                 }
                 if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
                     match renderer.render_frame(character, &self.camera) {
@@ -1573,12 +1556,12 @@ mod tests {
         let mut playback = PreviewPlayback::from_posture(scene.posture);
 
         assert_eq!(scene.posture, PostureCli::Fly);
-        assert_eq!(playback.preset, AnimationPreset::Fly);
-        assert!(!playback.playing);
-        assert_eq!(playback.sample(), None);
+        assert_eq!(playback.timeline.preset(), AnimationPreset::Fly);
+        assert!(!playback.timeline.is_playing());
+        assert_eq!(playback.sample(), static_posture);
 
         playback.toggle(std::time::Instant::now());
-        assert_eq!(playback.sample(), Some(static_posture));
+        assert_eq!(playback.sample(), static_posture);
     }
 
     #[test]
@@ -1589,7 +1572,7 @@ mod tests {
 
             playback.toggle(std::time::Instant::now());
 
-            assert_eq!(playback.sample(), Some(static_posture), "{posture:?}");
+            assert_eq!(playback.sample(), static_posture, "{posture:?}");
         }
     }
 

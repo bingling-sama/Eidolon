@@ -7,7 +7,8 @@ model loading, frame rendering, and rendered-output policy.
 ## Crate Layout
 
 - `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
-- `src/animation.rs` provides stateless procedural `AnimationPreset` sampling into complete Postures.
+- `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline`
+  playback, and deterministic `AnimationSchedule` frame times.
 - `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
@@ -63,10 +64,11 @@ window surface and `render_frame` presents each frame to the swapchain.
 
 The CLI uses `--posture` as a shared action selector. Static rendering samples a representative
 frame from its matching `AnimationPreset`; preview starts paused on the same frame and continues
-that preset when playback begins. For `render --animate`, the CLI samples the selected preset's
-natural cycle uniformly, applies explicit Posture overrides in its frame producer, and passes each
-RGBA frame to `output::write_output`. GIF delays and WebP timestamps use cumulative rounding so
-fractional frame durations do not drift. The Renderer remains responsible only for individual frames.
+that preset through `AnimationTimeline` when playback begins. For `render --animate`, an
+`AnimationSchedule` samples the selected preset's natural cycle uniformly, applies explicit Posture
+overrides in its frame producer, and passes each RGBA frame to `output::write_output`. GIF delays and
+WebP timestamps remain output-adapter concerns and use cumulative rounding so fractional frame
+durations do not drift. The Renderer remains responsible only for individual frames.
 
 ## Model And Skin Assumptions
 

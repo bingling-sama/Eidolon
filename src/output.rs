@@ -1,6 +1,6 @@
 //! Rendered-output policy and file encoders.
 
-use crate::animation::AnimationPreset;
+use crate::animation::{AnimationPreset, AnimationSchedule};
 use crate::error::EidolonError;
 use image::{ImageFormat, RgbaImage};
 use std::path::{Path, PathBuf};
@@ -149,19 +149,20 @@ pub fn write_output(
             size,
         } => {
             validate_animation(size, fps, speed)?;
-            let timing = AnimationTiming::new(preset, fps, speed);
+            let schedule = AnimationSchedule::new(preset, fps, speed)
+                .ok_or_else(|| EidolonError::output("invalid animation schedule"))?;
             #[cfg(not(target_arch = "wasm32"))]
             write_animation(
                 &resolved,
                 format,
                 size,
-                &timing,
+                &schedule,
                 loop_count,
                 &mut frame_producer,
             )?;
             #[cfg(target_arch = "wasm32")]
             {
-                let _ = (format, timing, loop_count, &mut frame_producer);
+                let _ = (format, schedule, loop_count, &mut frame_producer);
                 return Err(EidolonError::output(
                     "animated output is unavailable on wasm32",
                 ));
@@ -233,47 +234,16 @@ fn resolve_path(path: &Path, extension: &str) -> Result<PathBuf, EidolonError> {
     Ok(resolved)
 }
 
-struct AnimationTiming {
-    preset: AnimationPreset,
-    fps: u32,
-    frame_count: u32,
-}
-
-impl AnimationTiming {
-    fn new(preset: AnimationPreset, fps: u32, speed: f32) -> Self {
-        let cycle_seconds = preset.cycle_duration().as_secs_f64();
-        let frame_count = (cycle_seconds / f64::from(speed) * f64::from(fps))
-            .round()
-            .max(1.0) as u32;
-        Self {
-            preset,
-            fps,
-            frame_count,
-        }
-    }
-
-    fn frame_count(&self) -> u32 {
-        self.frame_count
-    }
-
-    fn sample_time(&self, frame_index: u32) -> Duration {
-        debug_assert!(frame_index < self.frame_count);
-        let nanos = self.preset.cycle_duration().as_nanos() * u128::from(frame_index)
-            / u128::from(self.frame_count);
-        Duration::from_nanos(nanos as u64)
-    }
-
-    fn webp_timestamp_ms(&self, frame_boundary: u32) -> u32 {
-        rounded_units(frame_boundary, 1_000, self.fps)
-    }
-
-    fn gif_delay_cs(&self, frame_index: u32) -> u32 {
-        rounded_units(frame_index + 1, 100, self.fps) - rounded_units(frame_index, 100, self.fps)
-    }
-}
-
 fn rounded_units(frame_boundary: u32, units_per_second: u32, fps: u32) -> u32 {
     (frame_boundary * units_per_second + fps / 2) / fps
+}
+
+fn webp_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
+    rounded_units(frame_boundary, 1_000, fps)
+}
+
+fn gif_delay_cs(frame_index: u32, fps: u32) -> u32 {
+    rounded_units(frame_index + 1, 100, fps) - rounded_units(frame_index, 100, fps)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -281,7 +251,7 @@ fn write_animation(
     path: &Path,
     format: AnimationFormat,
     size: (u32, u32),
-    timing: &AnimationTiming,
+    schedule: &AnimationSchedule,
     loop_count: u16,
     frame_producer: &mut impl FnMut(Duration) -> Result<RgbaImage, EidolonError>,
 ) -> Result<(), EidolonError> {
@@ -306,13 +276,13 @@ fn write_animation(
                     EidolonError::output(format!("failed to set GIF loop: {error}"))
                 })?;
 
-            for frame_index in 0..timing.frame_count() {
-                let image = frame_producer(timing.sample_time(frame_index))?;
+            for frame_index in 0..schedule.frame_count() {
+                let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
                 let mut rgba = image.into_raw();
                 let mut frame =
                     GifFrame::from_rgba_speed(size.0 as u16, size.1 as u16, &mut rgba, 10);
-                frame.delay = timing.gif_delay_cs(frame_index) as u16;
+                frame.delay = gif_delay_cs(frame_index, schedule.fps()) as u16;
                 encoder.write_frame(&frame).map_err(|error| {
                     EidolonError::output(format!("failed to write GIF: {error}"))
                 })?;
@@ -335,23 +305,20 @@ fn write_animation(
             };
             let mut encoder = WebpEncoder::new_with_options(size, options)
                 .map_err(|error| EidolonError::output(format!("failed to create WebP: {error}")))?;
-            for frame_index in 0..timing.frame_count() {
-                let image = frame_producer(timing.sample_time(frame_index))?;
+            for frame_index in 0..schedule.frame_count() {
+                let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
                 let rgba = image.into_raw();
-                let timestamp: i32 =
-                    timing
-                        .webp_timestamp_ms(frame_index)
-                        .try_into()
-                        .map_err(|error| {
-                            EidolonError::output(format!("invalid WebP timestamp: {error}"))
-                        })?;
+                let timestamp: i32 = webp_timestamp_ms(frame_index, schedule.fps())
+                    .try_into()
+                    .map_err(|error| {
+                        EidolonError::output(format!("invalid WebP timestamp: {error}"))
+                    })?;
                 encoder.add_frame(&rgba, timestamp).map_err(|error| {
                     EidolonError::output(format!("failed to write WebP: {error}"))
                 })?;
             }
-            let duration: i32 = timing
-                .webp_timestamp_ms(timing.frame_count())
+            let duration: i32 = webp_timestamp_ms(schedule.frame_count(), schedule.fps())
                 .try_into()
                 .map_err(|error| EidolonError::output(format!("invalid WebP duration: {error}")))?;
             encoder
@@ -479,14 +446,14 @@ mod tests {
     }
 
     #[test]
-    fn animation_timing_samples_one_cycle_without_endpoint() {
-        let timing = AnimationTiming::new(AnimationPreset::Walk, 30, 1.0);
-        assert_eq!(timing.frame_count(), 30);
-        assert_eq!(timing.sample_time(0), Duration::ZERO);
-        assert!(timing.sample_time(29) < AnimationPreset::Walk.cycle_duration());
-        assert_eq!(timing.webp_timestamp_ms(30), 1_000);
+    fn encoder_timing_rounds_without_drift() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 30, 1.0).unwrap();
+        assert_eq!(schedule.frame_count(), 30);
+        assert_eq!(webp_timestamp_ms(30, schedule.fps()), 1_000);
         assert_eq!(
-            (0..30).map(|frame| timing.gif_delay_cs(frame)).sum::<u32>(),
+            (0..30)
+                .map(|frame| gif_delay_cs(frame, schedule.fps()))
+                .sum::<u32>(),
             100
         );
     }
@@ -494,14 +461,14 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn gif_encoder_writes_frames_timing_dimensions_and_loop_metadata() {
-        let timing = AnimationTiming::new(AnimationPreset::Walk, 4, 1.0);
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 4, 1.0).unwrap();
         let path =
             std::env::temp_dir().join(format!("eidolon-output-gif-{}.gif", std::process::id()));
         write_animation(
             &path,
             AnimationFormat::Gif,
             (2, 2),
-            &timing,
+            &schedule,
             3,
             &mut indexed_rgba_frame,
         )
@@ -530,14 +497,14 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn webp_encoder_writes_lossless_rgba_frames_dimensions_and_loop_metadata() {
-        let timing = AnimationTiming::new(AnimationPreset::Walk, 4, 1.0);
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 4, 1.0).unwrap();
         let path =
             std::env::temp_dir().join(format!("eidolon-output-webp-{}.webp", std::process::id()));
         write_animation(
             &path,
             AnimationFormat::WebP,
             (2, 2),
-            &timing,
+            &schedule,
             2,
             &mut indexed_rgba_frame,
         )

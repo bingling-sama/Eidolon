@@ -14,6 +14,242 @@ pub enum AnimationPreset {
     Fly,
 }
 
+/// How an [`AnimationTimeline`] behaves when it reaches the preset's cycle end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoopMode {
+    Loop,
+    Once,
+}
+
+/// The result of advancing an [`AnimationTimeline`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdvanceResult {
+    Advanced,
+    Looped,
+    Finished,
+    Noop,
+}
+
+/// Stateful playback of one procedural animation preset.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnimationTimeline {
+    preset: AnimationPreset,
+    position: Duration,
+    speed: f32,
+    playing: bool,
+    loop_mode: LoopMode,
+    finished: bool,
+}
+
+impl AnimationTimeline {
+    const MAX_FRAME_GAP: Duration = Duration::from_millis(250);
+    const TERMINAL_SAMPLE_OFFSET: Duration = Duration::from_millis(1);
+
+    /// Create a paused, looping timeline at the start of a preset.
+    pub fn new(preset: AnimationPreset) -> Self {
+        Self {
+            preset,
+            position: Duration::ZERO,
+            speed: 1.0,
+            playing: false,
+            loop_mode: LoopMode::Loop,
+            finished: false,
+        }
+    }
+
+    pub fn preset(&self) -> AnimationPreset {
+        self.preset
+    }
+
+    pub fn position(&self) -> Duration {
+        self.position
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.preset.cycle_duration()
+    }
+
+    pub fn speed(&self) -> f32 {
+        self.speed
+    }
+
+    pub fn loop_mode(&self) -> LoopMode {
+        self.loop_mode
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.playing
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// Return the current posture, including while paused.
+    pub fn sample(&self) -> Posture {
+        if self.finished && self.loop_mode == LoopMode::Once {
+            self.preset
+                .sample(self.duration().saturating_sub(Self::TERMINAL_SAMPLE_OFFSET))
+        } else {
+            self.preset.sample(self.position)
+        }
+    }
+
+    pub fn play(&mut self) {
+        if !self.finished {
+            self.playing = true;
+        }
+    }
+
+    pub fn pause(&mut self) {
+        self.playing = false;
+    }
+
+    pub fn set_preset(&mut self, preset: AnimationPreset) {
+        self.preset = preset;
+        self.position = Duration::ZERO;
+        self.finished = false;
+    }
+
+    pub fn set_loop_mode(&mut self, loop_mode: LoopMode) {
+        if self.loop_mode == LoopMode::Once && loop_mode == LoopMode::Loop && self.finished {
+            self.position = Duration::ZERO;
+            self.finished = false;
+        }
+        self.loop_mode = loop_mode;
+    }
+
+    /// Clamp playback speed to the supported range.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.speed = if speed.is_finite() {
+            speed.clamp(0.25, 4.0)
+        } else if speed.is_sign_negative() {
+            0.25
+        } else {
+            4.0
+        };
+    }
+
+    pub fn seek_to(&mut self, position: Duration) {
+        let cycle_nanos = self.duration().as_nanos();
+        if self.loop_mode == LoopMode::Loop {
+            self.position = Duration::from_nanos((position.as_nanos() % cycle_nanos) as u64);
+            self.finished = false;
+        } else if position >= self.duration() {
+            self.position = self.duration();
+            self.finished = true;
+            self.playing = false;
+        } else {
+            self.position = position;
+            self.finished = false;
+        }
+    }
+
+    pub fn seek_by(&mut self, delta: Duration) {
+        let cycle_nanos = self.duration().as_nanos();
+        let target = self.position.as_nanos().saturating_add(delta.as_nanos());
+        if self.loop_mode == LoopMode::Loop {
+            self.position = Duration::from_nanos((target % cycle_nanos) as u64);
+            self.finished = false;
+        } else {
+            self.seek_to(Duration::from_nanos(target.min(cycle_nanos) as u64));
+        }
+    }
+
+    pub fn seek_back(&mut self, delta: Duration) {
+        let cycle_nanos = self.duration().as_nanos();
+        let current = self.position.as_nanos().min(cycle_nanos);
+        if self.loop_mode == LoopMode::Loop {
+            let offset = delta.as_nanos() % cycle_nanos;
+            self.position =
+                Duration::from_nanos(((current + cycle_nanos - offset) % cycle_nanos) as u64);
+            self.finished = false;
+        } else {
+            self.seek_to(Duration::from_nanos(
+                current.saturating_sub(delta.as_nanos()) as u64,
+            ));
+        }
+    }
+
+    /// Advance by a platform-provided delta. Long gaps are treated as pauses.
+    pub fn advance(&mut self, delta: Duration) -> AdvanceResult {
+        if !self.playing || self.finished || delta.is_zero() || delta > Self::MAX_FRAME_GAP {
+            return AdvanceResult::Noop;
+        }
+        let scaled = Duration::from_secs_f64(delta.as_secs_f64() * f64::from(self.speed));
+        let cycle_nanos = self.duration().as_nanos();
+        let target = self.position.as_nanos().saturating_add(scaled.as_nanos());
+
+        if self.loop_mode == LoopMode::Once && target >= cycle_nanos {
+            self.position = self.duration();
+            self.playing = false;
+            self.finished = true;
+            AdvanceResult::Finished
+        } else if self.loop_mode == LoopMode::Loop && target >= cycle_nanos {
+            self.position = Duration::from_nanos((target % cycle_nanos) as u64);
+            AdvanceResult::Looped
+        } else {
+            self.position = Duration::from_nanos(target as u64);
+            AdvanceResult::Advanced
+        }
+    }
+}
+
+/// Deterministic frame times for one offline animation cycle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnimationSchedule {
+    preset: AnimationPreset,
+    fps: u32,
+    speed: f32,
+    frame_count: u32,
+}
+
+impl AnimationSchedule {
+    /// Return `None` when FPS or speed is outside the supported output range.
+    pub fn new(preset: AnimationPreset, fps: u32, speed: f32) -> Option<Self> {
+        if !(1..=60).contains(&fps) || !speed.is_finite() || !(0.25..=4.0).contains(&speed) {
+            return None;
+        }
+        let cycle_seconds = preset.cycle_duration().as_secs_f64();
+        let frame_count = (cycle_seconds / f64::from(speed) * f64::from(fps))
+            .round()
+            .max(1.0) as u32;
+        Some(Self {
+            preset,
+            fps,
+            speed,
+            frame_count,
+        })
+    }
+
+    pub fn preset(&self) -> AnimationPreset {
+        self.preset
+    }
+
+    pub fn fps(&self) -> u32 {
+        self.fps
+    }
+
+    pub fn speed(&self) -> f32 {
+        self.speed
+    }
+
+    pub fn frame_count(&self) -> u32 {
+        self.frame_count
+    }
+
+    pub fn duration(&self) -> Duration {
+        Duration::from_secs_f64(self.preset.cycle_duration().as_secs_f64() / f64::from(self.speed))
+    }
+
+    pub fn sample_time(&self, frame_index: u32) -> Duration {
+        debug_assert!(frame_index < self.frame_count);
+        let nanos = self.preset.cycle_duration().as_nanos() * u128::from(frame_index)
+            / u128::from(self.frame_count);
+        Duration::from_nanos(nanos as u64)
+    }
+}
+
 impl AnimationPreset {
     /// All built-in presets in the order used by interactive selectors.
     pub const ALL: [Self; 5] = [Self::Idle, Self::Walk, Self::Run, Self::Wave, Self::Fly];
@@ -100,7 +336,7 @@ impl AnimationPreset {
 
 #[cfg(test)]
 mod tests {
-    use super::AnimationPreset;
+    use super::*;
     use crate::character::Posture;
     use std::time::Duration;
 
@@ -257,5 +493,97 @@ mod tests {
             assert_eq!(fly.body_pitch, -90.0);
             assert!(fly.elytra_roll > 45.0);
         }
+    }
+
+    #[test]
+    fn timeline_defaults_to_paused_looping_start() {
+        let timeline = AnimationTimeline::new(AnimationPreset::Walk);
+        assert_eq!(timeline.position(), Duration::ZERO);
+        assert_eq!(timeline.speed(), 1.0);
+        assert_eq!(timeline.loop_mode(), LoopMode::Loop);
+        assert!(!timeline.is_playing());
+        assert!(!timeline.is_finished());
+        assert_eq!(
+            timeline.sample(),
+            AnimationPreset::Walk.sample(Duration::ZERO)
+        );
+    }
+
+    #[test]
+    fn timeline_advances_scales_speed_and_ignores_long_gaps() {
+        let mut timeline = AnimationTimeline::new(AnimationPreset::Walk);
+        timeline.play();
+        assert_eq!(
+            timeline.advance(Duration::from_millis(100)),
+            AdvanceResult::Advanced
+        );
+        assert_eq!(timeline.position(), Duration::from_millis(100));
+
+        timeline.set_speed(2.0);
+        assert_eq!(
+            timeline.advance(Duration::from_millis(50)),
+            AdvanceResult::Advanced
+        );
+        assert_eq!(timeline.position(), Duration::from_millis(200));
+        assert_eq!(
+            timeline.advance(Duration::from_millis(251)),
+            AdvanceResult::Noop
+        );
+        assert_eq!(timeline.position(), Duration::from_millis(200));
+    }
+
+    #[test]
+    fn timeline_loop_and_once_have_distinct_cycle_end_states() {
+        let mut looping = AnimationTimeline::new(AnimationPreset::Walk);
+        looping.seek_to(Duration::from_millis(900));
+        looping.play();
+        assert_eq!(
+            looping.advance(Duration::from_millis(100)),
+            AdvanceResult::Looped
+        );
+        assert_eq!(looping.position(), Duration::ZERO);
+
+        let mut once = AnimationTimeline::new(AnimationPreset::Walk);
+        once.set_loop_mode(LoopMode::Once);
+        once.seek_to(Duration::from_millis(900));
+        once.play();
+        assert_eq!(
+            once.advance(Duration::from_millis(100)),
+            AdvanceResult::Finished
+        );
+        assert!(once.is_finished());
+        assert!(!once.is_playing());
+        assert_eq!(once.position(), AnimationPreset::Walk.cycle_duration());
+        assert_eq!(
+            once.sample(),
+            AnimationPreset::Walk
+                .sample(AnimationPreset::Walk.cycle_duration() - Duration::from_millis(1))
+        );
+        assert_ne!(once.sample(), AnimationPreset::Walk.sample(Duration::ZERO));
+    }
+
+    #[test]
+    fn timeline_seeks_in_both_directions_with_cycle_rules() {
+        let mut timeline = AnimationTimeline::new(AnimationPreset::Walk);
+        timeline.seek_back(Duration::from_millis(100));
+        assert_eq!(timeline.position(), Duration::from_millis(900));
+        timeline.seek_by(Duration::from_millis(200));
+        assert_eq!(timeline.position(), Duration::from_millis(100));
+
+        timeline.set_loop_mode(LoopMode::Once);
+        timeline.seek_back(Duration::from_millis(200));
+        assert_eq!(timeline.position(), Duration::ZERO);
+    }
+
+    #[test]
+    fn animation_schedule_validates_and_samples_one_cycle() {
+        assert!(AnimationSchedule::new(AnimationPreset::Walk, 0, 1.0).is_none());
+        assert!(AnimationSchedule::new(AnimationPreset::Walk, 30, f32::NAN).is_none());
+
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 30, 2.0).unwrap();
+        assert_eq!(schedule.frame_count(), 15);
+        assert_eq!(schedule.duration(), Duration::from_millis(500));
+        assert_eq!(schedule.sample_time(0), Duration::ZERO);
+        assert!(schedule.sample_time(14) < AnimationPreset::Walk.cycle_duration());
     }
 }

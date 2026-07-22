@@ -79,8 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 程序化动画
 
-`AnimationPreset` 是无状态接口：调用方传入时间，得到完整 `Posture`。采样时间会按自然周期自动循环，
-因此窗口预览、WASM `requestAnimationFrame` 和离线导出可以共用同一逻辑。
+`AnimationPreset` 保持为无状态采样基础：调用方传入时间，得到完整 `Posture`。
+`AnimationTimeline` 提供跨平台播放状态，`AnimationSchedule` 为离线输出提供确定性采样时刻。
 
 ```rust
 use eidolon::animation::AnimationPreset;
@@ -95,8 +95,9 @@ assert_eq!(
 ```
 
 内置动作包括 `Idle`（4 秒）、`Walk`（1 秒）、`Run`（0.6 秒）、`Wave`（1.2 秒）和
-`Fly`（1.5 秒）。核心库不保存时钟或播放状态；调用方在每次 Renderer 调用前更新
-`Character::posture`。
+`Fly`（1.5 秒）。adapter 向 timeline 提供帧间隔，因此 native `Instant` 与浏览器动画时间戳
+仍留在各自 adapter。timeline 负责速度、播放/暂停、seek、循环/结束，并忽略超过 250ms 的帧间隔。
+每次 Renderer 调用前使用 `timeline.sample()` 更新 `Character::posture`。
 
 ## 自定义姿势示例
 

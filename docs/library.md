@@ -146,9 +146,9 @@ Presets are available via `DefaultPostures`:
 
 ## Procedural Animation
 
-`AnimationPreset` is stateless: callers provide a time and receive a complete `Posture`. Sampling
-automatically wraps at the preset's natural cycle, so the same interface works for window loops,
-WASM `requestAnimationFrame`, and offline exporters.
+`AnimationPreset` remains the stateless sampling primitive: callers provide a time and receive a
+complete `Posture`. `AnimationTimeline` adds portable playback state, while `AnimationSchedule`
+provides deterministic sample times for offline output.
 
 ```rust
 use eidolon::animation::AnimationPreset;
@@ -165,8 +165,9 @@ assert_eq!(
 ```
 
 Available presets are `Idle` (4s), `Walk` (1s), `Run` (0.6s), `Wave` (1.2s), and `Fly` (1.5s).
-The library deliberately does not own a clock or playback state; update `Character::posture` before
-each call to the Renderer.
+Timeline callers provide frame deltas, so native `Instant` and browser animation timestamps remain
+in their adapters. The timeline owns speed, play/pause, seeking, loop/end behavior, and ignores
+frame gaps over 250ms. Update `Character::posture` from `timeline.sample()` before rendering.
 
 ## Skin Conversion
 

@@ -59,6 +59,7 @@ src/
 ├── main.rs         # CLI binary — clap with `render`, `preview`, and `convert` subcommands
 ├── error.rs        # EidolonError — typed errors for the public API
 ├── constants.rs    # WGSL vertex + fragment shaders
+├── animation.rs    # Preset sampling, playback timeline, and offline frame schedules
 ├── camera.rs       # Camera: yaw/pitch/scale → view + projection matrices
 ├── model.rs        # OBJ loader: parses named objects into BodyParts (main + layer meshes)
 ├── body.rs         # Body: Renderer-bound Skin + classic/slim geometry selection

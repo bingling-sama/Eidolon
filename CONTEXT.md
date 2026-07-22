@@ -35,3 +35,11 @@ _Avoid_: cloak
 **Elytra**:
 A winged presentation of Back equipment: a mirrored pair sharing an upper-back attachment that can open into a flight pose.
 _Avoid_: wings, glider
+
+**Animation timeline**:
+The temporal state of an Animation preset, including its current position, playback rate, play state, and loop mode, used to sample a Character's Posture.
+_Avoid_: animation clock, playback timer
+
+**Animation schedule**:
+The ordered sample times for one offline cycle of an Animation preset at a chosen frame rate and playback rate.
+_Avoid_: encoder timing, frame loop

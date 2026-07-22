@@ -6,7 +6,8 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 ## Crate 结构
 
 - `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
-- `src/animation.rs` 提供无状态的程序化 `AnimationPreset`，采样结果为完整 Posture。
+- `src/animation.rs` 提供无状态 `AnimationPreset` 采样、有状态 `AnimationTimeline` 播放，
+  以及确定性的 `AnimationSchedule` 帧时刻。
 - `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
@@ -47,9 +48,10 @@ RGBA 像素。native 为 `Renderer::render` 同步等待 map，wasm 为 `Rendere
 `render_frame` 每帧提交到 swapchain。
 
 CLI 使用 `--posture` 作为统一动作选择器。静态渲染采用对应 `AnimationPreset` 的代表帧；
-preview 初始暂停在同一帧，开始播放后继续该 preset。`render --animate` 会在所选 preset 的
-自然周期内均匀采样，在 frame producer 中应用显式 Posture 覆盖，逐帧渲染并交给
-`output::write_output`。GIF 延迟和 WebP 时间戳使用累计取整以避免漂移；Renderer 仍然只负责单帧渲染。
+preview 初始暂停在同一帧，开始播放后通过 `AnimationTimeline` 继续该 preset。
+`render --animate` 使用 `AnimationSchedule` 在自然周期内均匀采样，在 frame producer 中应用
+显式 Posture 覆盖，逐帧渲染并交给 `output::write_output`。GIF 延迟和 WebP 时间戳仍属于
+output adapter，并使用累计取整避免漂移；Renderer 仍然只负责单帧渲染。
 
 ## 模型与皮肤约定
 
