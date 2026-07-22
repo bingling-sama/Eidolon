@@ -1,4 +1,4 @@
-import { CanvasRenderer } from './pkg/eidolon_wasm_example.js';
+import { CanvasRenderer } from './pkg/eidolon.js';
 
 // ---- DOM ----
 const fileInput = document.getElementById('file-input');

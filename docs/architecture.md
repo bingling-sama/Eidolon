@@ -9,6 +9,8 @@ model loading, frame rendering, and rendered-output policy.
 - `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
 - `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline`
   playback, and deterministic `AnimationSchedule` frame times.
+- `src/wasm.rs` is an optional `wasm`-feature adapter that exposes `CanvasRenderer` through
+  `wasm-bindgen` when targeting `wasm32`.
 - `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.

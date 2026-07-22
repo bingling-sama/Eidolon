@@ -14,8 +14,8 @@ Minecraft skin renderer running in the browser via WebGPU + WASM.
 ```bash
 cd examples/wasm
 
-# Build the Rust crate to WASM
-wasm-pack build --target bundler --out-dir pkg
+# Build the core crate and its WASM bindings
+npm run build:wasm
 
 # Install JS dependencies
 npm install
@@ -30,9 +30,9 @@ After building the WASM package, run `npm run test:e2e` to verify desktop and mo
 
 ## How It Works
 
-1. `wasm-pack` compiles the Rust crate (`src/lib.rs`) to a WASM module + JS glue in `pkg/`
+1. `wasm-pack` compiles the core crate (`../../src/wasm.rs`, enabled by the `wasm` feature) to a WASM module + JS glue in `pkg/`
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
-3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; Rust samples the selected procedural animation while JS owns playback time
+3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; Rust exposes the core rendering bindings
 4. `set_elytra_angles(pitch, spread)` fixes the wing angles until `reset_elytra_angles()` restores animation-driven values
 5. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop; reduced-motion preferences start playback paused and page visibility changes reset the frame-time baseline
 6. Export captures an offscreen PNG at the selected resolution
@@ -41,9 +41,9 @@ After building the WASM package, run `npm run test:e2e` to verify desktop and mo
 
 | File | Purpose |
 |------|---------|
-| `Cargo.toml` | Rust crate (cdylib) depending on `eidolon` with `wasm` feature |
-| `src/lib.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
+| `../../Cargo.toml` | Core crate with the opt-in `wasm` feature and `cdylib` output |
+| `../../src/wasm.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
 | `index.html` | UI — skin/back-equipment pickers, animation playback, export controls, result canvas |
-| `main.js` | Vanilla JS — owns the playback clock and handles DOM, camera orbit, and resource loading |
+| `main.js` | Vanilla JS — drives controls and handles DOM, camera orbit, and resource loading |
 | `vite.config.js` | Vite config with WASM plugins |
 | `package.json` | npm scripts + Vite deps |

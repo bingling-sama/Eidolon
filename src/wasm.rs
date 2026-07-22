@@ -1,13 +1,13 @@
-//! WASM bindings for eidolon — renders Minecraft skins in the browser via WebGPU.
+//! WASM bindings for Eidolon via WebGPU.
 //!
-//! Build with `wasm-pack build --target bundler`, then import from JS.
+//! Build with `wasm-pack build --target bundler --features wasm`, then import from JS.
 //! Requires a browser with WebGPU support (Chrome 113+, Edge 113+, Firefox Nightly).
 
-use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
-use eidolon::animation::AnimationPreset;
-use eidolon::camera::Camera;
-use eidolon::character::{Character, DefaultPostures, Posture, SkinType};
-use eidolon::renderer::Renderer;
+use crate::animation::AnimationPreset;
+use crate::back_equipment::{BackEquipment, BackEquipmentKind};
+use crate::camera::Camera;
+use crate::character::{Character, DefaultPostures, Posture, SkinType};
+use crate::renderer::Renderer;
 use image::ImageFormat;
 use std::io::Cursor;
 use std::time::Duration;
@@ -158,7 +158,9 @@ impl CanvasRenderer {
     /// Sample the selected animation at a JS-owned playback time in seconds.
     pub fn sample_animation(&mut self, time_seconds: f64) -> Result<(), JsValue> {
         if !time_seconds.is_finite() || time_seconds < 0.0 {
-            return Err(JsValue::from_str("animation time must be finite and non-negative"));
+            return Err(JsValue::from_str(
+                "animation time must be finite and non-negative",
+            ));
         }
         self.animation_time = Duration::from_secs_f64(time_seconds);
         self.apply_animation_sample();
@@ -310,8 +312,6 @@ fn parse_animation(preset: &str) -> Result<AnimationPreset, JsValue> {
         "run" => Ok(AnimationPreset::Run),
         "wave" => Ok(AnimationPreset::Wave),
         "fly" => Ok(AnimationPreset::Fly),
-        other => Err(JsValue::from_str(&format!(
-            "unknown animation: '{other}'"
-        ))),
+        other => Err(JsValue::from_str(&format!("unknown animation: '{other}'"))),
     }
 }

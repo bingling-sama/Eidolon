@@ -8,6 +8,8 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 - `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
 - `src/animation.rs` 提供无状态 `AnimationPreset` 采样、有状态 `AnimationTimeline` 播放，
   以及确定性的 `AnimationSchedule` 帧时刻。
+- `src/wasm.rs` 是可选的 `wasm` feature adapter；目标为 `wasm32` 时通过 `wasm-bindgen` 暴露
+  `CanvasRenderer`。
 - `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入。
 - `src/lib.rs` 暴露库模块。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。

@@ -234,14 +234,17 @@ fn resolve_path(path: &Path, extension: &str) -> Result<PathBuf, EidolonError> {
     Ok(resolved)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn rounded_units(frame_boundary: u32, units_per_second: u32, fps: u32) -> u32 {
     (frame_boundary * units_per_second + fps / 2) / fps
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn webp_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
     rounded_units(frame_boundary, 1_000, fps)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn gif_delay_cs(frame_index: u32, fps: u32) -> u32 {
     rounded_units(frame_index + 1, 100, fps) - rounded_units(frame_index, 100, fps)
 }
