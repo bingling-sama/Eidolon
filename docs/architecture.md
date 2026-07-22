@@ -6,7 +6,9 @@ image output.
 
 ## Crate Layout
 
-- `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
+- `src/main.rs` defines the `eidolon` binary and the `render`, `animate`, `preview`, and `convert` subcommands.
+- `src/animation.rs` provides stateless procedural `AnimationPreset` sampling into complete Postures.
+- `src/animation_export.rs` is the CLI adapter for streaming GIF and Animated WebP encoding.
 - `src/lib.rs` exposes the library modules.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
 - `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
@@ -52,6 +54,11 @@ normal depth-tested pass; the collision box is 1.8 world units tall and the defa
 
 For `preview`, the same scene data and pipeline are used, but `Renderer::new_windowed` creates a
 window surface and `render_frame` presents each frame to the swapchain.
+
+For `animate`, the CLI samples one natural `AnimationPreset` cycle uniformly, applies explicit
+Posture overrides, renders each frame, and immediately submits its RGBA buffer to the selected
+encoder. GIF delays and WebP timestamps use cumulative rounding so fractional frame durations do
+not drift. The Renderer remains responsible only for individual frames.
 
 ## Model And Skin Assumptions
 

@@ -4,11 +4,13 @@
 //! Requires a browser with WebGPU support (Chrome 113+, Edge 113+, Firefox Nightly).
 
 use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
+use eidolon::animation::AnimationPreset;
 use eidolon::camera::Camera;
 use eidolon::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon::renderer::Renderer;
 use image::ImageFormat;
 use std::io::Cursor;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 /// Initialize `console_log` so Rust `log` macros print to the browser console.
@@ -28,6 +30,9 @@ pub struct CanvasRenderer {
     pending_posture: Option<Posture>,
     skin_type: SkinType,
     camera: Camera,
+    animation: AnimationPreset,
+    animation_time: Duration,
+    elytra_override: Option<(f32, f32)>,
 }
 
 #[wasm_bindgen]
@@ -44,6 +49,9 @@ impl CanvasRenderer {
             pending_posture: Some(DefaultPostures::STAND),
             skin_type: SkinType::Classic,
             camera: Camera::default(),
+            animation: AnimationPreset::Idle,
+            animation_time: Duration::ZERO,
+            elytra_override: None,
         })
     }
 
@@ -139,16 +147,39 @@ impl CanvasRenderer {
         Ok(())
     }
 
+    /// Select a procedural animation and reset it to phase zero.
+    pub fn set_animation(&mut self, preset: &str) -> Result<(), JsValue> {
+        self.animation = parse_animation(preset)?;
+        self.animation_time = Duration::ZERO;
+        self.apply_animation_sample();
+        Ok(())
+    }
+
+    /// Sample the selected animation at a JS-owned playback time in seconds.
+    pub fn sample_animation(&mut self, time_seconds: f64) -> Result<(), JsValue> {
+        if !time_seconds.is_finite() || time_seconds < 0.0 {
+            return Err(JsValue::from_str("animation time must be finite and non-negative"));
+        }
+        self.animation_time = Duration::from_secs_f64(time_seconds);
+        self.apply_animation_sample();
+        Ok(())
+    }
+
+    /// Natural cycle duration of the selected animation, in seconds.
+    pub fn animation_duration(&self) -> f64 {
+        self.animation.cycle_duration().as_secs_f64()
+    }
+
     /// Override elytra pitch and opening angle in degrees.
     pub fn set_elytra_angles(&mut self, pitch: f32, spread: f32) {
-        if let Some(character) = &mut self.character {
-            character.posture.elytra_pitch = pitch;
-            character.posture.elytra_roll = spread;
-        } else {
-            let posture = self.pending_posture.get_or_insert(DefaultPostures::STAND);
-            posture.elytra_pitch = pitch;
-            posture.elytra_roll = spread;
-        }
+        self.elytra_override = Some((pitch, spread));
+        self.apply_animation_sample();
+    }
+
+    /// Remove the manual elytra override and return control to the animation.
+    pub fn reset_elytra_angles(&mut self) {
+        self.elytra_override = None;
+        self.apply_animation_sample();
     }
 
     /// Current elytra pitch in degrees.
@@ -234,6 +265,19 @@ impl CanvasRenderer {
 }
 
 impl CanvasRenderer {
+    fn apply_animation_sample(&mut self) {
+        let mut posture = self.animation.sample(self.animation_time);
+        if let Some((pitch, spread)) = self.elytra_override {
+            posture.elytra_pitch = pitch;
+            posture.elytra_roll = spread;
+        }
+        if let Some(character) = &mut self.character {
+            character.posture = posture;
+        } else {
+            self.pending_posture = Some(posture);
+        }
+    }
+
     fn clear_back_equipment(&mut self, kind: BackEquipmentKind) {
         let should_clear = self
             .character
@@ -256,5 +300,18 @@ impl CanvasRenderer {
                 .unequip()
                 .expect("body-backed character can remove back equipment");
         }
+    }
+}
+
+fn parse_animation(preset: &str) -> Result<AnimationPreset, JsValue> {
+    match preset {
+        "idle" => Ok(AnimationPreset::Idle),
+        "walk" => Ok(AnimationPreset::Walk),
+        "run" => Ok(AnimationPreset::Run),
+        "wave" => Ok(AnimationPreset::Wave),
+        "fly" => Ok(AnimationPreset::Fly),
+        other => Err(JsValue::from_str(&format!(
+            "unknown animation: '{other}'"
+        ))),
     }
 }

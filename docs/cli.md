@@ -1,6 +1,6 @@
 # Command Line Reference
 
-Eidolon ships a single binary with three subcommands: `render`, `preview`, and `convert`.
+Eidolon ships a single binary with four subcommands: `render`, `animate`, `preview`, and `convert`.
 
 ## Render
 
@@ -89,6 +89,35 @@ eidolon render skin.png --posture walking --head-pitch 15 --left-arm-roll 30
 Format is inferred from the output filename extension. `output.png` → PNG, `output.webp` → WebP.
 The output path must not contain `..` components (directory traversal is rejected).
 
+## Animate
+
+Render one complete procedural animation cycle to GIF or Animated WebP.
+
+```bash
+eidolon animate <SKIN> <OUTPUT.gif|OUTPUT.webp> --animation <PRESET> [OPTIONS]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--animation <PRESET>` | `idle`, `walk`, `run`, `wave`, or `fly` | *(required)* |
+| `--fps <1..60>` | Output frame rate | `30` |
+| `--speed <0.25..4.0>` | Playback speed multiplier | `1.0` |
+| `--loop-count <N>` | Loop metadata; `0` means infinite | `0` |
+| `--width <1..2048>` | Output width | `800` |
+| `--height <1..2048>` | Output height | `600` |
+
+The scene, camera, Back equipment, and joint override options from `render` are also available.
+Overrides are applied after each animation sample, so an explicitly supplied joint, Cape, or Elytra
+angle remains fixed while other joints animate. `--posture` cannot be combined with animation export.
+Animated WebP preserves full alpha and uses lossless encoding. GIF uses a 256-color RGBA
+quantization path and therefore has limited transparency fidelity.
+
+```bash
+eidolon animate skin.png walk.gif --animation walk
+eidolon animate skin.png fly.webp --animation fly --elytra cape.png --fps 60 --speed 1.5
+eidolon animate skin.png wave.gif --animation wave --loop-count 3 --width 512 --height 512
+```
+
 ## Preview
 
 Open a live preview window.
@@ -97,9 +126,11 @@ Open a live preview window.
 eidolon preview [OPTIONS] <SKIN>
 ```
 
-Accepts the same scene, camera, posture, and viewport options as `render`, plus all power-user overrides. No output path or format argument.
+Accepts the same scene, camera, posture, and viewport options as `render`, plus all power-user overrides. No output path or format argument. Pass `--animation <idle|walk|run|wave|fly>` to start animated playback; it is mutually exclusive with `--posture`.
 
 In the preview window, drag with the left mouse button to pan, drag with the right mouse button to rotate, and use the mouse wheel to zoom.
+Use `Space` to play or pause, Left/Right to seek by one nominal 30fps frame, `1`–`5` to select
+Idle/Walk/Run/Wave/Fly, and `-`/`+` to adjust playback speed. Switching presets resets phase to zero.
 
 ### Examples
 
@@ -110,6 +141,7 @@ eidolon preview skin.png --nametag Steve
 eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png
 eidolon preview skin.png --posture running --width 1024 --height 768
+eidolon preview skin.png --animation walk
 ```
 
 ## Convert

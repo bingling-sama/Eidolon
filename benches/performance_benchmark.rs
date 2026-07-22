@@ -1,11 +1,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use eidolon::{
+    animation::AnimationPreset,
     camera::Camera,
     character::{Character, SkinType},
     renderer::Renderer,
     OutputFormat,
 };
+use gif::{Encoder as GifEncoder, Frame as GifFrame, Repeat};
 use std::fs;
+use std::time::Duration;
 
 fn performance_benchmark(c: &mut Criterion) {
     let output_dir = ".bench";
@@ -15,7 +18,7 @@ fn performance_benchmark(c: &mut Criterion) {
     let body = renderer
         .load_body("resources/bingling_sama.png", SkinType::Classic)
         .expect("Failed to load body");
-    let character = Character::from_body(body);
+    let mut character = Character::from_body(body);
 
     let mut camera = Camera {
         yaw: 180.0,
@@ -42,6 +45,24 @@ fn performance_benchmark(c: &mut Criterion) {
                         OutputFormat::Png,
                     )
                     .unwrap();
+            }
+        })
+    });
+
+    c.bench_function("export_walk_gif_800x600_30fps", |b| {
+        b.iter(|| {
+            let mut encoder = GifEncoder::new(std::io::sink(), 800, 600, &[]).unwrap();
+            encoder.set_repeat(Repeat::Infinite).unwrap();
+            for frame_index in 0..30 {
+                character.posture = AnimationPreset::Walk
+                    .sample(Duration::from_secs_f64(f64::from(frame_index) / 30.0));
+                let mut rgba = renderer
+                    .render(&character, &camera, 800, 600)
+                    .unwrap()
+                    .into_raw();
+                let mut frame = GifFrame::from_rgba_speed(800, 600, &mut rgba, 10);
+                frame.delay = ((frame_index + 1) * 100 / 30 - frame_index * 100 / 30) as u16;
+                encoder.write_frame(&frame).unwrap();
             }
         })
     });

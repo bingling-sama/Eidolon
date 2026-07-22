@@ -11,7 +11,7 @@ const elytraFileName = document.getElementById('elytra-file-name');
 const btnClearElytra = document.getElementById('btn-clear-elytra');
 const resultDiv = document.getElementById('result');
 const resultHint = document.getElementById('result-hint');
-const postureSelect = document.getElementById('select-posture');
+const animationSelect = document.getElementById('select-animation');
 const skinTypeSelect = document.getElementById('select-skin-type');
 const inputElytraPitch = document.getElementById('input-elytra-pitch');
 const inputElytraSpread = document.getElementById('input-elytra-spread');
@@ -24,6 +24,12 @@ const sizePresets = document.getElementById('size-presets');
 const inputBgCustom = document.getElementById('input-bg-custom');
 const inputBgAlpha = document.getElementById('input-bg-alpha');
 const bgPresets = document.getElementById('bg-presets');
+const btnPlay = document.getElementById('btn-play');
+const inputTimeline = document.getElementById('input-timeline');
+const outputTimeline = document.getElementById('output-timeline');
+const selectSpeed = document.getElementById('select-speed');
+const inputLoop = document.getElementById('input-loop');
+const btnResetElytra = document.getElementById('btn-reset-elytra');
 
 const canvas = document.createElement('canvas');
 canvas.style.display = 'block';
@@ -39,6 +45,15 @@ let skinLoaded = false;
 // Camera state
 const camera = { yaw: 180, pitch: 90, scale: 1.0 };
 const bg = { r: 0, g: 0, b: 0, a: 0 };
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const playback = {
+  playing: !reduceMotion,
+  speed: 1,
+  time: 0,
+  duration: 4,
+  loop: true,
+  lastTimestamp: null,
+};
 
 // ---- Init ----
 async function boot() {
@@ -47,7 +62,9 @@ async function boot() {
     renderer = await CanvasRenderer.new(canvas);
     resizeCanvas();
     setActivePreset(bgPresets.querySelector('.bg-swatch.transparent'));
-    renderer.set_posture(postureSelect.value);
+    renderer.set_animation(animationSelect.value);
+    playback.duration = renderer.animation_duration();
+    updatePlaybackControls();
     setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
     console.log('Renderer ready');
     requestAnimationFrame(frame);
@@ -72,41 +89,120 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 
 // ---- rAF render loop ----
-function frame() {
-  if (renderer && skinLoaded) {
-    renderer.set_camera(camera.yaw, camera.pitch, camera.scale);
-    try {
-      renderer.render_frame();
-    } catch (e) {
-      console.error(e);
+function frame(timestamp) {
+  if (renderer) {
+    if (playback.playing && playback.lastTimestamp != null) {
+      playback.time += (timestamp - playback.lastTimestamp) / 1000 * playback.speed;
+      if (playback.time >= playback.duration) {
+        if (playback.loop) {
+          playback.time %= playback.duration;
+        } else {
+          playback.time = Math.max(0, playback.duration - 0.001);
+          playback.playing = false;
+          updatePlayButton();
+        }
+      }
+    }
+    playback.lastTimestamp = timestamp;
+    renderer.sample_animation(playback.time);
+    updateTimeline();
+
+    if (skinLoaded) {
+      renderer.set_camera(camera.yaw, camera.pitch, camera.scale);
+      try {
+        renderer.render_frame();
+      } catch (e) {
+        console.error(e);
+      }
     }
   }
   requestAnimationFrame(frame);
 }
 
-// ---- Controls ----
-postureSelect.addEventListener('change', () => {
-  if (!renderer) return;
-  renderer.set_posture(postureSelect.value);
-  setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+document.addEventListener('visibilitychange', () => {
+  playback.lastTimestamp = null;
 });
+
+// ---- Controls ----
+animationSelect.addEventListener('change', () => {
+  if (!renderer) return;
+  renderer.set_animation(animationSelect.value);
+  playback.time = 0;
+  playback.duration = renderer.animation_duration();
+  playback.lastTimestamp = null;
+  setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+  updatePlaybackControls();
+});
+
+btnPlay.addEventListener('click', () => {
+  playback.playing = !playback.playing;
+  playback.lastTimestamp = null;
+  updatePlayButton();
+});
+
+inputTimeline.addEventListener('input', () => {
+  playback.time = Number(inputTimeline.value);
+  playback.lastTimestamp = null;
+  if (renderer) renderer.sample_animation(playback.time);
+  updateTimeline();
+});
+
+selectSpeed.addEventListener('change', () => {
+  playback.speed = Number(selectSpeed.value);
+  playback.lastTimestamp = null;
+});
+
+inputLoop.addEventListener('change', () => {
+  playback.loop = inputLoop.checked;
+});
+
+function updatePlaybackControls() {
+  inputTimeline.max = playback.duration;
+  selectSpeed.value = String(playback.speed);
+  inputLoop.checked = playback.loop;
+  updatePlayButton();
+  updateTimeline();
+}
+
+function updatePlayButton() {
+  btnPlay.innerHTML = playback.playing ? '&#10074;&#10074;' : '&#9654;';
+  btnPlay.setAttribute('aria-label', playback.playing ? 'Pause' : 'Play');
+  btnPlay.title = playback.playing ? 'Pause' : 'Play';
+}
+
+function updateTimeline() {
+  inputTimeline.value = playback.time;
+  outputTimeline.value = `${playback.time.toFixed(2)} / ${playback.duration.toFixed(2)}`;
+}
 
 function setElytraAngleControls(pitch, spread) {
   inputElytraPitch.value = pitch;
   inputElytraSpread.value = spread;
-  syncElytraAngles();
+  updateElytraAngleOutputs();
 }
 
-function syncElytraAngles() {
+function updateElytraAngleOutputs() {
   const pitch = Number(inputElytraPitch.value);
   const spread = Number(inputElytraSpread.value);
   outputElytraPitch.value = `${pitch}°`;
   outputElytraSpread.value = `${spread}°`;
+}
+
+function syncElytraAngles() {
+  updateElytraAngleOutputs();
+  const pitch = Number(inputElytraPitch.value);
+  const spread = Number(inputElytraSpread.value);
   if (renderer) renderer.set_elytra_angles(pitch, spread);
 }
 
 inputElytraPitch.addEventListener('input', syncElytraAngles);
 inputElytraSpread.addEventListener('input', syncElytraAngles);
+
+btnResetElytra.addEventListener('click', () => {
+  if (!renderer) return;
+  renderer.reset_elytra_angles();
+  setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+});
 
 skinTypeSelect.addEventListener('change', () => {
   if (!renderer) return;
@@ -376,4 +472,5 @@ function showError(title, detail) {
     </div>`;
 }
 
+updatePlayButton();
 boot();

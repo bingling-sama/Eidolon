@@ -27,7 +27,7 @@ impl std::error::Error for CharacterError {}
 /// Positive yaw turns right, positive pitch looks up.
 /// The renderer applies per-joint bind-pose offsets internally;
 /// library consumers work with intuitive 0°-is-neutral angles.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Posture {
     /// Recommended cape pitch for this posture, in degrees.
     pub cape_pitch: f32,

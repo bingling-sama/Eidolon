@@ -72,6 +72,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   `RUNNING` 为 `54` 度。CLI 选择姿势时会自动应用该角度。
 - `Renderer::new` 和 `Renderer::new_windowed` 会从 `resources/` 加载两套内置 OBJ 模型，因此建议从仓库根目录运行，或确保这些资源路径可用。
 
+## 程序化动画
+
+`AnimationPreset` 是无状态接口：调用方传入时间，得到完整 `Posture`。采样时间会按自然周期自动循环，
+因此窗口预览、WASM `requestAnimationFrame` 和离线导出可以共用同一逻辑。
+
+```rust
+use eidolon::animation::AnimationPreset;
+use std::time::Duration;
+
+let animation = AnimationPreset::Walk;
+character.posture = animation.sample(Duration::from_millis(250));
+assert_eq!(
+    animation.sample(Duration::ZERO),
+    animation.sample(animation.cycle_duration()),
+);
+```
+
+内置动作包括 `Idle`（4 秒）、`Walk`（1 秒）、`Run`（0.6 秒）、`Wave`（1.2 秒）和
+`Fly`（1.5 秒）。核心库不保存时钟或播放状态；调用方在每次 Renderer 调用前更新
+`Character::posture`。
+
 ## 自定义姿势示例
 
 ```rust

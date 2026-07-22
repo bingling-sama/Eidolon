@@ -1,6 +1,6 @@
 # 命令行参考
 
-Eidolon 提供一个可执行程序，包含三个子命令：`render`、`preview`、`convert`。
+Eidolon 提供一个可执行程序，包含四个子命令：`render`、`animate`、`preview`、`convert`。
 
 ## Render
 
@@ -61,6 +61,29 @@ cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nameta
 
 `--filename` 不能包含 `..` 路径片段，避免渲染输出通过目录穿越写到预期目录之外。
 
+## Animate
+
+将一个完整的程序化动画周期导出为 GIF 或 Animated WebP：
+
+```bash
+eidolon animate <皮肤> <输出.gif|输出.webp> --animation <动作> [选项]
+```
+
+- `--animation <idle|walk|run|wave|fly>` 动作预设，必填
+- `--fps <1..60>` 帧率，默认 `30`
+- `--speed <0.25..4.0>` 播放速度，默认 `1.0`
+- `--loop-count <N>` 循环元数据；`0` 表示无限循环，默认 `0`
+- `--width <1..2048>`、`--height <1..2048>` 输出尺寸，默认 `800×600`
+
+该命令也支持 `render` 的场景、相机、后背装备和关节覆盖选项。覆盖值会在每帧采样后应用，
+因此显式设置的关节、披风或鞘翅角度保持固定，其余部位继续动画。`--posture` 不能与动画导出同时使用。
+Animated WebP 使用无损 RGBA 编码；GIF 量化为 256 色，透明度表现有限。
+
+```bash
+eidolon animate skin.png walk.gif --animation walk
+eidolon animate skin.png fly.webp --animation fly --elytra cape.png --fps 60 --speed 1.5
+```
+
 ## Preview
 
 打开实时预览窗口。
@@ -69,9 +92,12 @@ cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nameta
 cargo run -- preview [OPTIONS]
 ```
 
-`preview` 支持与 `render` 相同的场景、相机、姿势和视口选项，但不包含 `--filename` 与 `--format`。
+`preview` 支持与 `render` 相同的场景、相机、姿势和视口选项，但不包含输出路径与格式。
+使用 `--animation <idle|walk|run|wave|fly>` 可直接开始动画播放；它与 `--posture` 互斥。
 
 在预览窗口中，按住鼠标左键拖拽可平移，按住右键拖拽可旋转，滚动滚轮可缩放。
+`Space` 播放/暂停，左右方向键按 30fps 单帧 seek，数字键 `1–5` 切换 Idle、Walk、Run、Wave、Fly，
+`-`/`+` 调整速度。切换动作后会回到相位 0。
 
 示例：
 
@@ -80,6 +106,7 @@ cargo run -- preview --skin-type slim --texture resources/bingling_sama.png --ya
 cargo run -- preview resources/bingling_sama.png --cape cape.png
 cargo run -- preview resources/bingling_sama.png --elytra cape.png
 cargo run -- preview resources/bingling_sama.png --nametag Steve
+cargo run -- preview resources/bingling_sama.png --animation walk
 ```
 
 ## Convert

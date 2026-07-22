@@ -1,8 +1,11 @@
+mod animation_export;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
+    animation::AnimationPreset,
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, DefaultPostures, Posture, SkinType},
@@ -14,7 +17,12 @@ use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
+
+#[cfg(test)]
+use animation_export::AnimationTiming;
+use animation_export::{export_animation, AnimationExportOptions};
 
 /// Minecraft skin renderer and skin-atlas utilities.
 #[derive(Parser, Debug)]
@@ -40,6 +48,27 @@ enum PostureCli {
     Flying,
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug, PartialEq, Eq)]
+enum AnimationCli {
+    Idle,
+    Walk,
+    Run,
+    Wave,
+    Fly,
+}
+
+impl From<AnimationCli> for AnimationPreset {
+    fn from(value: AnimationCli) -> Self {
+        match value {
+            AnimationCli::Idle => Self::Idle,
+            AnimationCli::Walk => Self::Walk,
+            AnimationCli::Run => Self::Run,
+            AnimationCli::Wave => Self::Wave,
+            AnimationCli::Fly => Self::Fly,
+        }
+    }
+}
+
 impl From<PostureCli> for Posture {
     fn from(value: PostureCli) -> Self {
         match value {
@@ -63,6 +92,35 @@ fn parse_positive_scale(s: &str) -> Result<f32, String> {
     }
 }
 
+fn parse_animation_speed(s: &str) -> Result<f32, String> {
+    let value: f32 = s
+        .parse()
+        .map_err(|_| format!("'{s}' is not a valid number"))?;
+    if value.is_finite() && (0.25..=4.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err(format!("speed must be between 0.25 and 4.0, got {value}"))
+    }
+}
+
+fn parse_animation_output(s: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(s);
+    if path
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err("animation output path must not contain '..' components".to_owned());
+    }
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase);
+    match extension.as_deref() {
+        Some("gif" | "webp") => Ok(path),
+        _ => Err("animation output must end in .gif or .webp".to_owned()),
+    }
+}
+
 #[derive(Parser, Debug)]
 struct ViewportArgs {
     /// Output image or window width in pixels.
@@ -70,6 +128,16 @@ struct ViewportArgs {
     width: u32,
     /// Output image or window height in pixels.
     #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u32).range(1..))]
+    height: u32,
+}
+
+#[derive(Parser, Debug)]
+struct AnimationViewportArgs {
+    /// Output animation width in pixels.
+    #[arg(long, default_value_t = 800, value_parser = clap::value_parser!(u32).range(1..=2048))]
+    width: u32,
+    /// Output animation height in pixels.
+    #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u32).range(1..=2048))]
     height: u32,
 }
 
@@ -169,6 +237,59 @@ struct SceneState {
     rotation: cgmath::Vector3<f32>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct PostureOverrides {
+    cape_pitch: Option<f32>,
+    elytra_pitch: Option<f32>,
+    elytra_spread: Option<f32>,
+    head_yaw: Option<f32>,
+    head_pitch: Option<f32>,
+    left_arm_roll: Option<f32>,
+    left_arm_pitch: Option<f32>,
+    right_arm_roll: Option<f32>,
+    right_arm_pitch: Option<f32>,
+    left_leg_pitch: Option<f32>,
+    right_leg_pitch: Option<f32>,
+}
+
+impl From<&SceneArgs> for PostureOverrides {
+    fn from(scene: &SceneArgs) -> Self {
+        Self {
+            cape_pitch: scene.cape_pitch,
+            elytra_pitch: scene.elytra_pitch,
+            elytra_spread: scene.elytra_spread,
+            head_yaw: scene.head_yaw,
+            head_pitch: scene.head_pitch,
+            left_arm_roll: scene.left_arm_roll,
+            left_arm_pitch: scene.left_arm_pitch,
+            right_arm_roll: scene.right_arm_roll,
+            right_arm_pitch: scene.right_arm_pitch,
+            left_leg_pitch: scene.left_leg_pitch,
+            right_leg_pitch: scene.right_leg_pitch,
+        }
+    }
+}
+
+impl PostureOverrides {
+    fn apply(self, base: Posture) -> Posture {
+        Posture {
+            cape_pitch: self.cape_pitch.unwrap_or(base.cape_pitch),
+            body_pitch: base.body_pitch,
+            elytra_pitch: self.elytra_pitch.unwrap_or(base.elytra_pitch),
+            elytra_yaw: base.elytra_yaw,
+            elytra_roll: self.elytra_spread.unwrap_or(base.elytra_roll),
+            head_yaw: self.head_yaw.unwrap_or(base.head_yaw),
+            head_pitch: self.head_pitch.unwrap_or(base.head_pitch),
+            left_arm_roll: self.left_arm_roll.unwrap_or(base.left_arm_roll),
+            left_arm_pitch: self.left_arm_pitch.unwrap_or(base.left_arm_pitch),
+            right_arm_roll: self.right_arm_roll.unwrap_or(base.right_arm_roll),
+            right_arm_pitch: self.right_arm_pitch.unwrap_or(base.right_arm_pitch),
+            left_leg_pitch: self.left_leg_pitch.unwrap_or(base.left_leg_pitch),
+            right_leg_pitch: self.right_leg_pitch.unwrap_or(base.right_leg_pitch),
+        }
+    }
+}
+
 impl SceneState {
     fn apply_to(&self, character: &mut Character) {
         character.nametag = self.nametag.clone();
@@ -179,23 +300,13 @@ impl SceneState {
     }
 }
 
+fn apply_posture_overrides(base: Posture, scene: &SceneArgs) -> Posture {
+    PostureOverrides::from(scene).apply(base)
+}
+
 fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Camera) {
     let base: Posture = scene.posture.into();
-    let posture = Posture {
-        cape_pitch: scene.cape_pitch.unwrap_or(base.cape_pitch),
-        body_pitch: base.body_pitch,
-        elytra_pitch: scene.elytra_pitch.unwrap_or(base.elytra_pitch),
-        elytra_yaw: base.elytra_yaw,
-        elytra_roll: scene.elytra_spread.unwrap_or(base.elytra_roll),
-        head_yaw: scene.head_yaw.unwrap_or(base.head_yaw),
-        head_pitch: scene.head_pitch.unwrap_or(base.head_pitch),
-        left_arm_roll: scene.left_arm_roll.unwrap_or(base.left_arm_roll),
-        left_arm_pitch: scene.left_arm_pitch.unwrap_or(base.left_arm_pitch),
-        right_arm_roll: scene.right_arm_roll.unwrap_or(base.right_arm_roll),
-        right_arm_pitch: scene.right_arm_pitch.unwrap_or(base.right_arm_pitch),
-        left_leg_pitch: scene.left_leg_pitch.unwrap_or(base.left_leg_pitch),
-        right_leg_pitch: scene.right_leg_pitch.unwrap_or(base.right_leg_pitch),
-    };
+    let posture = apply_posture_overrides(base, scene);
     let state = SceneState {
         skin_type: if scene.slim {
             SkinType::Slim
@@ -272,6 +383,37 @@ enum Command {
         #[command(flatten)]
         scene: SceneArgs,
     },
+    /// Render one animation cycle to GIF or Animated WebP.
+    Animate {
+        /// Path to the skin PNG file.
+        skin: String,
+
+        /// Output animation path (.gif or .webp).
+        #[arg(value_parser = parse_animation_output)]
+        output: PathBuf,
+
+        /// Procedural animation preset.
+        #[arg(long, value_enum, conflicts_with = "posture")]
+        animation: AnimationCli,
+
+        /// Frames per second.
+        #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..=60))]
+        fps: u32,
+
+        /// Playback speed multiplier.
+        #[arg(long, default_value_t = 1.0, value_parser = parse_animation_speed)]
+        speed: f32,
+
+        /// Repetitions in the output metadata; 0 loops forever.
+        #[arg(long, default_value_t = 0)]
+        loop_count: u16,
+
+        #[command(flatten)]
+        viewport: AnimationViewportArgs,
+
+        #[command(flatten)]
+        scene: SceneArgs,
+    },
     /// Open a live preview window.
     Preview {
         /// Path to the skin PNG file.
@@ -282,6 +424,10 @@ enum Command {
 
         #[command(flatten)]
         scene: SceneArgs,
+
+        /// Start with a procedural animation instead of a static posture.
+        #[arg(long, value_enum, conflicts_with = "posture")]
+        animation: Option<AnimationCli>,
     },
     /// Convert a legacy single-layer skin atlas to a square double-layer atlas.
     Convert {
@@ -304,6 +450,93 @@ struct PreviewApp {
     elytra_atlas_path: Option<String>,
     initial_size: PhysicalSize<u32>,
     interaction: PreviewInteraction,
+    playback: PreviewPlayback,
+    posture_overrides: PostureOverrides,
+}
+
+struct PreviewPlayback {
+    preset: AnimationPreset,
+    elapsed: std::time::Duration,
+    speed: f32,
+    playing: bool,
+    active: bool,
+    last_tick: Option<std::time::Instant>,
+}
+
+impl PreviewPlayback {
+    const MAX_FRAME_GAP: std::time::Duration = std::time::Duration::from_millis(250);
+
+    fn new(preset: AnimationPreset, playing: bool) -> Self {
+        Self {
+            preset,
+            elapsed: std::time::Duration::ZERO,
+            speed: 1.0,
+            playing,
+            active: playing,
+            last_tick: None,
+        }
+    }
+
+    fn tick(&mut self, now: std::time::Instant) {
+        if let Some(previous) = self.last_tick {
+            let delta = now.saturating_duration_since(previous);
+            if self.playing && delta <= Self::MAX_FRAME_GAP {
+                let scaled = if self.speed == 1.0 {
+                    delta
+                } else {
+                    std::time::Duration::from_nanos(
+                        (delta.as_nanos() as f64 * f64::from(self.speed)).round() as u64,
+                    )
+                };
+                self.elapsed += scaled;
+            }
+        }
+        self.last_tick = Some(now);
+    }
+
+    fn toggle(&mut self, now: std::time::Instant) {
+        self.tick(now);
+        self.active = true;
+        self.playing = !self.playing;
+    }
+
+    fn suspend(&mut self) {
+        self.last_tick = None;
+    }
+
+    fn select(&mut self, preset: AnimationPreset, now: std::time::Instant) {
+        if !self.active {
+            self.playing = true;
+        }
+        self.active = true;
+        self.preset = preset;
+        self.elapsed = std::time::Duration::ZERO;
+        self.last_tick = Some(now);
+    }
+
+    fn seek_frames(&mut self, frames: i32) {
+        self.active = true;
+        let cycle = self.preset.cycle_duration().as_secs_f64();
+        let seconds = (self.elapsed.as_secs_f64() + f64::from(frames) / 30.0).rem_euclid(cycle);
+        self.elapsed = std::time::Duration::from_secs_f64(seconds);
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        self.speed = speed.clamp(0.25, 4.0);
+    }
+
+    fn adjust_speed(&mut self, factor: f32) {
+        self.set_speed(self.speed * factor);
+    }
+
+    #[cfg(test)]
+    fn elapsed(&self) -> std::time::Duration {
+        self.elapsed
+    }
+
+    fn sample(&self) -> Option<Posture> {
+        self.active.then(|| self.preset.sample(self.elapsed))
+    }
 }
 
 #[derive(Default)]
@@ -456,7 +689,38 @@ impl ApplicationHandler for PreviewApp {
                     window.request_redraw();
                 }
             }
+            WindowEvent::KeyboardInput { event, .. }
+                if event.state == ElementState::Pressed && !event.repeat =>
+            {
+                let now = std::time::Instant::now();
+                match event.logical_key {
+                    Key::Named(NamedKey::Space) => self.playback.toggle(now),
+                    Key::Named(NamedKey::ArrowLeft) => self.playback.seek_frames(-1),
+                    Key::Named(NamedKey::ArrowRight) => self.playback.seek_frames(1),
+                    Key::Character(ref value) => match value.as_ref() {
+                        "1" => self.playback.select(AnimationPreset::Idle, now),
+                        "2" => self.playback.select(AnimationPreset::Walk, now),
+                        "3" => self.playback.select(AnimationPreset::Run, now),
+                        "4" => self.playback.select(AnimationPreset::Wave, now),
+                        "5" => self.playback.select(AnimationPreset::Fly, now),
+                        "-" => self.playback.adjust_speed(0.8),
+                        "+" | "=" => self.playback.adjust_speed(1.25),
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::Focused(_) => self.playback.suspend(),
             WindowEvent::RedrawRequested => {
+                self.playback.tick(std::time::Instant::now());
+                if let Some(posture) = self.playback.sample() {
+                    if let Some(character) = &mut self.character {
+                        character.posture = self.posture_overrides.apply(posture);
+                    }
+                }
                 if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
                     match renderer.render_frame(character, &self.camera) {
                         Ok(()) => {}
@@ -567,6 +831,38 @@ mod tests {
         interaction.scroll(1.0, &mut position, &mut camera);
 
         assert!(position.x.abs() < before);
+    }
+
+    #[test]
+    fn preview_playback_pauses_seeks_scales_time_and_ignores_long_gaps() {
+        let start = std::time::Instant::now();
+        let mut playback = PreviewPlayback::new(AnimationPreset::Walk, true);
+
+        playback.tick(start);
+        playback.tick(start + std::time::Duration::from_millis(100));
+        assert_eq!(playback.elapsed(), std::time::Duration::from_millis(100));
+
+        playback.toggle(start + std::time::Duration::from_millis(100));
+        playback.tick(start + std::time::Duration::from_millis(200));
+        assert_eq!(playback.elapsed(), std::time::Duration::from_millis(100));
+        playback.seek_frames(1);
+        assert_eq!(
+            playback.elapsed(),
+            std::time::Duration::from_millis(100) + std::time::Duration::from_secs_f64(1.0 / 30.0)
+        );
+
+        playback.toggle(start + std::time::Duration::from_millis(200));
+        playback.set_speed(2.0);
+        playback.tick(start + std::time::Duration::from_millis(250));
+        assert_eq!(
+            playback.elapsed(),
+            std::time::Duration::from_millis(200) + std::time::Duration::from_secs_f64(1.0 / 30.0)
+        );
+        playback.tick(start + std::time::Duration::from_secs(2));
+        assert_eq!(
+            playback.elapsed(),
+            std::time::Duration::from_millis(200) + std::time::Duration::from_secs_f64(1.0 / 30.0)
+        );
     }
 
     // ── parse_positive_scale ──
@@ -819,6 +1115,35 @@ mod tests {
     }
 
     #[test]
+    fn animation_sample_is_modified_only_by_explicit_overrides() {
+        let mut scene = default_scene();
+        scene.head_yaw = Some(42.0);
+        scene.elytra_spread = Some(33.0);
+        let sampled = AnimationPreset::Walk.sample(AnimationPreset::Walk.cycle_duration() / 4);
+
+        let posture = apply_posture_overrides(sampled, &scene);
+
+        assert_eq!(posture.head_yaw, 42.0);
+        assert_eq!(posture.elytra_roll, 33.0);
+        assert_eq!(posture.left_leg_pitch, sampled.left_leg_pitch);
+        assert_eq!(posture.right_arm_pitch, sampled.right_arm_pitch);
+    }
+
+    #[test]
+    fn animation_timing_samples_one_cycle_without_repeating_the_endpoint() {
+        let timing = AnimationTiming::new(AnimationPreset::Walk, 30, 1.0);
+
+        assert_eq!(timing.frame_count(), 30);
+        assert_eq!(timing.sample_time(0), std::time::Duration::ZERO);
+        assert!(timing.sample_time(29) < AnimationPreset::Walk.cycle_duration());
+        assert_eq!(timing.webp_timestamp_ms(30), 1_000);
+        assert_eq!(
+            (0..30).map(|frame| timing.gif_delay_cs(frame)).sum::<u32>(),
+            100
+        );
+    }
+
+    #[test]
     fn scene_world_position_and_rotation() {
         let mut scene = default_scene();
         scene.pos_x = 1.0;
@@ -861,6 +1186,129 @@ mod tests {
             }
             _ => panic!("Expected Render"),
         }
+    }
+
+    #[test]
+    fn cli_animate_minimal_uses_documented_defaults() {
+        let args = Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.gif",
+            "--animation",
+            "idle",
+        ])
+        .expect("minimal animate parse");
+        match args.command {
+            Command::Animate {
+                skin,
+                output,
+                animation,
+                fps,
+                speed,
+                loop_count,
+                viewport,
+                ..
+            } => {
+                assert_eq!(skin, "skin.png");
+                assert_eq!(output, PathBuf::from("out.gif"));
+                assert_eq!(animation, AnimationCli::Idle);
+                assert_eq!(fps, 30);
+                assert_eq!(speed, 1.0);
+                assert_eq!(loop_count, 0);
+                assert_eq!(viewport.width, 800);
+                assert_eq!(viewport.height, 600);
+            }
+            _ => panic!("Expected Animate"),
+        }
+    }
+
+    #[test]
+    fn cli_animate_rejects_posture_and_animation_together() {
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.webp",
+            "--posture",
+            "wave",
+            "--animation",
+            "run",
+        ])
+        .is_err());
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "../out.gif",
+            "--animation",
+            "idle",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn cli_animate_rejects_static_posture_even_with_default_animation() {
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.gif",
+            "--posture",
+            "wave",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn cli_animate_validates_format_and_numeric_bounds() {
+        let base = [
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.gif",
+            "--animation",
+            "walk",
+        ];
+        for invalid_tail in [
+            ["--fps", "0"],
+            ["--fps", "61"],
+            ["--speed", "0.24"],
+            ["--speed", "4.01"],
+            ["--width", "0"],
+            ["--width", "2049"],
+            ["--height", "0"],
+            ["--height", "2049"],
+        ] {
+            assert!(Args::try_parse_from(base.into_iter().chain(invalid_tail)).is_err());
+        }
+
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.png",
+            "--animation",
+            "idle",
+        ])
+        .is_err());
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "animate",
+            "skin.png",
+            "out.webp",
+            "--animation",
+            "fly",
+            "--fps",
+            "60",
+            "--speed",
+            "4",
+            "--width",
+            "2048",
+            "--height",
+            "1",
+        ])
+        .is_ok());
     }
 
     #[test]
@@ -1083,6 +1531,7 @@ mod tests {
                 skin,
                 viewport,
                 scene,
+                ..
             } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(viewport.width, 800);
@@ -1115,6 +1564,7 @@ mod tests {
                 skin,
                 viewport,
                 scene,
+                ..
             } => {
                 assert_eq!(skin, "skin.png");
                 assert_eq!(viewport.width, 1024);
@@ -1125,6 +1575,29 @@ mod tests {
             }
             _ => panic!("Expected Preview"),
         }
+    }
+
+    #[test]
+    fn cli_preview_accepts_animation_and_rejects_a_static_posture_with_it() {
+        let args =
+            Args::try_parse_from(["eidolon", "preview", "skin.png", "--animation", "run"]).unwrap();
+        match args.command {
+            Command::Preview { animation, .. } => {
+                assert_eq!(animation, Some(AnimationCli::Run));
+            }
+            _ => panic!("Expected Preview"),
+        }
+
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "preview",
+            "skin.png",
+            "--animation",
+            "walk",
+            "--posture",
+            "wave",
+        ])
+        .is_err());
     }
 
     #[test]
@@ -1222,12 +1695,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         }
+        Command::Animate {
+            skin,
+            output,
+            animation,
+            fps,
+            speed,
+            loop_count,
+            viewport,
+            scene,
+        } => {
+            let renderer = Renderer::new()?;
+            let (mut character, camera) = load_character(&renderer, &skin, &scene)?;
+            export_animation(
+                &renderer,
+                &mut character,
+                &camera,
+                &output,
+                AnimationExportOptions {
+                    preset: animation.into(),
+                    fps,
+                    speed,
+                    loop_count,
+                    size: (viewport.width, viewport.height),
+                },
+                |posture| apply_posture_overrides(posture, &scene),
+            )?;
+            info!("Done. Saved animation: {}", output.display());
+            Ok(())
+        }
         Command::Preview {
             skin,
             viewport,
             scene,
+            animation,
         } => {
             let (scene_state, camera) = scene_state_and_camera_from_scene(&scene);
+            let posture_overrides = PostureOverrides::from(&scene);
 
             let event_loop = EventLoop::new()?;
             let mut app = PreviewApp {
@@ -1241,6 +1745,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 elytra_atlas_path: scene.elytra,
                 initial_size: PhysicalSize::new(viewport.width, viewport.height),
                 interaction: PreviewInteraction::default(),
+                playback: PreviewPlayback::new(
+                    animation.map(Into::into).unwrap_or(AnimationPreset::Idle),
+                    animation.is_some(),
+                ),
+                posture_overrides,
             };
             event_loop.run_app(&mut app)?;
 

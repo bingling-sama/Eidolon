@@ -137,6 +137,30 @@ Presets are available via `DefaultPostures`:
 | `DefaultPostures::RUNNING` | Arms and legs in running swing; cape baseline 54° |
 | `DefaultPostures::FLYING` | Horizontal player with neutral limbs, 20° pitch, and 60° elytra spread |
 
+## Procedural Animation
+
+`AnimationPreset` is stateless: callers provide a time and receive a complete `Posture`. Sampling
+automatically wraps at the preset's natural cycle, so the same interface works for window loops,
+WASM `requestAnimationFrame`, and offline exporters.
+
+```rust
+use eidolon::animation::AnimationPreset;
+use std::time::Duration;
+
+let animation = AnimationPreset::Walk;
+let time = Duration::from_millis(250);
+character.posture = animation.sample(time);
+
+assert_eq!(
+    animation.sample(Duration::ZERO),
+    animation.sample(animation.cycle_duration()),
+);
+```
+
+Available presets are `Idle` (4s), `Walk` (1s), `Run` (0.6s), `Wave` (1.2s), and `Fly` (1.5s).
+The library deliberately does not own a clock or playback state; update `Character::posture` before
+each call to the Renderer.
+
 ## Skin Conversion
 
 Convert legacy single-layer skins to double-layer without rendering:

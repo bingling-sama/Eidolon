@@ -8,6 +8,7 @@ Provides:
 - Headless image output (PNG / WebP) and windowed preview
 */
 
+pub mod animation;
 pub mod back_equipment;
 pub mod body;
 pub mod camera;
