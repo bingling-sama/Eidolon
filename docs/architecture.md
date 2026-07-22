@@ -6,7 +6,7 @@ model loading, and static image output; the binary owns CLI-specific animated fi
 
 ## Crate Layout
 
-- `src/main.rs` defines the `eidolon` binary and the `render`, `animate`, `preview`, and `convert` subcommands.
+- `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
 - `src/animation.rs` provides stateless procedural `AnimationPreset` sampling into complete Postures.
 - `src/animation_export.rs` is the CLI adapter for streaming GIF and Animated WebP encoding.
 - `src/lib.rs` exposes the library modules.
@@ -57,10 +57,11 @@ window surface and `render_frame` presents each frame to the swapchain.
 
 The CLI uses `--posture` as a shared action selector. Static rendering samples a representative
 frame from its matching `AnimationPreset`; preview starts paused on the same frame and continues
-that preset when playback begins. For `animate`, the CLI samples the selected preset's natural
-cycle uniformly, applies explicit Posture overrides, renders each frame, and immediately submits
-its RGBA buffer to the selected encoder. GIF delays and WebP timestamps use cumulative rounding so
-fractional frame durations do not drift. The Renderer remains responsible only for individual frames.
+that preset when playback begins. For `render --animate`, the CLI samples the selected preset's
+natural cycle uniformly, applies explicit Posture overrides, renders each frame, and immediately
+submits its RGBA buffer to the selected encoder. GIF delays and WebP timestamps use cumulative
+rounding so fractional frame durations do not drift. The Renderer remains responsible only for
+individual frames.
 
 ## Model And Skin Assumptions
 

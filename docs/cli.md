@@ -1,10 +1,10 @@
 # Command Line Reference
 
-Eidolon ships a single binary with four subcommands: `render`, `animate`, `preview`, and `convert`.
+Eidolon ships a single binary with three subcommands: `render`, `preview`, and `convert`.
 
 ## Render
 
-Render a skin to an image file (headless).
+Render a skin to a static image or animation file (headless).
 
 ```bash
 eidolon render [OPTIONS] <SKIN> [OUTPUT]
@@ -15,7 +15,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | Arg | Description | Default |
 |-----|-------------|---------|
 | `<SKIN>` | Path to the skin PNG file | *(required)* |
-| `[OUTPUT]` | Output image path. Extension determines format (`.png` or `.webp`) | `output.png` |
+| `[OUTPUT]` | Output path. Static: `.png`/`.webp`; animated: `.gif`/`.webp` | `output.png`, or `output.webp` with `--animate` |
 
 **Options:**
 
@@ -23,6 +23,10 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 |------|-------------|---------|
 | `--width <PX>` | Output width in pixels | `800` |
 | `--height <PX>` | Output height in pixels | `600` |
+| `--animate` | Render a complete animation cycle instead of one frame | *(disabled)* |
+| `--fps <1..60>` | Animation frame rate; requires `--animate` | `30` |
+| `--speed <0.25..4.0>` | Animation playback speed; requires `--animate` | `1.0` |
+| `--loop-count <N>` | Animation loop metadata; `0` means infinite; requires `--animate` | `0` |
 | `--slim` | Use slim arm geometry (Alex-style, 3px arms) | *(classic, 4px)* |
 | `--nametag <TEXT>` | Render a Minecraft-style player name above the model | *(hidden)* |
 | `--disable-nametag-see-through` | Fully hide nametag pixels occluded by scene geometry | *(translucent when occluded)* |
@@ -34,7 +38,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
 | `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
-| `--posture <ACTION>` | Action: `stand`, `wave`, `walking`, `running`, `flying` | `stand` |
+| `--posture <ACTION>` | Action: `idle`, `walk`, `run`, `wave`, `fly` | `idle` |
 
 **Power-user options** (show in `--help` but not `-h`):
 
@@ -58,7 +62,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 ### Examples
 
 ```bash
-# Minimal — classic arms, stand pose, 800×600 PNG
+# Minimal — classic arms, idle pose, 800×600 PNG
 eidolon render skin.png
 
 # Slim arms, WebP output
@@ -83,45 +87,23 @@ eidolon render skin.png big.webp --posture wave --cam-zoom 1.5 --width 1024 --he
 eidolon render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2
 
 # Override individual joints on top of a posture preset
-eidolon render skin.png --posture walking --head-pitch 15 --left-arm-roll 30
+eidolon render skin.png --posture walk --head-pitch 15 --left-arm-roll 30
+
+# Animated GIF and lossless Animated WebP
+eidolon render skin.png walk.gif --animate --posture walk
+eidolon render skin.png fly.webp --animate --posture fly --elytra cape.png --fps 60 --speed 1.5
+eidolon render skin.png wave.gif --animate --posture wave --loop-count 3 --width 512 --height 512
 ```
 
 Format is inferred from the output filename extension. `output.png` → PNG, `output.webp` → WebP.
 The output path must not contain `..` components (directory traversal is rejected).
 
-`--posture` is the shared action selector for static rendering, animation export, and preview.
-The mappings are `stand` → Idle, `wave` → Wave, `walking` → Walk, `running` → Run, and
-`flying` → Fly. Static rendering samples a representative frame from the selected animation;
-Walk and Run use the quarter-cycle frame, while the other actions use phase zero.
-
-## Animate
-
-Render one complete procedural animation cycle to GIF or Animated WebP.
-
-```bash
-eidolon animate <SKIN> <OUTPUT.gif|OUTPUT.webp> [OPTIONS]
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--posture <ACTION>` | `stand`, `wave`, `walking`, `running`, or `flying` | `stand` |
-| `--fps <1..60>` | Output frame rate | `30` |
-| `--speed <0.25..4.0>` | Playback speed multiplier | `1.0` |
-| `--loop-count <N>` | Loop metadata; `0` means infinite | `0` |
-| `--width <1..2048>` | Output width | `800` |
-| `--height <1..2048>` | Output height | `600` |
-
-The scene, camera, Back equipment, and joint override options from `render` are also available.
-Overrides are applied after each animation sample, so an explicitly supplied joint, Cape, or Elytra
-angle remains fixed while other joints animate.
-Animated WebP preserves full alpha and uses lossless encoding. GIF uses a 256-color RGBA
-quantization path and therefore has limited transparency fidelity.
-
-```bash
-eidolon animate skin.png walk.gif --posture walking
-eidolon animate skin.png fly.webp --posture flying --elytra cape.png --fps 60 --speed 1.5
-eidolon animate skin.png wave.gif --posture wave --loop-count 3 --width 512 --height 512
-```
+`--posture` uses exactly the `AnimationPreset` names and is shared by static rendering, animated
+rendering, and preview. Static rendering samples a representative frame; Walk and Run use the
+quarter-cycle frame, while the other actions use phase zero. With `--animate`, explicit joint,
+Cape, and Elytra overrides are applied after every sample. Animated WebP preserves full alpha and
+uses lossless encoding; GIF uses a 256-color RGBA quantization path. Animated output dimensions
+must not exceed 2048×2048.
 
 ## Preview
 
@@ -145,8 +127,8 @@ eidolon preview skin.png --slim --cam-zoom 2.0
 eidolon preview skin.png --nametag Steve
 eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png
-eidolon preview skin.png --posture running --width 1024 --height 768
-eidolon preview skin.png --posture walking
+eidolon preview skin.png --posture run --width 1024 --height 768
+eidolon preview skin.png --posture walk
 ```
 
 ## Convert

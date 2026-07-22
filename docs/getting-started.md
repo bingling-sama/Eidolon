@@ -17,7 +17,7 @@ cargo build
 
 ## Render an Image (Headless)
 
-The minimal invocation uses all defaults (classic arms, stand pose, 800×600 PNG):
+The minimal invocation uses all defaults (classic arms, idle pose, 800×600 PNG):
 
 ```bash
 cargo run -- render resources/bingling_sama.png
@@ -41,12 +41,20 @@ cargo run -- render resources/bingling_sama.png --slim
 
 ### Posture Presets
 
-Choose from `stand` (default), `wave`, `walking`, `running`, `flying`:
+Choose from `idle` (default), `walk`, `run`, `wave`, `fly`:
 
 ```bash
 cargo run -- render resources/bingling_sama.png --posture wave
-cargo run -- render resources/bingling_sama.png --posture running --slim
-cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture flying
+cargo run -- render resources/bingling_sama.png --posture run --slim
+cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture fly
+```
+
+### Render an Animation
+
+Add `--animate` and use a `.gif` or `.webp` output path:
+
+```bash
+cargo run -- render resources/bingling_sama.png walk.gif --animate --posture walk
 ```
 
 ### Camera Control

@@ -16,47 +16,54 @@ cargo build
 
 ## 渲染图片（无窗口）
 
-必须指定 `--skin-type`（`classic` 或 `slim`）。默认纹理为 `resources/bingling_sama.png`。
+最小命令使用 classic 手臂、Idle 代表帧和 `800×600` PNG：
 
 ```bash
-cargo run -- render --skin-type classic
+cargo run -- render resources/bingling_sama.png
 ```
 
 默认输出为 `output.png`。如需 WebP：
 
 ```bash
-cargo run -- render --skin-type classic --format webp
+cargo run -- render resources/bingling_sama.png output.webp
 ```
 
-如果同时使用 `--filename output.png` 与 `--format webp`，输出文件名会自动调整为 `output.webp`。
+输出格式由文件扩展名推断。
 
-### 姿势预设
+### 动作预设
 
-可选姿势包括 `stand`（默认）、`wave`、`walking`、`running` 和 `flying`：
+可选动作包括 `idle`（默认）、`walk`、`run`、`wave` 和 `fly`：
 
 ```bash
 cargo run -- render resources/bingling_sama.png --posture wave
-cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture flying
+cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.png --posture fly
+```
+
+### 渲染动画
+
+添加 `--animate`，并使用 `.gif` 或 `.webp` 输出路径：
+
+```bash
+cargo run -- render resources/bingling_sama.png walk.gif --animate --posture walk
 ```
 
 渲染自定义皮肤和相机角度：
 
 ```bash
 cargo run -- render \
-  --skin-type slim \
-  --texture resources/bingling_sama.png \
-  --filename preview.png \
+  resources/bingling_sama.png preview.png \
+  --slim \
   --width 1024 \
   --height 1024 \
-  --yaw 210 \
-  --pitch 90 \
-  --scale 1.2
+  --cam-yaw 210 \
+  --cam-pitch 90 \
+  --cam-zoom 1.2
 ```
 
 ## 窗口预览
 
 ```bash
-cargo run -- preview --skin-type classic
+cargo run -- preview resources/bingling_sama.png
 ```
 
 预览窗口支持与 `render` 相同的场景、相机、姿势和视口参数。

@@ -11,7 +11,7 @@ Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model o
 - Load and render Minecraft player models
 - Texture mapping support
 - 3D rendering with wgpu (Vulkan / Metal / DX12)
-- Save rendering result as PNG or WebP
+- Save static PNG/WebP or animated GIF/WebP output
 - Configurable camera, poses, and output size
 - Minecraft-style nametags above player models
 - Cape and elytra back-equipment rendering
@@ -47,7 +47,7 @@ cargo build
 ### Render an Image
 
 ```bash
-# Minimal — all defaults (classic arms, stand pose, 800×600 PNG)
+# Minimal — all defaults (classic arms, idle pose, 800×600 PNG)
 cargo run -- render resources/bingling_sama.png
 
 # Slim arms, wave pose, WebP output
@@ -58,6 +58,9 @@ cargo run -- render resources/bingling_sama.png --cam-yaw 210 --cam-zoom 1.5 --w
 
 # Render a player nametag
 cargo run -- render resources/bingling_sama.png --nametag BinglingTX
+
+# Render a procedural animation
+cargo run -- render resources/bingling_sama.png walk.gif --animate --posture walk
 ```
 
 ### Preview in a Window
