@@ -4,10 +4,10 @@ use std::sync::Arc;
 use clap::{Parser, Subcommand, ValueEnum};
 use eidolon::{
     animation::{AnimationPreset, AnimationTimeline},
+    assets::RawSkin,
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, Posture, SkinType},
-    converter,
     error::EidolonError,
     output::{write_output, OutputIntent},
     renderer::Renderer,
@@ -1732,15 +1732,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::Convert { input, output } => {
-            let img =
-                image::open(&input).map_err(|e| format!("Failed to open input image: {}", e))?;
-
-            match converter::single2double(&img) {
-                Ok(result) => {
+            match RawSkin::convert_file(&input, &output) {
+                Ok(()) => {
                     info!("Conversion OK. Double-layer skin saved to: {:?}", output);
-                    result
-                        .save(output)
-                        .map_err(|e| format!("Failed to save output image: {}", e))?;
                     Ok(())
                 }
                 Err(e) => {
