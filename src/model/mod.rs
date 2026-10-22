@@ -1,10 +1,17 @@
-//! Loads the rigged Minecraft player mesh from OBJ assets.
+//! Loads the rigged Minecraft player mesh and equipment geometry.
 
+mod cape;
+mod elytra;
+
+use crate::character::SkinType;
 use crate::error::EidolonError;
 use log::info;
 use std::collections::HashMap;
 use tobj::{load_obj, GPU_LOAD_OPTIONS};
 use wgpu::util::DeviceExt;
+
+use cape::build_cape;
+use elytra::build_elytra;
 
 /// Vertex layout: position, normal, UV (matches the skin shader `VertexInput`).
 #[repr(C)]
@@ -218,6 +225,67 @@ impl Model {
     }
 }
 
+/// Consolidated GPU mesh catalog holding body variations and back equipment meshes.
+pub struct ModelCatalog {
+    pub classic: Model,
+    pub slim: Model,
+    pub cape: CapePart,
+    pub elytra: ElytraPart,
+}
+
+impl ModelCatalog {
+    /// Initialize all character body and back-equipment geometries.
+    pub fn new(device: &wgpu::Device) -> Result<Self, EidolonError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let (slim, classic) = {
+            let slim = Model::load_from_obj(device, "resources/slim.obj")?;
+            let classic = Model::load_from_obj(device, "resources/classic.obj")?;
+            (slim, classic)
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let (slim, classic) = {
+            let slim = Model::load_from_obj_bytes(
+                device,
+                include_bytes!("../../../resources/slim.obj"),
+                "slim.obj",
+            )?;
+            let classic = Model::load_from_obj_bytes(
+                device,
+                include_bytes!("../../../resources/classic.obj"),
+                "classic.obj",
+            )?;
+            (slim, classic)
+        };
+
+        let cape = build_cape(device)?;
+        let elytra = build_elytra(device)?;
+
+        Ok(Self {
+            classic,
+            slim,
+            cape,
+            elytra,
+        })
+    }
+
+    /// Return the player body mesh corresponding to the selected arm type.
+    pub fn body_model(&self, skin_type: SkinType) -> &Model {
+        match skin_type {
+            SkinType::Classic => &self.classic,
+            SkinType::Slim => &self.slim,
+        }
+    }
+
+    pub fn cape_model(&self) -> &CapePart {
+        &self.cape
+    }
+
+    pub fn elytra_model(&self) -> &ElytraPart {
+        &self.elytra
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -235,16 +303,13 @@ mod tests {
     }
 
     #[test]
-    fn load_slim_model_has_all_parts() {
+    fn model_catalog_loads_all_geometries() {
         let (device, _queue) = make_device();
-        let model =
-            Model::load_from_obj(&device, "resources/slim.obj").expect("Failed to load slim model");
-        let _ = &model.head;
-        let _ = &model.body;
-        let _ = &model.right_arm;
-        let _ = &model.left_arm;
-        let _ = &model.right_leg;
-        let _ = &model.left_leg;
+        let catalog = ModelCatalog::new(&device).expect("Failed to load ModelCatalog");
+        let _ = catalog.body_model(SkinType::Classic);
+        let _ = catalog.body_model(SkinType::Slim);
+        let _ = catalog.cape_model();
+        let _ = catalog.elytra_model();
     }
 
     #[test]

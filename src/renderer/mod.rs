@@ -17,11 +17,9 @@ use winit::window::Window;
 use crate::back_equipment::{BackEquipmentAtlas, BackEquipmentKind};
 use crate::body::Body;
 use crate::camera::Camera;
-use crate::cape::build_cape;
 use crate::character::{Character, SkinType};
-use crate::elytra::build_elytra;
 use crate::error::EidolonError;
-use crate::model::Model;
+use crate::model::ModelCatalog;
 use crate::texture::Texture;
 
 use nametag::{compute_nametag_uniform, nametag_passes, CachedNametag, NametagPass};
@@ -46,10 +44,7 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     uniform_aligned_size: u32,
-    slim_model: Model,
-    default_model: Model,
-    cape_model: crate::model::CapePart,
-    elytra_model: crate::model::ElytraPart,
+    models: ModelCatalog,
     surface: Option<wgpu::Surface<'static>>,
     surface_config: Option<wgpu::SurfaceConfiguration>,
     surface_pipeline: Option<wgpu::RenderPipeline>,
@@ -383,29 +378,7 @@ impl Renderer {
             }],
         });
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let (slim_model, default_model) = {
-            let slim = Model::load_from_obj(&device, "resources/slim.obj")?;
-            let classic = Model::load_from_obj(&device, "resources/classic.obj")?;
-            (slim, classic)
-        };
-
-        let cape_model = build_cape(&device)?;
-        let elytra_model = build_elytra(&device)?;
-        #[cfg(target_arch = "wasm32")]
-        let (slim_model, default_model) = {
-            let slim = Model::load_from_obj_bytes(
-                &device,
-                include_bytes!("../../resources/slim.obj"),
-                "slim.obj",
-            )?;
-            let classic = Model::load_from_obj_bytes(
-                &device,
-                include_bytes!("../../resources/classic.obj"),
-                "classic.obj",
-            )?;
-            (slim, classic)
-        };
+        let models = ModelCatalog::new(&device)?;
 
         let (surface, surface_config) = match surface_info {
             Some((s, c, _)) => (Some(s), Some(c)),
@@ -424,10 +397,7 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
             uniform_aligned_size: aligned_size,
-            slim_model,
-            default_model,
-            cape_model,
-            elytra_model,
+            models,
             surface,
             surface_config,
             surface_pipeline,
@@ -524,10 +494,7 @@ impl Renderer {
         height: u32,
     ) {
         let body = character.body();
-        let model = body.map(|body| match body.skin_type() {
-            SkinType::Slim => &self.slim_model,
-            SkinType::Classic => &self.default_model,
-        });
+        let model = body.map(|body| self.models.body_model(body.skin_type()));
 
         if body.is_some() {
             let uniforms = compute_body_part_uniforms(character, camera, width, height);
@@ -680,15 +647,18 @@ impl Renderer {
                     &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
                 render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.cape_model.main.vertex_buffer.slice(..));
-                render_pass.draw(0..self.cape_model.main.vertex_count, 0..1);
+                render_pass.set_vertex_buffer(
+                    0,
+                    self.models.cape_model().main.vertex_buffer.slice(..),
+                );
+                render_pass.draw(0..self.models.cape_model().main.vertex_count, 0..1);
             }
 
             if let Some(elytra_atlas) = elytra_atlas {
                 render_pass.set_bind_group(1, &elytra_atlas.bind_group, &[]);
                 for (index, wing) in [
-                    (LEFT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.left_wing),
-                    (RIGHT_ELYTRA_UNIFORM_INDEX, &self.elytra_model.right_wing),
+                    (LEFT_ELYTRA_UNIFORM_INDEX, &self.models.elytra_model().left_wing),
+                    (RIGHT_ELYTRA_UNIFORM_INDEX, &self.models.elytra_model().right_wing),
                 ] {
                     render_pass.set_bind_group(
                         0,

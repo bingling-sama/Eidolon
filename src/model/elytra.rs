@@ -113,7 +113,7 @@ fn upload_wing(device: &wgpu::Device, label: &str, vertices: &[TexturedVertex]) 
     }
 }
 
-pub fn build_elytra(device: &wgpu::Device) -> Result<ElytraPart, EidolonError> {
+pub(crate) fn build_elytra(device: &wgpu::Device) -> Result<ElytraPart, EidolonError> {
     let left = wing_vertices(false);
     let right = wing_vertices(true);
     Ok(ElytraPart {

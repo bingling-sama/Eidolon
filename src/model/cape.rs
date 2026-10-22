@@ -22,7 +22,7 @@ const CAPE_Y: f32 = BODY_TOP - 0.5;
 ///
 /// The geometry is centered at origin. The caller positions it on the
 /// player's upper back via the pivot transform in the shader uniform.
-pub fn build_cape(device: &wgpu::Device) -> Result<CapePart, EidolonError> {
+pub(crate) fn build_cape(device: &wgpu::Device) -> Result<CapePart, EidolonError> {
     // ── 24 unique vertices (position + UV) from skinview3d BoxGeometry(10, 16, 1) ──
     // Pixel coords converted to model space: ÷ 16.
     // The top edge aligns with the body shoulder line.
