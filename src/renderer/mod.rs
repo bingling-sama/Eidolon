@@ -5,7 +5,7 @@ mod pipeline;
 mod readback;
 mod uniforms;
 
-use std::cell::RefCell;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -56,7 +56,9 @@ pub struct Renderer {
     nametag_surface_pipeline: Option<wgpu::RenderPipeline>,
     nametag_see_through_surface_pipeline: Option<wgpu::RenderPipeline>,
     /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
-    cached_depth_texture: RefCell<Option<(wgpu::Texture, u32, u32)>>,
+    cached_depth_texture: Mutex<Option<(wgpu::Texture, u32, u32)>>,
+    /// Cached nametag textures and meshes (indexed by text).
+    cached_nametags: Mutex<std::collections::HashMap<String, Arc<CachedNametag>>>,
     /// RGBA clear color for the render pass background. Default: transparent black.
     clear_color: [f64; 4],
 }
@@ -431,9 +433,45 @@ impl Renderer {
             surface_pipeline,
             nametag_surface_pipeline,
             nametag_see_through_surface_pipeline,
-            cached_depth_texture: RefCell::new(None),
+            cached_depth_texture: Mutex::new(None),
+            cached_nametags: Mutex::new(std::collections::HashMap::new()),
             clear_color: [0.0, 0.0, 0.0, 0.0],
         })
+    }
+
+    /// Upload a pre-loaded/validated [`RawCapeAtlas`] to GPU texture.
+    pub fn upload_cape_atlas(
+        &self,
+        atlas: &crate::assets::RawCapeAtlas,
+    ) -> Result<BackEquipmentAtlas, EidolonError> {
+        let texture = Texture::upload_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            atlas.as_raw(),
+            atlas.width(),
+            atlas.height(),
+        )?;
+        Ok(BackEquipmentAtlas::new(texture, self.context_id))
+    }
+
+    /// Upload a pre-loaded/validated [`RawSkin`] to GPU texture.
+    pub fn upload_skin(
+        &self,
+        skin: &crate::assets::RawSkin,
+        skin_type: SkinType,
+    ) -> Result<Body, EidolonError> {
+        let texture = Texture::upload_raw(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            &self.sampler,
+            skin.as_raw(),
+            skin.width(),
+            skin.height(),
+        )?;
+        Ok(Body::new(texture, skin_type, self.context_id))
     }
 
     /// Load and validate the atlas shared by cape and elytra presentation.
@@ -442,15 +480,8 @@ impl Renderer {
         &self,
         path: &str,
     ) -> Result<BackEquipmentAtlas, EidolonError> {
-        let texture = Texture::load_from_file_raw(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            path,
-        )?;
-        texture.validate_cape_atlas()?;
-        Ok(BackEquipmentAtlas::new(texture, self.context_id))
+        let raw = crate::assets::RawCapeAtlas::from_file(path)?;
+        self.upload_cape_atlas(&raw)
     }
 
     /// Load a back-equipment atlas from PNG bytes.
@@ -458,28 +489,15 @@ impl Renderer {
         &self,
         bytes: &[u8],
     ) -> Result<BackEquipmentAtlas, EidolonError> {
-        let texture = Texture::load_from_memory_raw(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            bytes,
-        )?;
-        texture.validate_cape_atlas()?;
-        Ok(BackEquipmentAtlas::new(texture, self.context_id))
+        let raw = crate::assets::RawCapeAtlas::from_memory(bytes)?;
+        self.upload_cape_atlas(&raw)
     }
 
     /// Load a body skin and bind its classic or slim geometry selection.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_body(&self, path: &str, skin_type: SkinType) -> Result<Body, EidolonError> {
-        let texture = Texture::load_from_file(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            path,
-        )?;
-        Ok(Body::new(texture, skin_type, self.context_id))
+        let raw = crate::assets::RawSkin::from_file(path)?;
+        self.upload_skin(&raw, skin_type)
     }
 
     /// Load a body skin from PNG bytes.
@@ -488,14 +506,8 @@ impl Renderer {
         bytes: &[u8],
         skin_type: SkinType,
     ) -> Result<Body, EidolonError> {
-        let texture = Texture::load_from_memory(
-            &self.device,
-            &self.queue,
-            &self.texture_bind_group_layout,
-            &self.sampler,
-            bytes,
-        )?;
-        Ok(Body::new(texture, skin_type, self.context_id))
+        let raw = crate::assets::RawSkin::from_memory(bytes)?;
+        self.upload_skin(&raw, skin_type)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -556,27 +568,30 @@ impl Renderer {
             }
         }
 
-        let nametag_text = character
+        let nametag_cached = character
             .nametag
             .as_deref()
-            .filter(|text| !text.trim().is_empty());
-        if let Some(text) = nametag_text {
-            let needs_rebuild = character
-                .nametag_cache
-                .borrow()
-                .as_ref()
-                .is_none_or(|cached| cached.text != text || cached.context_id != self.context_id);
-            if needs_rebuild {
-                *character.nametag_cache.borrow_mut() = CachedNametag::new(
+            .filter(|text| !text.trim().is_empty())
+            .and_then(|text| {
+                let mut cache = self.cached_nametags.lock().unwrap();
+                if let Some(cached) = cache.get(text) {
+                    Some(Arc::clone(cached))
+                } else if let Some(new_cached) = CachedNametag::new(
                     &self.device,
                     &self.queue,
                     &self.texture_bind_group_layout,
                     &self.sampler,
                     text,
                     self.context_id,
-                );
-            }
+                ) {
+                    cache.insert(text.to_owned(), Arc::clone(&new_cached));
+                    Some(new_cached)
+                } else {
+                    None
+                }
+            });
 
+        if nametag_cached.is_some() {
             let uniform = compute_nametag_uniform(character, camera, width, height);
             let offset = (NAMETAG_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
             self.queue
@@ -584,7 +599,7 @@ impl Renderer {
         }
 
         let depth_view = {
-            let mut cache = self.cached_depth_texture.borrow_mut();
+            let mut cache = self.cached_depth_texture.lock().unwrap();
             let need_new = match cache.as_ref() {
                 None => true,
                 Some((_, w, h)) => *w != width || *h != height,
@@ -685,23 +700,20 @@ impl Renderer {
                 }
             }
 
-            if let Some(text) = nametag_text {
-                let cache = character.nametag_cache.borrow();
-                if let Some(cached) = cache.as_ref().filter(|cached| cached.text == text) {
-                    render_pass.set_bind_group(
-                        0,
-                        &self.uniform_bind_group,
-                        &[NAMETAG_UNIFORM_INDEX * self.uniform_aligned_size],
-                    );
-                    render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
-                    for pass in nametag_passes(character.nametag_see_through) {
-                        render_pass.set_pipeline(match pass {
-                            NametagPass::SeeThrough => nametag_see_through_pipeline,
-                            NametagPass::Normal => nametag_pipeline,
-                        });
-                        render_pass.draw(0..cached.vertex_count, 0..1);
-                    }
+            if let Some(cached) = nametag_cached {
+                render_pass.set_bind_group(
+                    0,
+                    &self.uniform_bind_group,
+                    &[NAMETAG_UNIFORM_INDEX * self.uniform_aligned_size],
+                );
+                render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
+                render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
+                for pass in nametag_passes(character.nametag_see_through) {
+                    render_pass.set_pipeline(match pass {
+                        NametagPass::SeeThrough => nametag_see_through_pipeline,
+                        NametagPass::Normal => nametag_pipeline,
+                    });
+                    render_pass.draw(0..cached.vertex_count, 0..1);
                 }
             }
         }
@@ -898,5 +910,16 @@ impl Renderer {
             config.height = height;
             surface.configure(&self.device, config);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renderer_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Renderer>();
     }
 }

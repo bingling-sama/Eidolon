@@ -590,8 +590,8 @@ fn load_body_corrupted_png_errors() {
         Err(e) => {
             let msg = e.to_string();
             assert!(
-                msg.contains("Texture error"),
-                "Expected Texture error, got: {msg}"
+                msg.contains("Image error") || msg.contains("Texture error"),
+                "Expected Image error or Texture error, got: {msg}"
             );
         }
     }

@@ -1,11 +1,8 @@
 use crate::back_equipment::BackEquipment;
 use crate::body::Body;
 pub use crate::body::SkinType;
-use crate::renderer::nametag::CachedNametag;
 use cgmath::Vector3;
-use std::cell::RefCell;
 use std::fmt;
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CharacterError {
@@ -153,7 +150,6 @@ pub struct Character {
     back_equipment: Option<BackEquipment>,
     /// Optional player name rendered above the model. `None` hides the nametag.
     pub nametag: Option<String>,
-    pub(crate) nametag_cache: RefCell<Option<Arc<CachedNametag>>>,
     /// Whether an occluded nametag remains visible at reduced opacity.
     pub nametag_see_through: bool,
     pub posture: Posture,
@@ -170,7 +166,6 @@ impl Character {
             body,
             back_equipment,
             nametag: None,
-            nametag_cache: RefCell::new(None),
             nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
@@ -236,7 +231,6 @@ impl Character {
             body: None,
             back_equipment: None,
             nametag: None,
-            nametag_cache: RefCell::new(None),
             nametag_see_through: true,
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
@@ -383,6 +377,12 @@ mod tests {
         assert_eq!(flying.right_arm_pitch, 0.0);
         assert_eq!(flying.left_leg_pitch, 0.0);
         assert_eq!(flying.right_leg_pitch, 0.0);
+    }
+
+    #[test]
+    fn character_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Character>();
     }
 
     #[test]

@@ -55,7 +55,9 @@ pub(crate) fn nametag_passes(see_through: bool) -> &'static [NametagPass] {
 }
 
 pub(crate) struct CachedNametag {
+    #[allow(dead_code)]
     pub text: String,
+    #[allow(dead_code)]
     pub context_id: u64,
     pub texture: Texture,
     pub vertex_buffer: wgpu::Buffer,

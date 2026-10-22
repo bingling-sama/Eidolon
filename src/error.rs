@@ -7,6 +7,8 @@ use std::fmt;
 pub enum EidolonError {
     /// Wrapped I/O error (file not found, permission denied, etc.).
     Io(std::io::Error),
+    /// Wrapped image decoding/processing error.
+    Image(image::ImageError),
     /// GPU adapter, device, or pipeline failure.
     Gpu(String),
     /// OBJ model missing required named objects.
@@ -27,6 +29,7 @@ impl fmt::Display for EidolonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Image(e) => write!(f, "Image error: {e}"),
             Self::Gpu(msg) => write!(f, "GPU error: {msg}"),
             Self::Model(msg) => write!(f, "Model error: {msg}"),
             Self::Texture(msg) => write!(f, "Texture error: {msg}"),
@@ -42,6 +45,7 @@ impl std::error::Error for EidolonError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(e) => Some(e),
+            Self::Image(e) => Some(e),
             _ => None,
         }
     }
@@ -50,6 +54,12 @@ impl std::error::Error for EidolonError {
 impl From<std::io::Error> for EidolonError {
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<image::ImageError> for EidolonError {
+    fn from(e: image::ImageError) -> Self {
+        Self::Image(e)
     }
 }
 
@@ -141,6 +151,17 @@ mod tests {
     }
 
     #[test]
+    fn from_image_error() {
+        let img_err = image::ImageError::Decoding(image::error::DecodingError::new(
+            image::error::ImageFormatHint::Unknown,
+            "corrupt",
+        ));
+        let e: EidolonError = img_err.into();
+        assert!(matches!(e, EidolonError::Image(_)));
+        assert!(std::error::Error::source(&e).is_some());
+    }
+
+    #[test]
     fn surface_error_conversion_preserves_recovery_kind() {
         let error: EidolonError = wgpu::SurfaceError::Lost.into();
         assert!(matches!(
@@ -181,8 +202,13 @@ mod tests {
 
     #[test]
     fn display_all_variants() {
-        let io = std::io::Error::new(std::io::ErrorKind::Other, "oops");
+        let io = std::io::Error::other("oops");
+        let img = image::ImageError::Decoding(image::error::DecodingError::new(
+            image::error::ImageFormatHint::Unknown,
+            "corrupt",
+        ));
         assert_eq!(EidolonError::Io(io).to_string(), "I/O error: oops");
+        assert_eq!(EidolonError::Image(img).to_string(), "Image error: Format error decoding `Unknown`: corrupt");
         assert_eq!(
             EidolonError::Gpu("shader compile failed".into()).to_string(),
             "GPU error: shader compile failed"

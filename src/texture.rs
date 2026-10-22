@@ -4,18 +4,8 @@
 //! If the image has single-layer layout (width = 2 × height), it is converted to a
 //! double-layer skin via [`crate::converter::single2double`] before upload.
 
-use crate::converter::single2double;
 use crate::error::EidolonError;
-#[cfg(not(target_arch = "wasm32"))]
-use image::ImageFormat;
-use image::{DynamicImage, GenericImageView};
 use log::info;
-#[cfg(not(target_arch = "wasm32"))]
-use std::fs::File;
-#[cfg(not(target_arch = "wasm32"))]
-use std::io::BufReader;
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::Path;
 
 /// GPU image atlas.
 ///
@@ -27,160 +17,9 @@ pub struct Texture {
     #[allow(dead_code)]
     pub(crate) view: wgpu::TextureView,
     pub(crate) bind_group: wgpu::BindGroup,
-    width: u32,
-    height: u32,
 }
 
 impl Texture {
-    pub(crate) fn validate_cape_atlas(&self) -> Result<(), EidolonError> {
-        validate_cape_atlas_dimensions(self.width, self.height)
-    }
-
-    /// Load a skin from in-memory PNG bytes, decode as RGBA, optionally convert single-layer
-    /// skins, then create the GPU texture and bind group.
-    ///
-    /// Available on all platforms. Preferred for WASM where file I/O is not available.
-    pub fn load_from_memory(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        bytes: &[u8],
-    ) -> Result<Self, EidolonError> {
-        info!("Loading texture from memory ({} bytes)", bytes.len());
-        let image = image::load_from_memory(bytes)
-            .map_err(|e| EidolonError::texture(format!("failed to decode PNG from memory: {e}")))?;
-        Self::load_texture(device, queue, bind_group_layout, sampler, &image)
-    }
-
-    /// Load a texture from memory without applying legacy skin-atlas conversion.
-    ///
-    /// This is intended for non-Skin atlases such as 64x32 Back equipment atlases,
-    /// whose aspect ratio would otherwise be mistaken for a legacy player skin.
-    pub(crate) fn load_from_memory_raw(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        bytes: &[u8],
-    ) -> Result<Self, EidolonError> {
-        let image = image::load_from_memory(bytes)
-            .map_err(|e| EidolonError::texture(format!("failed to decode PNG from memory: {e}")))?
-            .to_rgba8();
-        let (width, height) = image.dimensions();
-        Self::upload_raw(
-            device,
-            queue,
-            bind_group_layout,
-            sampler,
-            image.as_raw(),
-            width,
-            height,
-        )
-    }
-
-    /// Load a skin from a PNG file path, decode as RGBA, optionally convert single-layer skins,
-    /// then create the GPU texture and bind group.
-    ///
-    /// The path is canonicalized before use to resolve symlinks and `..` components.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_from_file(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        path: &str,
-    ) -> Result<Self, EidolonError> {
-        info!("Loading texture: {}", path);
-        if path.contains('\0') {
-            return Err(EidolonError::invalid_path(
-                "texture path contains null bytes",
-            ));
-        }
-        let canonical = Path::new(path).canonicalize().map_err(|e| {
-            EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e))
-        })?;
-        let file = File::open(&canonical)?;
-        let reader = BufReader::new(file);
-        let image = image::load(reader, ImageFormat::Png)
-            .map_err(|e| EidolonError::texture(format!("failed to decode PNG: {e}")))?
-            .to_rgba8();
-        Self::load_texture(
-            device,
-            queue,
-            bind_group_layout,
-            sampler,
-            &DynamicImage::ImageRgba8(image),
-        )
-    }
-
-    /// Load a skin without auto-converting single-layer to double-layer.
-    ///
-    /// Use when the raw texture layout must be preserved as-is.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_from_file_raw(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        path: &str,
-    ) -> Result<Self, EidolonError> {
-        info!("Loading texture (raw, no conversion): {}", path);
-        if path.contains('\0') {
-            return Err(EidolonError::invalid_path(
-                "texture path contains null bytes",
-            ));
-        }
-        let canonical = Path::new(path).canonicalize().map_err(|e| {
-            EidolonError::invalid_path(format!("failed to resolve '{}': {}", path, e))
-        })?;
-        let file = File::open(&canonical)?;
-        let reader = BufReader::new(file);
-        let image = image::load(reader, ImageFormat::Png)
-            .map_err(|e| EidolonError::texture(format!("failed to decode PNG: {e}")))?
-            .to_rgba8();
-        let dimensions = image.dimensions();
-        Self::upload_raw(
-            device,
-            queue,
-            bind_group_layout,
-            sampler,
-            image.as_raw(),
-            dimensions.0,
-            dimensions.1,
-        )
-    }
-
-    fn load_texture(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
-        sampler: &wgpu::Sampler,
-        image: &DynamicImage,
-    ) -> Result<Texture, EidolonError> {
-        let (width, height) = image.dimensions();
-        info!("Texture dimensions: {}x{}", width, height);
-
-        let image = if width == height * 2 {
-            info!("Single-layer skin detected, converting to double-layer...");
-            single2double(image)?
-        } else {
-            image.clone()
-        };
-
-        let image_dimensions = image.dimensions();
-        let image_rgba = image.to_rgba8();
-        Self::upload_raw(
-            device,
-            queue,
-            bind_group_layout,
-            sampler,
-            &image_rgba,
-            image_dimensions.0,
-            image_dimensions.1,
-        )
-    }
-
     pub(crate) fn upload_raw(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -245,31 +84,13 @@ impl Texture {
             texture,
             view,
             bind_group,
-            width,
-            height,
         })
     }
 }
 
-fn validate_cape_atlas_dimensions(width: u32, height: u32) -> Result<(), EidolonError> {
-    let width_scale = width / 64;
-    let height_scale = height / 32;
-    let is_integer_hd_atlas = width >= 64
-        && height >= 32
-        && width.is_multiple_of(64)
-        && height.is_multiple_of(32)
-        && width_scale == height_scale;
-    if !is_integer_hd_atlas {
-        return Err(EidolonError::texture(format!(
-            "cape atlas must be 64x32 or an integer HD multiple, got {width}x{height}"
-        )));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::validate_cape_atlas_dimensions;
+    use crate::assets::validate_cape_atlas_dimensions;
 
     #[test]
     fn cape_atlas_accepts_base_and_hd_dimensions() {

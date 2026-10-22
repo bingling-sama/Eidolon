@@ -9,6 +9,7 @@ Provides:
 */
 
 pub mod animation;
+pub mod assets;
 pub mod back_equipment;
 pub mod body;
 pub mod camera;
