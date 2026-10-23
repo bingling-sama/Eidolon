@@ -207,7 +207,7 @@ renderer.render_frame(&character, &camera)?;
 - `Camera::scale` (renamed `cam_zoom` in the CLI) controls orbit distance: `distance = 4.0 / scale`. Larger values move the camera closer.
 - Character rotation is Euler: X first, then Y, then Z.
 - Set `Character::nametag` to `Some(name)` to draw an unlit, camera-facing label above the player.
-  The label uses the bundled Monocraft pixel font, a white glyph shadow, a translucent black
+  The label uses the bundled Minecraft pixel font (with Unifont fallback for Unicode), a white glyph shadow, a translucent black
   background, and scene depth testing. Nametags are single-line and limited to 64 characters;
   characters missing from the bundled font use its standard missing-glyph box.
 - Nametag spacing is applied along the scene's vertical Y axis after finding the highest point of

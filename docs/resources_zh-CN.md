@@ -9,8 +9,8 @@
 - `resources/bingling_sama.png` 双层 Alex 皮肤
 - `resources/undefinedR2.png` 双层 Steve 皮肤
 - `resources/SSSSSteven.png` 单层 Steve 皮肤
-- `resources/Monocraft.ttf` 用于 nametag 的 Monocraft v4.2.1 像素字体
-- `resources/Monocraft-LICENSE` Monocraft 的 SIL Open Font License 1.1 许可证
+- `resources/minecraft.ttf` 用于 nametag 的 Minecraft 像素字体
+- `resources/unifont.otf` 用于非 ASCII / Unicode 字符的 GNU Unifont 回退字体
 
 ## 说明
 
@@ -33,6 +33,6 @@ cargo run -- convert resources/SSSSSteven.png converted.png
 - `undefinedR2` 提供双层 Steve 皮肤
 - `SSSSSteven` 提供单层 Steve 皮肤
 - `bingling-sama` 提供双层 Alex 皮肤
-- Idrees Hassan 的 [Monocraft](https://github.com/IdreesInc/Monocraft) 字体，按 SIL Open Font License 1.1 分发
+- GNU Unifont 项目提供的 Unicode 回退字体
 
 ![Nametag 渲染预览](nametag-preview.png)

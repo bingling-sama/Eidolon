@@ -26,7 +26,7 @@ model loading, frame rendering, and rendered-output policy.
 - `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
 - `src/renderer/` contains the shared `wgpu` renderer split into submodules:
   - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
-  - `nametag.rs` — Monocraft text rasterization, cached label geometry, and billboard transforms.
+  - `nametag.rs` — Minecraft / Unifont text rasterization, cached label geometry, and billboard transforms.
   - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
   - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
   - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.

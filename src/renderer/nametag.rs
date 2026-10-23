@@ -1,4 +1,4 @@
-use ab_glyph::{point, Font, FontRef, ScaleFont};
+use ab_glyph::{point, Font, FontRef, GlyphId, ScaleFont};
 use cgmath::{Matrix4, Point3, SquareMatrix, Transform, Vector3, Vector4};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -10,13 +10,14 @@ use crate::texture::Texture;
 
 use super::uniforms::{compute_base_model_matrix, Uniforms};
 
-const FONT_BYTES: &[u8] = include_bytes!("../../resources/Monocraft.ttf");
-const FONT_HEIGHT: f32 = 10.0;
-const HORIZONTAL_PADDING: u32 = 2;
-const VERTICAL_PADDING: u32 = 1;
+const PRIMARY_FONT_BYTES: &[u8] = include_bytes!("../../resources/minecraft.ttf");
+const FALLBACK_FONT_BYTES: &[u8] = include_bytes!("../../resources/unifont.otf");
+const FONT_HEIGHT: f32 = 16.0;
+const HORIZONTAL_PADDING: u32 = 4;
+const VERTICAL_PADDING: u32 = 2;
 const SHADOW_OFFSET: u32 = 1;
 const MAX_CHARACTERS: usize = 64;
-const WORLD_UNITS_PER_PIXEL: f32 = 0.02;
+const WORLD_UNITS_PER_PIXEL: f32 = 0.01;
 const NAMETAG_VERTICAL_GAP: f32 = 0.5;
 const COLLISION_BOX_MIN: Point3<f32> = Point3::new(-0.5, 0.0, -0.25);
 const COLLISION_BOX_MAX: Point3<f32> = Point3::new(0.5, 1.8, 0.25);
@@ -123,24 +124,48 @@ pub(crate) fn rasterize_nametag(text: &str) -> Option<NametagImage> {
             }
         })
         .collect();
-    let font = FontRef::try_from_slice(FONT_BYTES).expect("embedded Monocraft font is valid");
-    let scaled = font.as_scaled(FONT_HEIGHT);
-    let baseline = VERTICAL_PADDING as f32 + scaled.ascent().ceil();
+    let primary_font =
+        FontRef::try_from_slice(PRIMARY_FONT_BYTES).expect("embedded minecraft font is valid");
+    let fallback_font =
+        FontRef::try_from_slice(FALLBACK_FONT_BYTES).expect("embedded unifont fallback is valid");
+    let primary_scaled = primary_font.as_scaled(FONT_HEIGHT);
+    let fallback_scaled = fallback_font.as_scaled(FONT_HEIGHT);
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum FontSource {
+        Primary,
+        Fallback,
+    }
+
+    let baseline = VERTICAL_PADDING as f32 + primary_scaled.ascent().ceil();
     let mut caret = HORIZONTAL_PADDING as f32;
-    let mut previous = None;
+    let mut previous: Option<(FontSource, GlyphId)> = None;
     let mut glyphs = Vec::new();
 
     for character in text.chars() {
-        let id = scaled.glyph_id(character);
-        if let Some(previous) = previous {
-            caret += scaled.kern(previous, id);
+        let primary_id = primary_scaled.glyph_id(character);
+        let (source, scaled, id) = if primary_id.0 != 0 {
+            (FontSource::Primary, &primary_scaled, primary_id)
+        } else {
+            let fallback_id = fallback_scaled.glyph_id(character);
+            if fallback_id.0 != 0 {
+                (FontSource::Fallback, &fallback_scaled, fallback_id)
+            } else {
+                (FontSource::Primary, &primary_scaled, primary_id)
+            }
+        };
+
+        if let Some((prev_source, prev_id)) = previous {
+            if prev_source == source {
+                caret += scaled.kern(prev_id, id);
+            }
         }
         let glyph = id.with_scale_and_position(FONT_HEIGHT, point(caret, baseline));
         if let Some(outlined) = scaled.outline_glyph(glyph) {
             glyphs.push(outlined);
         }
         caret += scaled.h_advance(id);
-        previous = Some(id);
+        previous = Some((source, id));
     }
 
     let width = (caret.ceil() as u32 + HORIZONTAL_PADDING + SHADOW_OFFSET).max(1);
@@ -297,6 +322,20 @@ mod tests {
             .rgba
             .chunks_exact(4)
             .any(|pixel| pixel == [0, 0, 0, 64]));
+        assert!(image
+            .rgba
+            .chunks_exact(4)
+            .any(|pixel| pixel == [255, 255, 255, 255]));
+        assert!(image
+            .rgba
+            .chunks_exact(4)
+            .any(|pixel| pixel == [63, 63, 63, 255]));
+    }
+
+    #[test]
+    fn rasterized_nametag_falls_back_to_unifont_for_cjk() {
+        let image = rasterize_nametag("史蒂夫").expect("cjk nametag");
+        assert!(image.width > image.height);
         assert!(image
             .rgba
             .chunks_exact(4)

@@ -9,8 +9,8 @@ This project ships with sample models and skins under `resources/` for testing a
 - `resources/bingling_sama.png` Double-layer Alex skin
 - `resources/undefinedR2.png` Double-layer Steve skin
 - `resources/SSSSSteven.png` Single-layer Steve skin
-- `resources/Monocraft.ttf` Monocraft v4.2.1 pixel font for nametags
-- `resources/Monocraft-LICENSE` SIL Open Font License 1.1 for Monocraft
+- `resources/minecraft.ttf` Minecraft pixel font for nametags
+- `resources/unifont.otf` GNU Unifont fallback font for non-ASCII/Unicode glyphs
 
 ## Notes
 
@@ -33,6 +33,6 @@ cargo run -- convert resources/SSSSSteven.png converted.png
 - `undefinedR2` for the double-layer Steve skin
 - `SSSSSteven` for the single-layer Steve skin
 - `bingling-sama` for the double-layer Alex skin
-- [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan, distributed under the SIL Open Font License 1.1
+- GNU Unifont project for Unicode fallback font
 
 ![Nametag rendering preview](nametag-preview.png)
