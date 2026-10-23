@@ -9,3 +9,5 @@ skills-lock.json
 .env
 /examples/wasm/playwright-report/
 /examples/wasm/test-results/
+._*
+.DS_Store
