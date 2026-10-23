@@ -6,7 +6,7 @@
 /// the normal by `uniforms.offset` (small positive values push the overlay layer outward).
 ///
 /// Fragment stage: nearest-neighbor sampling via `s_skin`, discards near-transparent texels,
-/// then two directional lights plus ambient on the shaded normal.
+/// then pure ambient lighting (1.0).
 ///
 /// # Bind groups
 ///
@@ -65,16 +65,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    let light_dir1 = normalize(vec3<f32>(1.0, 1.0, 1.0));
-    let light_dir2 = normalize(vec3<f32>(-1.0, 0.5, -0.5));
-
-    let ambient = 0.5;
-    let diff1 = max(dot(normalize(in.normal), light_dir1), 0.0);
-    let diff2 = max(dot(normalize(in.normal), light_dir2), 0.0) * 0.3;
-
-    let diffuse = (ambient + diff1 * 0.5 + diff2) * vec3<f32>(1.0, 1.0, 1.0);
-
-    return vec4<f32>(tex_color.rgb * diffuse, tex_color.a);
+    let ambient = 1.0;
+    return vec4<f32>(tex_color.rgb * ambient, tex_color.a);
 }
 "#;
 

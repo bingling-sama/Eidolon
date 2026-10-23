@@ -17,7 +17,7 @@ use eidolon::renderer::Renderer;
 ///
 /// Config: classic skin, bingling_sama.png, yaw=180 pitch=90 scale=1,
 /// standing posture (all defaults), 800×600.
-const GOLDEN_HASH: u64 = 5599923306021208352;
+const GOLDEN_HASH: u64 = 10953113395297316018;
 
 fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
     let mut h: u64 = 0;
