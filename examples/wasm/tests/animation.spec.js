@@ -123,3 +123,53 @@ test('nametag input and see-through toggle update rendered canvas', async ({ pag
   const clearedFrame = await canvasShot(page);
   expect(clearedFrame.equals(baseFrame)).toBe(true);
 });
+
+test('accessory only renders without skin and can switch between cape and elytra', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#result')).toHaveAttribute('data-renderer-ready', 'true');
+
+  const capePath = fileURLToPath(
+    new URL('../../../resources/Turtle_Cape.png', import.meta.url),
+  );
+
+  // Upload accessory when no skin is loaded
+  await page.locator('#accessory-input').setInputFiles(capePath);
+  await expect(page.locator('#result-hint')).toHaveClass(/hidden/);
+  await expect(page.locator('#btn-export')).toBeEnabled();
+  await expect(page.locator('#btn-copy')).toBeEnabled();
+  await expect(page.locator('#accessory-mode-wrap')).toBeVisible();
+
+  await page.waitForTimeout(200);
+  const capeFrame = await canvasShot(page);
+
+  // Switch mode to elytra
+  await page.locator('#select-accessory-mode').selectOption('elytra');
+  await page.waitForTimeout(200);
+  const elytraFrame = await canvasShot(page);
+
+  // Cape and Elytra should have distinct visual geometry
+  expect(elytraFrame.equals(capeFrame)).toBe(false);
+
+  // Clear accessory restores empty state
+  await page.locator('#btn-clear-accessory').click();
+  await expect(page.locator('#result-hint')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#btn-export')).toBeDisabled();
+});
+
+test('skin can be uploaded and cleared with clear button', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#result')).toHaveAttribute('data-renderer-ready', 'true');
+
+  const skinPath = fileURLToPath(
+    new URL('../../../resources/bingling_sama.png', import.meta.url),
+  );
+
+  await page.locator('#file-input').setInputFiles(skinPath);
+  await expect(page.locator('#result-hint')).toHaveClass(/hidden/);
+  await expect(page.locator('#btn-clear-skin')).toBeVisible();
+
+  await page.locator('#btn-clear-skin').click();
+  await expect(page.locator('#result-hint')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#btn-clear-skin')).not.toBeVisible();
+  await expect(page.locator('#btn-export')).toBeDisabled();
+});

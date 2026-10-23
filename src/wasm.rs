@@ -110,6 +110,21 @@ impl CanvasRenderer {
         log::info!("Cape cleared");
     }
 
+    /// Disable skin/body rendering.
+    pub fn clear_skin(&mut self) {
+        let only_body = self
+            .character
+            .as_ref()
+            .is_some_and(|c| c.back_equipment().is_none());
+        if only_body {
+            self.pending_posture = self.character.as_ref().map(|c| c.posture);
+            self.character = None;
+        } else if let Some(character) = &mut self.character {
+            let _ = character.remove_body();
+        }
+        log::info!("Skin cleared");
+    }
+
     /// Load a Back equipment atlas from PNG bytes and select Elytra presentation.
     pub fn load_elytra(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
         let atlas = self

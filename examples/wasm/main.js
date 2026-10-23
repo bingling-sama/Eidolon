@@ -30,12 +30,13 @@ import { CanvasRenderer } from './pkg/eidolon.js';
 // ---- DOM ----
 const fileInput = document.getElementById('file-input');
 const fileName = document.getElementById('file-name');
-const capeInput = document.getElementById('cape-input');
-const capeFileName = document.getElementById('cape-file-name');
-const btnClearCape = document.getElementById('btn-clear-cape');
-const elytraInput = document.getElementById('elytra-input');
-const elytraFileName = document.getElementById('elytra-file-name');
-const btnClearElytra = document.getElementById('btn-clear-elytra');
+const btnClearSkin = document.getElementById('btn-clear-skin');
+const accessoryInput = document.getElementById('accessory-input');
+const accessoryFileName = document.getElementById('accessory-file-name');
+const btnUploadAccessory = document.getElementById('btn-upload-accessory');
+const accessoryModeWrap = document.getElementById('accessory-mode-wrap');
+const selectAccessoryMode = document.getElementById('select-accessory-mode');
+const btnClearAccessory = document.getElementById('btn-clear-accessory');
 const resultDiv = document.getElementById('result');
 const resultHint = document.getElementById('result-hint');
 const animationSelect = document.getElementById('select-animation');
@@ -45,6 +46,7 @@ const inputElytraSpread = document.getElementById('input-elytra-spread');
 const outputElytraPitch = document.getElementById('output-elytra-pitch');
 const outputElytraSpread = document.getElementById('output-elytra-spread');
 const btnExport = document.getElementById('btn-export');
+const btnCopy = document.getElementById('btn-copy');
 const inputSizeW = document.getElementById('input-size-w');
 const inputSizeH = document.getElementById('input-size-h');
 const sizePresets = document.getElementById('size-presets');
@@ -70,7 +72,31 @@ resultDiv.appendChild(canvas);
 /** @type {CanvasRenderer | null} */
 let renderer = null;
 let skinLoaded = false;
+let accessoryLoaded = false;
 let elytraOverridden = false;
+
+function hasModel() {
+  return skinLoaded || accessoryLoaded;
+}
+
+function updateModelActiveState() {
+  const active = hasModel();
+  if (active) {
+    resultHint.classList.add('hidden');
+    btnCopy.disabled = false;
+    btnExport.disabled = false;
+    inputSizeW.disabled = false;
+    inputSizeH.disabled = false;
+    resultDiv.style.cursor = 'grab';
+  } else {
+    resultHint.classList.remove('hidden');
+    btnCopy.disabled = true;
+    btnExport.disabled = true;
+    inputSizeW.disabled = true;
+    inputSizeH.disabled = true;
+    resultDiv.style.cursor = 'default';
+  }
+}
 
 // Camera state
 const camera = { yaw: 180, pitch: 90, scale: 1.0 };
@@ -146,31 +172,33 @@ window.addEventListener('resize', resizeCanvas);
 // ---- rAF render loop ----
 function frame(timestamp) {
   if (renderer) {
-    const wasPlaying = playback.playing;
-    if (playback.lastTimestamp != null) {
-      const deltaSeconds = Math.max(0, (timestamp - playback.lastTimestamp) / 1000);
-      try {
-        renderer.advance_animation(deltaSeconds);
-      } catch (e) {
-        console.error('Animation advance failed:', e);
+    if (hasModel()) {
+      const wasPlaying = playback.playing;
+      if (playback.lastTimestamp != null) {
+        const deltaSeconds = Math.max(0, (timestamp - playback.lastTimestamp) / 1000);
+        try {
+          renderer.advance_animation(deltaSeconds);
+        } catch (e) {
+          console.error('Animation advance failed:', e);
+        }
       }
-    }
-    playback.lastTimestamp = timestamp;
-    playback.time = renderer.animation_time();
-    playback.playing = renderer.animation_playing();
-    if (playback.playing !== wasPlaying) updatePlayButton();
-    if (!elytraOverridden) {
-      setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
-    }
-    updateTimeline();
+      playback.lastTimestamp = timestamp;
+      playback.time = renderer.animation_time();
+      playback.playing = renderer.animation_playing();
+      if (playback.playing !== wasPlaying) updatePlayButton();
+      if (!elytraOverridden) {
+        setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+      }
+      updateTimeline();
 
-    if (skinLoaded) {
       renderer.set_camera(camera.yaw, camera.pitch, camera.scale);
       try {
         renderer.render_frame();
       } catch (e) {
         console.error(e);
       }
+    } else {
+      playback.lastTimestamp = null;
     }
   }
   requestAnimationFrame(frame);
@@ -374,11 +402,8 @@ fileInput.addEventListener('change', () => {
     renderer.load_skin(bytes);
     camera.yaw = 180; camera.pitch = 90; camera.scale = 1.0;
     skinLoaded = true;
-    resultHint.classList.add('hidden');
-    btnExport.disabled = false;
-    inputSizeW.disabled = false;
-    inputSizeH.disabled = false;
-    resultDiv.style.cursor = 'grab';
+    btnClearSkin?.classList.remove('hidden');
+    updateModelActiveState();
   };
   reader.onerror = () => {
     fileName.textContent = '';
@@ -387,96 +412,98 @@ fileInput.addEventListener('change', () => {
   reader.readAsArrayBuffer(file);
 });
 
-capeInput.addEventListener('change', () => {
-  const file = capeInput.files?.[0];
-  if (!file || !renderer) return;
+btnClearSkin?.addEventListener('click', () => {
+  if (!renderer) return;
+  renderer.clear_skin();
+  skinLoaded = false;
+  fileInput.value = '';
+  fileName.textContent = '';
+  btnClearSkin.classList.add('hidden');
+  updateModelActiveState();
+});
 
-  capeFileName.textContent = file.name;
-  console.log('loading cape:', file.name);
+let accessoryBytes = null;
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
-      renderer.load_cape(bytes);
-      btnClearCape.disabled = false;
-      elytraInput.value = '';
-      elytraFileName.textContent = '';
-      btnClearElytra.disabled = true;
-    } catch (e) {
-      renderer.clear_cape();
-      capeInput.value = '';
-      capeFileName.textContent = '';
-      btnClearCape.disabled = true;
-      console.error('Failed to load cape:', e);
-    }
-  };
-  reader.onerror = () => {
+function applyAccessory() {
+  if (!renderer) return;
+  if (!accessoryBytes) {
     renderer.clear_cape();
-    capeInput.value = '';
-    capeFileName.textContent = '';
-    btnClearCape.disabled = true;
-    console.error(`Failed to read ${file.name}.`, reader.error?.message);
-  };
-  reader.readAsArrayBuffer(file);
-});
+    renderer.clear_elytra();
+    accessoryLoaded = false;
+    btnUploadAccessory.classList.remove('hidden');
+    accessoryModeWrap.classList.add('hidden');
+    accessoryFileName.textContent = '';
+    updateModelActiveState();
+    return;
+  }
 
-elytraInput.addEventListener('change', () => {
-  const file = elytraInput.files?.[0];
-  if (!file || !renderer) return;
+  btnUploadAccessory.classList.add('hidden');
+  accessoryModeWrap.classList.remove('hidden');
 
-  elytraFileName.textContent = file.name;
-  console.log('loading elytra:', file.name);
+  const mode = selectAccessoryMode.value;
+  if (mode === 'cape') {
+    renderer.clear_elytra();
+    renderer.load_cape(accessoryBytes);
+  } else if (mode === 'elytra') {
+    renderer.clear_cape();
+    renderer.load_elytra(accessoryBytes);
+  }
+  accessoryLoaded = true;
+  updateModelActiveState();
+}
+
+accessoryInput.addEventListener('change', () => {
+  const file = accessoryInput.files?.[0];
+  if (!file) return;
+
+  accessoryFileName.textContent = file.name;
+  console.log('loading accessory texture:', file.name);
 
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
-      renderer.load_elytra(bytes);
-      btnClearElytra.disabled = false;
-      capeInput.value = '';
-      capeFileName.textContent = '';
-      btnClearCape.disabled = true;
+      accessoryBytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
+      applyAccessory();
     } catch (e) {
-      renderer.clear_elytra();
-      elytraInput.value = '';
-      elytraFileName.textContent = '';
-      btnClearElytra.disabled = true;
-      console.error('Failed to load elytra:', e);
+      console.error('Failed to apply accessory:', e);
+      clearAccessory();
     }
   };
   reader.onerror = () => {
-    renderer.clear_elytra();
-    elytraInput.value = '';
-    elytraFileName.textContent = '';
-    btnClearElytra.disabled = true;
     console.error(`Failed to read ${file.name}.`, reader.error?.message);
+    clearAccessory();
   };
   reader.readAsArrayBuffer(file);
 });
 
-btnClearCape.addEventListener('click', () => {
-  if (!renderer) return;
-  renderer.clear_cape();
-  capeInput.value = '';
-  capeFileName.textContent = '';
-  btnClearCape.disabled = true;
+selectAccessoryMode.addEventListener('change', () => {
+  if (accessoryBytes) {
+    applyAccessory();
+  }
 });
 
-btnClearElytra.addEventListener('click', () => {
-  if (!renderer) return;
-  renderer.clear_elytra();
-  elytraInput.value = '';
-  elytraFileName.textContent = '';
-  btnClearElytra.disabled = true;
-});
+function clearAccessory() {
+  accessoryBytes = null;
+  accessoryInput.value = '';
+  accessoryFileName.textContent = '';
+  accessoryLoaded = false;
+  btnUploadAccessory.classList.remove('hidden');
+  accessoryModeWrap.classList.add('hidden');
+  if (renderer) {
+    renderer.clear_cape();
+    renderer.clear_elytra();
+  }
+  updateModelActiveState();
+}
+
+btnClearAccessory.addEventListener('click', clearAccessory);
 
 // ---- Orbit interaction (drag to rotate, scroll to zoom) ----
 let dragging = false;
 let dragLast = { x: 0, y: 0 };
 
 canvas.addEventListener('mousedown', (e) => {
-  if (!skinLoaded) return;
+  if (!hasModel()) return;
   dragging = true;
   dragLast = { x: e.clientX, y: e.clientY };
   canvas.style.cursor = 'grabbing';
@@ -494,18 +521,53 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => {
   dragging = false;
-  if (skinLoaded) canvas.style.cursor = 'grab';
+  if (hasModel()) canvas.style.cursor = 'grab';
 });
 
 canvas.addEventListener('wheel', (e) => {
-  if (!skinLoaded) return;
+  if (!hasModel()) return;
   e.preventDefault();
   camera.scale = Math.min(4.0, Math.max(0.25, camera.scale - e.deltaY * 0.005));
 }, { passive: false });
 
+// ---- Copy to Clipboard ----
+btnCopy.addEventListener('click', async () => {
+  if (!renderer || !hasModel()) return;
+  btnCopy.disabled = true;
+  btnCopy.textContent = 'Copying…';
+  try {
+    const w = Math.max(64, Math.min(4096, parseInt(inputSizeW.value, 10) || 800));
+    const h = Math.max(64, Math.min(4096, parseInt(inputSizeH.value, 10) || 600));
+    renderer.set_background(bg.r, bg.g, bg.b, bg.a);
+    const pngBytes = await renderer.capture_frame(w, h);
+    syncBackground();
+    const blob = new Blob([pngBytes], { type: 'image/png' });
+
+    if (!navigator.clipboard?.write) {
+      throw new Error('Async Clipboard API not supported or context insecure');
+    }
+
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob }),
+    ]);
+    btnCopy.textContent = 'Copied!';
+    setTimeout(() => {
+      btnCopy.textContent = 'Copy to Clipboard';
+    }, 2000);
+  } catch (e) {
+    console.error('Copy to clipboard failed:', e);
+    btnCopy.textContent = 'Failed';
+    setTimeout(() => {
+      btnCopy.textContent = 'Copy to Clipboard';
+    }, 2000);
+  } finally {
+    btnCopy.disabled = false;
+  }
+});
+
 // ---- Export ----
 btnExport.addEventListener('click', async () => {
-  if (!renderer || !skinLoaded) return;
+  if (!renderer || !hasModel()) return;
   btnExport.disabled = true;
   btnExport.textContent = 'Exporting…';
   try {
