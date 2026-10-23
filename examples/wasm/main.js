@@ -1,3 +1,30 @@
+// Ensure GPUCanvasContext matches wasm-bindgen instanceof checks even when
+// wrapped by browser extensions (e.g. devtools/installHook) or unexposed on window.
+(function ensureGPUCanvasContext() {
+  if (typeof window === 'undefined') return;
+  if (typeof window.GPUCanvasContext === 'undefined') {
+    class GPUCanvasContext {}
+    Object.defineProperty(GPUCanvasContext, Symbol.hasInstance, {
+      value: (inst) => inst && (inst.constructor?.name === 'GPUCanvasContext' || typeof inst.configure === 'function'),
+      configurable: true,
+    });
+    window.GPUCanvasContext = GPUCanvasContext;
+  } else {
+    try {
+      const Target = window.GPUCanvasContext;
+      Object.defineProperty(Target, Symbol.hasInstance, {
+        value: (inst) =>
+          inst && (
+            inst.constructor === Target ||
+            inst.constructor?.name === 'GPUCanvasContext' ||
+            typeof inst.configure === 'function'
+          ),
+        configurable: true,
+      });
+    } catch (_) {}
+  }
+})();
+
 import { CanvasRenderer } from './pkg/eidolon.js';
 
 // ---- DOM ----
@@ -30,6 +57,8 @@ const outputTimeline = document.getElementById('output-timeline');
 const selectSpeed = document.getElementById('select-speed');
 const inputLoop = document.getElementById('input-loop');
 const btnResetElytra = document.getElementById('btn-reset-elytra');
+const inputNametag = document.getElementById('input-nametag');
+const inputNametagSeeThrough = document.getElementById('input-nametag-see-through');
 
 const canvas = document.createElement('canvas');
 canvas.style.display = 'block';
@@ -58,6 +87,21 @@ const playback = {
 
 // ---- Init ----
 async function boot() {
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    showError(
+      'Insecure Context (WebGPU disabled)',
+      `WebGPU is only available over HTTPS or localhost. Current origin: ${window.location.origin}. Please open http://localhost:${window.location.port || '5173'} instead of IP address.`,
+    );
+    return;
+  }
+
+  if (!navigator.gpu) {
+    showError(
+      'WebGPU is not supported in this browser.',
+      'Please use Chrome 113+, Edge 113+, or enable WebGPU (e.g. dom.webgpu.enabled in Firefox about:config; or launch Chrome with --enable-features=Vulkan on Linux).',
+    );
+    return;
+  }
   try {
     console.log('Initializing WebGPU renderer…');
     renderer = await CanvasRenderer.new(canvas);
@@ -72,6 +116,10 @@ async function boot() {
     playback.time = renderer.animation_time();
     updatePlaybackControls();
     setElytraAngleControls(renderer.elytra_pitch(), renderer.elytra_spread());
+    if (inputNametag.value) {
+      renderer.set_nametag(inputNametag.value);
+    }
+    renderer.set_nametag_see_through(inputNametagSeeThrough.checked);
     resultDiv.dataset.rendererReady = 'true';
     console.log('Renderer ready');
     requestAnimationFrame(frame);
@@ -230,6 +278,16 @@ skinTypeSelect.addEventListener('change', () => {
   renderer.set_skin_type(skinTypeSelect.value);
 });
 
+inputNametag.addEventListener('input', () => {
+  if (!renderer) return;
+  renderer.set_nametag(inputNametag.value);
+});
+
+inputNametagSeeThrough.addEventListener('change', () => {
+  if (!renderer) return;
+  renderer.set_nametag_see_through(inputNametagSeeThrough.checked);
+});
+
 // ---- Resolution presets ----
 sizePresets.addEventListener('click', (e) => {
   const btn = /** @type {HTMLElement} */ (e.target).closest('.size-preset');
@@ -298,11 +356,20 @@ fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
+  if (!renderer) {
+    showError(
+      'Renderer not ready',
+      'WebGPU is not initialized. Please ensure your browser supports WebGPU and the page is loaded over localhost or HTTPS.',
+    );
+    return;
+  }
+
   fileName.textContent = file.name;
   console.log('loading:', file.name);
 
   const reader = new FileReader();
   reader.onload = () => {
+    if (!renderer) return;
     const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
     renderer.load_skin(bytes);
     camera.yaw = 180; camera.pitch = 90; camera.scale = 1.0;

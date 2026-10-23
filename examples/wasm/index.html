@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Eidolon — Minecraft Skin Renderer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
   <style>
     /* ---- Geist Design System — Light theme ---- */
     :root {
@@ -158,6 +159,29 @@
       background: var(--bg-200);
       color: var(--gray-700);
       cursor: not-allowed;
+    }
+    .input-text {
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      width: 100%;
+      height: 40px;
+      padding: 0 12px;
+      background: var(--bg-100);
+      color: var(--gray-1000);
+      border: none;
+      border-radius: var(--radius-sm);
+      box-shadow: inset 0 0 0 1px var(--gray-400);
+      transition: box-shadow 150ms var(--ease-out);
+    }
+    .input-text:hover { box-shadow: inset 0 0 0 1px var(--gray-500); }
+    .input-text:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--bg-100), 0 0 0 4px var(--blue-700);
+    }
+    .input-text::placeholder {
+      color: var(--gray-700);
     }
     .size-inputs {
       display: flex;
@@ -605,6 +629,17 @@
         <div class="field" style="max-width:120px;flex:0 0 auto">
           <span class="field-label">Elytra</span>
           <button id="btn-reset-elytra" class="btn btn-secondary">Reset Elytra</button>
+        </div>
+        <div class="field" style="min-width:140px;flex:1">
+          <label class="field-label" for="input-nametag">Nametag</label>
+          <input type="text" id="input-nametag" class="input-text" placeholder="Nametag text" maxlength="64">
+        </div>
+        <div class="field" style="max-width:120px;flex:0 0 auto">
+          <span class="field-label">Occlusion</span>
+          <label class="loop-control" for="input-nametag-see-through" style="height:40px;cursor:pointer">
+            <input type="checkbox" id="input-nametag-see-through" checked>
+            <span>See-through</span>
+          </label>
         </div>
       </div>
 

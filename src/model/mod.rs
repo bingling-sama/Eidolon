@@ -247,12 +247,12 @@ impl ModelCatalog {
         let (slim, classic) = {
             let slim = Model::load_from_obj_bytes(
                 device,
-                include_bytes!("../../../resources/slim.obj"),
+                include_bytes!("../../resources/slim.obj"),
                 "slim.obj",
             )?;
             let classic = Model::load_from_obj_bytes(
                 device,
-                include_bytes!("../../../resources/classic.obj"),
+                include_bytes!("../../resources/classic.obj"),
                 "classic.obj",
             )?;
             (slim, classic)

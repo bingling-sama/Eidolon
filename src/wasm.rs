@@ -17,6 +17,8 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen(start)]
 pub fn init_logger() {
     console_log::init_with_level(log::Level::Info).ok();
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
     log::info!("eidolon WASM initialized");
 }
 
@@ -32,6 +34,8 @@ pub struct CanvasRenderer {
     camera: Camera,
     timeline: AnimationTimeline,
     elytra_override: Option<(f32, f32)>,
+    nametag: Option<String>,
+    nametag_see_through: bool,
 }
 
 #[wasm_bindgen]
@@ -50,6 +54,8 @@ impl CanvasRenderer {
             camera: Camera::default(),
             timeline: AnimationTimeline::new(AnimationPreset::Idle),
             elytra_override: None,
+            nametag: None,
+            nametag_see_through: true,
         })
     }
 
@@ -67,6 +73,8 @@ impl CanvasRenderer {
                 .pending_posture
                 .take()
                 .unwrap_or(DefaultPostures::STAND);
+            character.nametag = self.nametag.clone();
+            character.nametag_see_through = self.nametag_see_through;
             self.character = Some(character);
         }
         log::info!("Skin loaded");
@@ -88,6 +96,8 @@ impl CanvasRenderer {
                 .pending_posture
                 .take()
                 .unwrap_or(DefaultPostures::STAND);
+            character.nametag = self.nametag.clone();
+            character.nametag_see_through = self.nametag_see_through;
             self.character = Some(character);
         }
         log::info!("Cape loaded");
@@ -115,6 +125,8 @@ impl CanvasRenderer {
                 .pending_posture
                 .take()
                 .unwrap_or(DefaultPostures::STAND);
+            character.nametag = self.nametag.clone();
+            character.nametag_see_through = self.nametag_see_through;
             self.character = Some(character);
         }
         log::info!("Elytra loaded");
@@ -260,6 +272,51 @@ impl CanvasRenderer {
             body.set_skin_type(self.skin_type);
         }
         Ok(())
+    }
+
+    /// Set or clear the player nametag. An empty string or whitespace removes the nametag.
+    pub fn set_nametag(&mut self, text: &str) {
+        let nametag = if text.trim().is_empty() {
+            None
+        } else {
+            Some(text.to_owned())
+        };
+        self.nametag = nametag.clone();
+        if let Some(character) = &mut self.character {
+            character.nametag = nametag;
+        }
+    }
+
+    /// Remove the player nametag.
+    pub fn clear_nametag(&mut self) {
+        self.nametag = None;
+        if let Some(character) = &mut self.character {
+            character.nametag = None;
+        }
+    }
+
+    /// Set whether occluded nametag pixels remain visible at reduced opacity.
+    pub fn set_nametag_see_through(&mut self, see_through: bool) {
+        self.nametag_see_through = see_through;
+        if let Some(character) = &mut self.character {
+            character.nametag_see_through = see_through;
+        }
+    }
+
+    /// Current nametag text, or `None` if hidden.
+    pub fn nametag(&self) -> Option<String> {
+        self.character
+            .as_ref()
+            .and_then(|character| character.nametag.clone())
+            .or_else(|| self.nametag.clone())
+    }
+
+    /// Whether nametag see-through occlusion is enabled.
+    pub fn nametag_see_through(&self) -> bool {
+        self.character
+            .as_ref()
+            .map(|character| character.nametag_see_through)
+            .unwrap_or(self.nametag_see_through)
     }
 
     /// Set camera orbit. `yaw`/`pitch` in degrees, `scale` > 0 (higher = closer).

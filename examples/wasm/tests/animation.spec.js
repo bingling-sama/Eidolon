@@ -85,10 +85,41 @@ test('mobile controls stay within the viewport', async ({ page }) => {
   await loadSkin(page);
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  for (const selector of ['#btn-play', '#input-timeline', '#select-speed', '#input-loop', 'canvas']) {
+  for (const selector of [
+    '#btn-play',
+    '#input-timeline',
+    '#select-speed',
+    '#input-loop',
+    '#input-nametag',
+    '#input-nametag-see-through',
+    'canvas',
+  ]) {
     const box = await page.locator(selector).boundingBox();
     expect(box).not.toBeNull();
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
   }
+});
+
+test('nametag input and see-through toggle update rendered canvas', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await loadSkin(page);
+
+  const baseFrame = await canvasShot(page);
+
+  await page.locator('#input-nametag').fill('Steve');
+  await page.waitForTimeout(100);
+  const nametagFrame = await canvasShot(page);
+  expect(nametagFrame.equals(baseFrame)).toBe(false);
+
+  await page.locator('#input-nametag-see-through').uncheck();
+  await page.waitForTimeout(100);
+  const occludedFrame = await canvasShot(page);
+  expect(occludedFrame.equals(baseFrame)).toBe(false);
+
+  await page.locator('#input-nametag').fill('');
+  await page.waitForTimeout(100);
+  const clearedFrame = await canvasShot(page);
+  expect(clearedFrame.equals(baseFrame)).toBe(true);
 });

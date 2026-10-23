@@ -24,9 +24,9 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a Back equipment atlas for Cape or Elytra presentation. Choose an animation, play or pause it, adjust its speed and timeline, and toggle looping. Elytra pitch and spread become fixed overrides when adjusted; **Reset Elytra** returns them to animation control.
+Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft skin PNG, and optionally pick a Back equipment atlas for Cape or Elytra presentation. Choose an animation, play or pause it, adjust its speed and timeline, and toggle looping. Configure a player nametag and occlusion see-through mode. Elytra pitch and spread become fixed overrides when adjusted; **Reset Elytra** returns them to animation control.
 
-After building the WASM package, run `npm run test:e2e` to verify desktop and mobile layout, playback, reduced-motion behavior, canvas updates, and Elytra override reset in Chromium.
+After building the WASM package, run `npm run test:e2e` to verify desktop and mobile layout, playback, reduced-motion behavior, canvas updates, nametag rendering, and Elytra override reset in Chromium.
 
 ## How It Works
 

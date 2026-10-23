@@ -5,10 +5,8 @@ mod pipeline;
 mod readback;
 mod uniforms;
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use image::{ImageBuffer, Rgba};
 #[cfg(not(target_arch = "wasm32"))]

@@ -4,7 +4,10 @@
 //! from GPU resource allocation.
 
 use crate::error::EidolonError;
-use image::{imageops, DynamicImage, GenericImageView, ImageBuffer, ImageFormat, Rgba, RgbaImage};
+#[cfg(not(target_arch = "wasm32"))]
+use image::ImageFormat;
+use image::{imageops, DynamicImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 // 64×32 right leg: source rects on the upper half (OFIB face order) in pixel coords (x0, y0, x1, y1).
