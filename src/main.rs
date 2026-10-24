@@ -405,6 +405,14 @@ enum Command {
         #[arg(default_value = "output.png")]
         output: PathBuf,
     },
+    /// Inspect and classify a Minecraft texture (skin, cape, elytra).
+    Identify {
+        /// Path to the texture PNG image.
+        texture: PathBuf,
+        /// Output format in JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 struct PreviewApp {
@@ -1742,6 +1750,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(Box::new(std::io::Error::other(e.to_string())))
                 }
             }
+        }
+        Command::Identify { texture, json } => {
+            let bytes = std::fs::read(&texture).map_err(|e| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("failed to read '{}': {}", texture.display(), e),
+                )) as Box<dyn std::error::Error>
+            })?;
+            let report = eidolon::classifier::inspect_texture(&bytes).map_err(|e| {
+                Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+            })?;
+
+            if json {
+                println!(
+                    "{{\n  \"kind\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"hd_scale\": {},\n  \"is_hd\": {},\n  \"can_auto_upgrade\": {},\n  \"description\": \"{}\"\n}}",
+                    report.kind.as_str(),
+                    report.width,
+                    report.height,
+                    report.hd_scale,
+                    report.is_hd,
+                    report.can_auto_upgrade,
+                    report.description
+                );
+            } else {
+                println!("File: {}", texture.display());
+                println!("Kind: {}", report.kind.as_str());
+                println!("Dimensions: {}x{}", report.width, report.height);
+                println!("HD: {} (scale {}x)", report.is_hd, report.hd_scale);
+                println!("Auto-upgradeable: {}", report.can_auto_upgrade);
+                println!("Description: {}", report.description);
+            }
+            Ok(())
         }
     }
 }

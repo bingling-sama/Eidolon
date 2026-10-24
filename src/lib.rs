@@ -16,6 +16,7 @@ pub mod camera;
 pub mod character;
 pub mod constants;
 pub mod converter;
+pub mod classifier;
 pub mod error;
 pub mod model;
 pub mod output;

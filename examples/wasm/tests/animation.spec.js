@@ -173,3 +173,30 @@ test('skin can be uploaded and cleared with clear button', async ({ page }) => {
   await expect(page.locator('#btn-clear-skin')).not.toBeVisible();
   await expect(page.locator('#btn-export')).toBeDisabled();
 });
+
+test('inspect_texture correctly detects texture format in browser', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#result')).toHaveAttribute('data-renderer-ready', 'true');
+
+  const fs = await import('node:fs');
+  const bytes = Array.from(fs.readFileSync(skinPath));
+
+  const report = await page.evaluate(async (imgBytes) => {
+    const { inspect_texture } = await import('/pkg/eidolon.js');
+    const buf = new Uint8Array(imgBytes);
+    const rep = inspect_texture(buf);
+    return {
+      kind: rep.kind,
+      width: rep.width,
+      height: rep.height,
+      is_hd: rep.is_hd,
+      can_auto_upgrade: rep.can_auto_upgrade,
+    };
+  }, bytes);
+
+  expect(report.kind).toBe('skin_double_layer');
+  expect(report.width).toBe(64);
+  expect(report.height).toBe(64);
+  expect(report.is_hd).toBe(false);
+  expect(report.can_auto_upgrade).toBe(false);
+});

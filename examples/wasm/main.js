@@ -25,7 +25,7 @@
   }
 })();
 
-import { CanvasRenderer } from './pkg/eidolon.js';
+import { CanvasRenderer, inspect_texture } from './pkg/eidolon.js';
 
 // ---- DOM ----
 const fileInput = document.getElementById('file-input');
@@ -399,6 +399,42 @@ fileInput.addEventListener('change', () => {
   reader.onload = () => {
     if (!renderer) return;
     const bytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
+
+    let detectedKind = 'skin_double_layer';
+    try {
+      const rep = inspect_texture(bytes);
+      detectedKind = rep.kind;
+      console.log('Skin inspection report:', {
+        kind: rep.kind,
+        dimensions: `${rep.width}x${rep.height}`,
+        is_hd: rep.is_hd,
+        can_auto_upgrade: rep.can_auto_upgrade,
+        desc: rep.description,
+      });
+
+      // Mis-upload redirect: if user uploaded a cape/elytra into Skin picker,
+      // route it directly to accessory!
+      if (rep.kind === 'cape' || rep.kind === 'elytra') {
+        fileInput.value = '';
+        fileName.textContent = '';
+        accessoryFileName.innerHTML = `<span>${file.name}</span> <span class="file-tag badge-cape">${rep.kind === 'elytra' ? 'Elytra' : 'Cape'}</span>`;
+        accessoryBytes = bytes;
+        selectAccessoryMode.value = rep.kind === 'elytra' ? 'elytra' : 'cape';
+        applyAccessory();
+        return;
+      }
+
+      // Format tag decoration
+      const tagText = rep.can_auto_upgrade
+        ? 'Legacy 64x32 (Auto 2x)'
+        : (rep.is_hd ? `HD (${rep.hd_scale}x)` : 'Standard');
+      const tagClass = rep.can_auto_upgrade ? 'badge-warn' : 'badge-skin';
+      fileName.innerHTML = `<span>${file.name}</span> <span class="file-tag ${tagClass}">${tagText}</span>`;
+    } catch (e) {
+      console.debug('Texture inspection failed:', e);
+      fileName.textContent = file.name;
+    }
+
     renderer.load_skin(bytes);
     camera.yaw = 180; camera.pitch = 90; camera.scale = 1.0;
     skinLoaded = true;
@@ -463,6 +499,29 @@ accessoryInput.addEventListener('change', () => {
   reader.onload = () => {
     try {
       accessoryBytes = new Uint8Array(/** @type {ArrayBuffer} */ (reader.result));
+      // Try to auto-detect mode if inspector is available
+      try {
+        const report = inspect_texture(accessoryBytes);
+        console.log('Accessory inspection report:', {
+          kind: report.kind,
+          dimensions: `${report.width}x${report.height}`,
+          is_hd: report.is_hd,
+          desc: report.description,
+        });
+
+        const kindLabel = report.kind === 'elytra' ? 'Elytra' : 'Cape';
+        const tagText = report.is_hd ? `${kindLabel} (${report.hd_scale}x HD)` : kindLabel;
+        accessoryFileName.innerHTML = `<span>${file.name}</span> <span class="file-tag badge-cape">${tagText}</span>`;
+
+        if (report.kind === 'elytra') {
+          selectAccessoryMode.value = 'elytra';
+        } else if (report.kind === 'cape') {
+          selectAccessoryMode.value = 'cape';
+        }
+      } catch (err) {
+        console.debug('Texture inspection skipped:', err);
+        accessoryFileName.textContent = file.name;
+      }
       applyAccessory();
     } catch (e) {
       console.error('Failed to apply accessory:', e);
