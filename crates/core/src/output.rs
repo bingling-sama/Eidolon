@@ -179,6 +179,19 @@ pub fn write_output(
     Ok(resolved)
 }
 
+/// Encode a static RGBA image into an in-memory byte buffer (PNG or WebP).
+pub fn encode_static_image(
+    image: &RgbaImage,
+    format: StaticFormat,
+) -> Result<Vec<u8>, EidolonError> {
+    let mut bytes = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut bytes);
+    image
+        .write_to(&mut cursor, format.image_format())
+        .map_err(|error| EidolonError::output(format!("failed to encode image: {error}")))?;
+    Ok(bytes)
+}
+
 fn validate_path(path: &Path) -> Result<(), EidolonError> {
     if path.as_os_str().to_string_lossy().contains('\0') {
         return Err(EidolonError::invalid_path(

@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use image::{ImageBuffer, Rgba};
+use wgpu::util::DeviceExt;
 #[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
 use winit::window::Window;
 
@@ -38,9 +39,8 @@ pub struct Renderer {
     nametag_pipeline: wgpu::RenderPipeline,
     nametag_see_through_pipeline: wgpu::RenderPipeline,
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    uniform_bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    uniform_buffer: wgpu::Buffer,
-    uniform_bind_group: wgpu::BindGroup,
     uniform_aligned_size: u32,
     models: ModelCatalog,
     surface: Option<wgpu::Surface<'static>>,
@@ -48,8 +48,6 @@ pub struct Renderer {
     surface_pipeline: Option<wgpu::RenderPipeline>,
     nametag_surface_pipeline: Option<wgpu::RenderPipeline>,
     nametag_see_through_surface_pipeline: Option<wgpu::RenderPipeline>,
-    /// Cached depth buffer; recreated when dimensions change (avoids per-frame alloc in windowed preview).
-    cached_depth_texture: Mutex<Option<(wgpu::Texture, u32, u32)>>,
     /// Cached nametag textures and meshes (indexed by text).
     cached_nametags: Mutex<std::collections::HashMap<String, Arc<CachedNametag>>>,
     /// RGBA clear color for the render pass background. Default: transparent black.
@@ -356,25 +354,6 @@ impl Renderer {
         let alignment = device.limits().min_uniform_buffer_offset_alignment;
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
         let aligned_size = uniform_size.div_ceil(alignment) * alignment;
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Dynamic Uniform Buffer"),
-            size: (UNIFORM_COUNT * aligned_size) as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Uniform Bind Group"),
-            layout: &uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_buffer,
-                    offset: 0,
-                    size: wgpu::BufferSize::new(uniform_size as u64),
-                }),
-            }],
-        });
 
         let models = ModelCatalog::new(&device)?;
 
@@ -391,9 +370,8 @@ impl Renderer {
             nametag_pipeline,
             nametag_see_through_pipeline,
             texture_bind_group_layout,
+            uniform_bind_group_layout,
             sampler,
-            uniform_buffer,
-            uniform_bind_group,
             uniform_aligned_size: aligned_size,
             models,
             surface,
@@ -401,9 +379,25 @@ impl Renderer {
             surface_pipeline,
             nametag_surface_pipeline,
             nametag_see_through_surface_pipeline,
-            cached_depth_texture: Mutex::new(None),
             cached_nametags: Mutex::new(std::collections::HashMap::new()),
             clear_color: [0.0, 0.0, 0.0, 0.0],
+        })
+    }
+
+    fn create_depth_texture(&self, width: u32, height: u32) -> wgpu::Texture {
+        self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
         })
     }
 
@@ -483,6 +477,7 @@ impl Renderer {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
+        depth_view: &wgpu::TextureView,
         pipeline: &wgpu::RenderPipeline,
         nametag_pipeline: &wgpu::RenderPipeline,
         nametag_see_through_pipeline: &wgpu::RenderPipeline,
@@ -491,15 +486,18 @@ impl Renderer {
         width: u32,
         height: u32,
     ) {
+        let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
+        let mut uniform_bytes = vec![0u8; (UNIFORM_COUNT * self.uniform_aligned_size) as usize];
+
         let body = character.body();
         let model = body.map(|body| self.models.body_model(body.skin_type()));
 
         if body.is_some() {
             let uniforms = compute_body_part_uniforms(character, camera, width, height);
             for (i, uniform) in uniforms.iter().enumerate() {
-                let offset = (i as u64) * (self.uniform_aligned_size as u64);
-                self.queue
-                    .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(uniform));
+                let offset = (i as usize) * (self.uniform_aligned_size as usize);
+                let bytes = bytemuck::bytes_of(uniform);
+                uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
             }
         }
 
@@ -513,12 +511,9 @@ impl Renderer {
 
         if cape_atlas.is_some() {
             let cape_uniform = compute_cape_uniform(character, camera, width, height);
-            let offset = (CAPE_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
-            self.queue.write_buffer(
-                &self.uniform_buffer,
-                offset,
-                bytemuck::bytes_of(&cape_uniform),
-            );
+            let offset = (CAPE_UNIFORM_INDEX as usize) * (self.uniform_aligned_size as usize);
+            let bytes = bytemuck::bytes_of(&cape_uniform);
+            uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
         }
 
         if elytra_atlas.is_some() {
@@ -527,9 +522,9 @@ impl Renderer {
                 .into_iter()
                 .zip(elytra_uniforms)
             {
-                let offset = (index as u64) * (self.uniform_aligned_size as u64);
-                self.queue
-                    .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
+                let offset = (index as usize) * (self.uniform_aligned_size as usize);
+                let bytes = bytemuck::bytes_of(&uniform);
+                uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
             }
         }
 
@@ -558,40 +553,29 @@ impl Renderer {
 
         if nametag_cached.is_some() {
             let uniform = compute_nametag_uniform(character, camera, width, height);
-            let offset = (NAMETAG_UNIFORM_INDEX as u64) * (self.uniform_aligned_size as u64);
-            self.queue
-                .write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
+            let offset = (NAMETAG_UNIFORM_INDEX as usize) * (self.uniform_aligned_size as usize);
+            let bytes = bytemuck::bytes_of(&uniform);
+            uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
         }
 
-        let depth_view = {
-            let mut cache = self.cached_depth_texture.lock().unwrap();
-            let need_new = match cache.as_ref() {
-                None => true,
-                Some((_, w, h)) => *w != width || *h != height,
-            };
-            if need_new {
-                let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-                    label: Some("Depth Texture"),
-                    size: wgpu::Extent3d {
-                        width,
-                        height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: DEPTH_FORMAT,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                });
-                *cache = Some((texture, width, height));
-            }
-            cache
-                .as_ref()
-                .unwrap()
-                .0
-                .create_view(&wgpu::TextureViewDescriptor::default())
-        };
+        let uniform_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Frame Dynamic Uniform Buffer"),
+            contents: &uniform_bytes,
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let uniform_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Frame Uniform Bind Group"),
+            layout: &self.uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &uniform_buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(uniform_size as u64),
+                }),
+            }],
+        });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -610,7 +594,7 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_view,
+                    view: depth_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -628,7 +612,7 @@ impl Renderer {
                 for i in 0..PART_CONFIGS.len() {
                     let body_part = body_part_ref(i, model);
                     let dynamic_offset = (i as u32) * self.uniform_aligned_size;
-                    render_pass.set_bind_group(0, &self.uniform_bind_group, &[dynamic_offset]);
+                    render_pass.set_bind_group(0, &uniform_bind_group, &[dynamic_offset]);
 
                     render_pass.set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
                     render_pass.draw(0..body_part.main.vertex_count, 0..1);
@@ -641,7 +625,7 @@ impl Renderer {
             if let Some(cape_atlas) = cape_atlas {
                 render_pass.set_bind_group(
                     0,
-                    &self.uniform_bind_group,
+                    &uniform_bind_group,
                     &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
                 render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
@@ -660,7 +644,7 @@ impl Renderer {
                 ] {
                     render_pass.set_bind_group(
                         0,
-                        &self.uniform_bind_group,
+                        &uniform_bind_group,
                         &[index * self.uniform_aligned_size],
                     );
                     render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
@@ -671,7 +655,7 @@ impl Renderer {
             if let Some(cached) = nametag_cached {
                 render_pass.set_bind_group(
                     0,
-                    &self.uniform_bind_group,
+                    &uniform_bind_group,
                     &[NAMETAG_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
                 render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
@@ -741,6 +725,9 @@ impl Renderer {
         });
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let depth_texture = self.create_depth_texture(width, height);
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -750,6 +737,7 @@ impl Renderer {
         self.encode_render_pass(
             &mut encoder,
             &texture_view,
+            &depth_view,
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
@@ -794,6 +782,9 @@ impl Renderer {
         });
         let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let depth_texture = self.create_depth_texture(width, height);
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -803,6 +794,7 @@ impl Renderer {
         self.encode_render_pass(
             &mut encoder,
             &texture_view,
+            &depth_view,
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
@@ -829,6 +821,9 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let depth_texture = self.create_depth_texture(config.width, config.height);
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let pipeline = self.surface_pipeline.as_ref().unwrap_or(&self.pipeline);
         let nametag_pipeline = self
             .nametag_surface_pipeline
@@ -848,6 +843,7 @@ impl Renderer {
         self.encode_render_pass(
             &mut encoder,
             &view,
+            &depth_view,
             pipeline,
             nametag_pipeline,
             nametag_see_through_pipeline,
@@ -889,5 +885,35 @@ mod tests {
     fn renderer_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Renderer>();
+    }
+
+    #[test]
+    fn renderer_concurrent_render_different_threads() {
+        let renderer = Arc::new(Renderer::new().expect("Failed to create renderer"));
+        let body = renderer
+            .load_body("resources/bingling_sama.png", SkinType::Classic)
+            .expect("Failed to load body");
+        let character = Arc::new(Character::from_body(body));
+
+        let handles: Vec<_> = (0..3)
+            .map(|i| {
+                let r = Arc::clone(&renderer);
+                let c = Arc::clone(&character);
+                std::thread::spawn(move || {
+                    let camera = Camera {
+                        yaw: 180.0 + (i as f32) * 10.0,
+                        pitch: 90.0,
+                        scale: 1.0,
+                    };
+                    let image = r.render(&c, &camera, 64, 64).expect("render failed");
+                    assert_eq!(image.width(), 64);
+                    assert_eq!(image.height(), 64);
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().expect("thread panicked");
+        }
     }
 }
