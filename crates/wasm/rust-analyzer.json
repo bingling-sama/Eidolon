@@ -1,0 +1,8 @@
+{
+  "cargo": {
+    "target": "wasm32-unknown-unknown"
+  },
+  "check": {
+    "targets": "wasm32-unknown-unknown"
+  }
+}
