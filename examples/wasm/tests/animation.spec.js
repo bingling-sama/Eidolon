@@ -92,6 +92,7 @@ test('mobile controls stay within the viewport', async ({ page }) => {
     '#input-loop',
     '#input-nametag',
     '#input-nametag-see-through',
+    '#format-presets',
     'canvas',
   ]) {
     const box = await page.locator(selector).boundingBox();
@@ -199,4 +200,58 @@ test('inspect_texture correctly detects texture format in browser', async ({ pag
   expect(report.height).toBe(64);
   expect(report.is_hd).toBe(false);
   expect(report.can_auto_upgrade).toBe(false);
+});
+
+test('export format selection updates UI and export button label', async ({ page }) => {
+  await page.goto('/');
+  await loadSkin(page);
+
+  await expect(page.locator('#btn-export-text')).toHaveText('Export PNG');
+  await expect(page.locator('.format-preset[data-format="png"]')).toHaveClass(/active/);
+
+  // Switch to WebP
+  await page.locator('.format-preset[data-format="webp"]').click();
+  await expect(page.locator('#btn-export-text')).toHaveText('Export WebP');
+  await expect(page.locator('.format-preset[data-format="webp"]')).toHaveClass(/active/);
+  await expect(page.locator('.format-preset[data-format="png"]')).not.toHaveClass(/active/);
+
+  // Switch to JPEG
+  await page.locator('.format-preset[data-format="jpeg"]').click();
+  await expect(page.locator('#btn-export-text')).toHaveText('Export JPEG');
+  await expect(page.locator('.format-preset[data-format="jpeg"]')).toHaveClass(/active/);
+
+  // Switch via select element
+  await page.locator('#select-export-format').selectOption('png');
+  await expect(page.locator('#btn-export-text')).toHaveText('Export PNG');
+  await expect(page.locator('.format-preset[data-format="png"]')).toHaveClass(/active/);
+});
+
+test('renderer captures frames in png, webp, and jpeg formats with correct magic headers', async ({ page }) => {
+  await page.goto('/');
+  await loadSkin(page);
+
+  const results = await page.evaluate(async () => {
+    const renderer = window.__eidolon_renderer;
+    if (!renderer) throw new Error('Renderer not available on window');
+
+    const png = Array.from(await renderer.capture_frame(128, 128, 'png'));
+    const webp = Array.from(await renderer.capture_frame(128, 128, 'webp'));
+    const jpeg = Array.from(await renderer.capture_frame(128, 128, 'jpeg'));
+    const def = Array.from(await renderer.capture_frame(128, 128));
+
+    return { png, webp, jpeg, def };
+  });
+
+  // PNG magic: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+  expect(results.png.slice(0, 8)).toEqual([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  expect(results.def.slice(0, 8)).toEqual([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+  // WebP magic: 'RIFF' .... 'WEBP'
+  const webpHeader = String.fromCharCode(...results.webp.slice(0, 4));
+  const webpType = String.fromCharCode(...results.webp.slice(8, 12));
+  expect(webpHeader).toBe('RIFF');
+  expect(webpType).toBe('WEBP');
+
+  // JPEG magic: 0xFF 0xD8 0xFF
+  expect(results.jpeg.slice(0, 3)).toEqual([0xFF, 0xD8, 0xFF]);
 });

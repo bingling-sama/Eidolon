@@ -352,9 +352,15 @@ impl CanvasRenderer {
         self.inner.resize(width, height);
     }
 
-    /// Offscreen render at high resolution, return PNG bytes for download.
+    /// Offscreen render at high resolution, return encoded image bytes for download.
     /// Renders at the given size independently of the canvas.
-    pub async fn capture_frame(&self, width: u32, height: u32) -> Result<Vec<u8>, JsValue> {
+    /// Supports "png" (default), "webp", and "jpeg"/"jpg".
+    pub async fn capture_frame(
+        &self,
+        width: u32,
+        height: u32,
+        format: Option<String>,
+    ) -> Result<Vec<u8>, JsValue> {
         let character = self
             .character
             .as_ref()
@@ -364,12 +370,34 @@ impl CanvasRenderer {
             .render_async(character, &self.camera, width, height)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let mut png_bytes = Vec::new();
-        image_buffer
-            .write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        log::info!("Captured {}×{} → {} bytes", width, height, png_bytes.len());
-        Ok(png_bytes)
+        let format_str = format.as_deref().unwrap_or("png");
+        let mut encoded_bytes = Vec::new();
+        match format_str.to_ascii_lowercase().as_str() {
+            "png" => {
+                image_buffer
+                    .write_to(&mut Cursor::new(&mut encoded_bytes), ImageFormat::Png)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            }
+            "webp" => {
+                image_buffer
+                    .write_to(&mut Cursor::new(&mut encoded_bytes), ImageFormat::WebP)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            }
+            "jpeg" | "jpg" => {
+                let rgb = image::DynamicImage::ImageRgba8(image_buffer).to_rgb8();
+                rgb.write_to(&mut Cursor::new(&mut encoded_bytes), ImageFormat::Jpeg)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            }
+            other => return Err(JsValue::from_str(&format!("unsupported format: '{other}'"))),
+        }
+        log::info!(
+            "Captured {}×{} ({}) → {} bytes",
+            width,
+            height,
+            format_str,
+            encoded_bytes.len()
+        );
+        Ok(encoded_bytes)
     }
 
     /// Present one frame to the canvas. Call in a rAF loop at 60fps.
@@ -492,8 +520,8 @@ impl JsTextureReport {
 /// Inspect and classify a Minecraft texture from raw image bytes (e.g. PNG).
 #[wasm_bindgen]
 pub fn inspect_texture(bytes: &[u8]) -> Result<JsTextureReport, JsValue> {
-    let rep = crate::classifier::inspect_texture(bytes)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let rep =
+        crate::classifier::inspect_texture(bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(JsTextureReport {
         kind: rep.kind.as_str().to_string(),
         width: rep.width,

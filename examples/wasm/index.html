@@ -611,6 +611,7 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
     }
 
+    .format-row,
     .resolution-row {
       display: flex;
       align-items: center;
@@ -618,10 +619,12 @@
       gap: 10px;
       flex-wrap: wrap;
     }
+    .format-presets,
     .size-presets {
       display: flex;
       gap: 4px;
     }
+    .format-preset,
     .size-preset {
       font-size: 11px;
       font-weight: 600;
@@ -634,10 +637,12 @@
       cursor: pointer;
       transition: all 150ms var(--ease-out);
     }
+    .format-preset:hover,
     .size-preset:hover {
       border-color: var(--border-strong);
       color: var(--text-primary);
     }
+    .format-preset.active,
     .size-preset.active {
       background: var(--text-primary);
       color: #fff;
@@ -779,7 +784,20 @@
       }
       .timeline-wrap { width: 100%; order: 3; }
       .playback-options { width: auto; gap: 8px; order: 2; margin-left: auto; }
+      .format-row,
       .resolution-row { flex-direction: column; align-items: stretch; gap: 8px; }
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -821,7 +839,7 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          <span>Export PNG</span>
+          <span id="btn-export-text">Export PNG</span>
         </button>
       </div>
     </header>
@@ -1014,7 +1032,20 @@
 
         <div class="panel-section">
           <div class="section-header">
-            <span class="section-title">Export Resolution</span>
+            <span class="section-title">Export Settings</span>
+          </div>
+          <div class="format-row">
+            <span class="field-label" style="margin-bottom:0">Format</span>
+            <div class="format-presets" id="format-presets">
+              <button type="button" class="format-preset active" data-format="png">PNG</button>
+              <button type="button" class="format-preset" data-format="webp">WebP</button>
+              <button type="button" class="format-preset" data-format="jpeg">JPEG</button>
+            </div>
+            <select id="select-export-format" class="visually-hidden" aria-label="Export Format">
+              <option value="png" selected>PNG</option>
+              <option value="webp">WebP</option>
+              <option value="jpeg">JPEG</option>
+            </select>
           </div>
           <div class="resolution-row">
             <div class="size-presets" id="size-presets">

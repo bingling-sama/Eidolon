@@ -46,10 +46,13 @@ const inputElytraSpread = document.getElementById('input-elytra-spread');
 const outputElytraPitch = document.getElementById('output-elytra-pitch');
 const outputElytraSpread = document.getElementById('output-elytra-spread');
 const btnExport = document.getElementById('btn-export');
+const btnExportText = document.getElementById('btn-export-text');
 const btnCopy = document.getElementById('btn-copy');
 const inputSizeW = document.getElementById('input-size-w');
 const inputSizeH = document.getElementById('input-size-h');
 const sizePresets = document.getElementById('size-presets');
+const formatPresets = document.getElementById('format-presets');
+const selectExportFormat = document.getElementById('select-export-format');
 const inputBgCustom = document.getElementById('input-bg-custom');
 const inputBgAlpha = document.getElementById('input-bg-alpha');
 const bgPresets = document.getElementById('bg-presets');
@@ -131,6 +134,7 @@ async function boot() {
   try {
     console.log('Initializing WebGPU renderer…');
     renderer = await CanvasRenderer.new(canvas);
+    window.__eidolon_renderer = renderer;
     resizeCanvas();
     setActivePreset(bgPresets.querySelector('.bg-swatch.transparent'));
     syncBackground();
@@ -330,6 +334,51 @@ sizePresets.addEventListener('click', (e) => {
 });
 inputSizeW.addEventListener('input', () => sizePresets.querySelectorAll('.size-preset').forEach(b => b.classList.remove('active')));
 inputSizeH.addEventListener('input', () => sizePresets.querySelectorAll('.size-preset').forEach(b => b.classList.remove('active')));
+
+// ---- Export format ----
+let currentFormat = 'png';
+const formatLabels = {
+  png: 'PNG',
+  webp: 'WebP',
+  jpeg: 'JPEG',
+};
+
+function setExportFormat(format) {
+  format = (format || 'png').toLowerCase();
+  if (!['png', 'webp', 'jpeg'].includes(format)) return;
+  currentFormat = format;
+
+  if (formatPresets) {
+    formatPresets.querySelectorAll('.format-preset').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.format === currentFormat);
+    });
+  }
+  if (selectExportFormat && selectExportFormat.value !== currentFormat) {
+    selectExportFormat.value = currentFormat;
+  }
+
+  const label = formatLabels[currentFormat] || currentFormat.toUpperCase();
+  btnExport.title = `Save rendered ${label}`;
+  if (btnExportText) {
+    btnExportText.textContent = `Export ${label}`;
+  } else {
+    btnExport.textContent = `Export ${label}`;
+  }
+}
+
+if (formatPresets) {
+  formatPresets.addEventListener('click', (e) => {
+    const btn = /** @type {HTMLElement} */ (e.target).closest('.format-preset');
+    if (!btn || !btn.dataset.format) return;
+    setExportFormat(btn.dataset.format);
+  });
+}
+
+if (selectExportFormat) {
+  selectExportFormat.addEventListener('change', () => {
+    setExportFormat(selectExportFormat.value);
+  });
+}
 
 inputBgCustom.addEventListener('input', () => {
   setActivePreset(null);
@@ -598,7 +647,7 @@ btnCopy.addEventListener('click', async () => {
     const w = Math.max(64, Math.min(4096, parseInt(inputSizeW.value, 10) || 800));
     const h = Math.max(64, Math.min(4096, parseInt(inputSizeH.value, 10) || 600));
     renderer.set_background(bg.r, bg.g, bg.b, bg.a);
-    const pngBytes = await renderer.capture_frame(w, h);
+    const pngBytes = await renderer.capture_frame(w, h, 'png');
     syncBackground();
     const blob = new Blob([pngBytes], { type: 'image/png' });
 
@@ -628,20 +677,46 @@ btnCopy.addEventListener('click', async () => {
 btnExport.addEventListener('click', async () => {
   if (!renderer || !hasModel()) return;
   btnExport.disabled = true;
-  btnExport.textContent = 'Exporting…';
+  if (btnExportText) {
+    btnExportText.textContent = 'Exporting…';
+  } else {
+    btnExport.textContent = 'Exporting…';
+  }
   try {
     const w = Math.max(64, Math.min(4096, parseInt(inputSizeW.value, 10) || 800));
     const h = Math.max(64, Math.min(4096, parseInt(inputSizeH.value, 10) || 600));
     // Set true RGBA for export (supports transparency), then restore preview color.
     renderer.set_background(bg.r, bg.g, bg.b, bg.a);
-    const pngBytes = await renderer.capture_frame(w, h);
+    const bytes = await renderer.capture_frame(w, h, currentFormat);
     syncBackground(); // restore preview-adapted color
-    const blob = new Blob([pngBytes], { type: 'image/png' });
+
+    const mimeMap = {
+      png: 'image/png',
+      webp: 'image/webp',
+      jpeg: 'image/jpeg',
+    };
+    const extMap = {
+      png: 'png',
+      webp: 'webp',
+      jpeg: 'jpg',
+    };
+    const descMap = {
+      png: 'PNG Image',
+      webp: 'WebP Image',
+      jpeg: 'JPEG Image',
+    };
+
+    const mime = mimeMap[currentFormat] || 'image/png';
+    const ext = extMap[currentFormat] || 'png';
+    const desc = descMap[currentFormat] || 'Image';
+    const fileName = `rendered_skin.${ext}`;
+
+    const blob = new Blob([bytes], { type: mime });
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
-          suggestedName: 'rendered_skin.png',
-          types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }],
+          suggestedName: fileName,
+          types: [{ description: desc, accept: { [mime]: [`.${ext}`] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(blob);
@@ -653,16 +728,16 @@ btnExport.addEventListener('click', async () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'rendered_skin.png';
+      a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
     }
-    console.log('exported:', pngBytes.length, 'bytes');
+    console.log('exported:', bytes.length, 'bytes');
   } catch (e) {
     console.error('Export failed:', e);
   } finally {
     btnExport.disabled = false;
-    btnExport.textContent = 'Export PNG';
+    setExportFormat(currentFormat);
   }
 });
 
