@@ -113,7 +113,7 @@ Contributions are welcome. See `docs/contributing.md`.
 
 ## License
 
-See `LICENSE`.
+MIT. See [LICENSE](LICENSE).
 
 ## Credits
 

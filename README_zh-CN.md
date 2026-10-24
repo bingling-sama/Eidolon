@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 许可证
 
-见 `LICENSE`。
+MIT。见 [LICENSE](LICENSE)。
 
 ## 致谢
 

@@ -1,11 +1,11 @@
 [package]
 name = "eidolon-core"
-version = "0.0.1-alpha"
+version.workspace = true
 description = "A Minecraft skin off-screen renderer core engine written in Rust"
-edition = "2021"
-license-file = "../../LICENSE"
-homepage = "https://github.com/bingling-sama/eidolon"
-repository = "https://github.com/bingling-sama/eidolon"
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [lib]
 name = "eidolon_core"

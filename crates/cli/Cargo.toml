@@ -1,11 +1,11 @@
 [package]
 name = "eidolon-cli"
-version = "0.0.1-alpha"
+version.workspace = true
 description = "Minecraft skin renderer CLI"
-edition = "2021"
-license-file = "../../LICENSE"
-homepage = "https://github.com/bingling-sama/eidolon"
-repository = "https://github.com/bingling-sama/eidolon"
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "eidolon"
