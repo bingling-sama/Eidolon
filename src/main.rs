@@ -1224,6 +1224,31 @@ mod tests {
         )
         .is_err());
 
+        for valid_ext in ["out.gif", "out.webp", "out.apng", "out.avif"] {
+            let valid_output =
+                Args::try_parse_from(["eidolon", "render", "skin.png", valid_ext, "--animate"])
+                    .unwrap();
+            let Command::Render {
+                output,
+                viewport,
+                animation,
+                ..
+            } = valid_output.command
+            else {
+                panic!("Expected Render");
+            };
+            let output = resolve_render_output(output, &viewport, &animation).unwrap();
+            assert!(OutputIntent::animation_from_path(
+                std::path::Path::new(&output),
+                AnimationPreset::Walk,
+                animation.fps,
+                animation.speed,
+                animation.loop_count,
+                (viewport.width, viewport.height),
+            )
+            .is_ok());
+        }
+
         let oversized = Args::try_parse_from([
             "eidolon",
             "render",

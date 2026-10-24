@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `Body` 将 Skin 与 `SkinType` 组合在一起。单层 Skin 在加载时会自动转换为双层。
 - 克隆 `Character`、`Body` 或 `BackEquipmentAtlas` 会共享不可变 GPU 资源。这些资源只能由创建它们的 Renderer 渲染；另一个 Renderer 必须重新加载资源。
 - `StaticFormat` 支持 `Png` 与 `WebP`。`OutputIntent` 显式指定格式，输出模块会统一扩展名并返回最终路径。
-- `AnimationFormat` 支持 `Gif` 与 Animated `WebP`。`OutputIntent::Animation` 接受 `AnimationPreset`、FPS、速度倍率、循环次数和 frame producer，并返回最终路径。
+- `AnimationFormat` 支持 `Gif`、Animated `WebP`、`Apng` 与 `Avif`。`OutputIntent::Animation` 接受 `AnimationPreset`、FPS、速度倍率、循环次数和 frame producer，并返回最终路径。
 - 公共错误 `EidolonError::Output` 表示输出校验、编码或写入失败。
 - 如需更精细的姿势、相机和变换控制，可直接调整 `Character` 与 `Camera` 的字段。
 - 将 `Character::nametag` 设为 `Some(name)` 可在玩家头顶显示始终朝向相机的标签。标签使用

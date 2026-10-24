@@ -9,7 +9,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:bench": "playwright test tests/benchmark.spec.js",
+    "bench": "playwright test tests/benchmark.spec.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

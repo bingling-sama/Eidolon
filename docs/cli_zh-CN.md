@@ -12,7 +12,7 @@ cargo run -- render [选项] <皮肤 PNG> [输出]
 
 选项：
 
-- `[输出]` 静态输出接受 `.png`/`.webp`；动画输出接受 `.gif`/`.webp`。静态默认
+- `[输出]` 静态输出接受 `.png`/`.webp`；动画输出接受 `.gif`/`.webp`/`.apng`/`.avif`。静态默认
   `output.png`，`--animate` 时默认 `output.webp`
 - `--width <PX>` 输出宽度（像素）。默认：`800`
 - `--height <PX>` 输出高度（像素）。默认：`600`
@@ -59,12 +59,14 @@ cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nameta
 
 `--posture` 与 `AnimationPreset` 使用完全相同的名称，并由静态渲染、动画渲染和窗口预览共用。
 静态渲染采用代表帧；Walk 和 Run 采用四分之一周期，其他动作采用相位 0。添加 `--animate`
-后，输出必须为 `.gif` 或 `.webp`，尺寸不超过 `2048×2048`。显式关节、披风或鞘翅覆盖会在
-每帧采样后应用。Animated WebP 使用无损 RGBA 编码；GIF 量化为 256 色。
+后，输出必须为 `.gif`、`.webp`、`.apng` 或 `.avif`，尺寸不超过 `2048×2048`。显式关节、披风或鞘翅覆盖会在
+每帧采样后应用。Animated WebP 与 APNG 使用无损 RGBA 编码；AVIF 编码带 alpha 的动画 AV1 序列；GIF 量化为 256 色。
 
 ```bash
 eidolon render skin.png walk.gif --animate --posture walk
 eidolon render skin.png fly.webp --animate --posture fly --elytra cape.png --fps 60 --speed 1.5
+eidolon render skin.png run.apng --animate --posture run
+eidolon render skin.png dance.avif --animate --posture dance
 ```
 
 ## Preview

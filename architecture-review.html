@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — eidolon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased selection:bg-emerald-100 selection:text-emerald-900">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <!-- Header -->
+      <header class="border-b border-stone-200 pb-8">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <span class="text-xs font-mono uppercase tracking-widest text-stone-500">Architecture Health Check</span>
+            <h1 class="text-3xl font-serif font-bold tracking-tight text-slate-900 mt-1">eidolon</h1>
+          </div>
+          <span class="text-sm font-mono text-stone-400">2026-10-23</span>
+        </div>
+        <!-- Compact legend -->
+        <div class="flex flex-wrap items-center gap-6 pt-4 text-xs font-mono text-slate-600 bg-stone-100/70 p-3 rounded-lg border border-stone-200">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-3.5 h-3.5 border border-slate-700 bg-white rounded-sm"></span>
+            <span>Module</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-0 border-t-2 border-dashed border-slate-500"></span>
+            <span>Seam</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-0 border-t-2 border-red-500"></span>
+            <span class="text-red-700 font-medium">Leakage / Shallowness</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-3.5 h-3.5 bg-slate-900 rounded-sm"></span>
+            <span class="text-slate-900 font-semibold">Deep Module</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Candidates Section -->
+      <section id="candidates" class="space-y-12">
+
+        <!-- Candidate 1 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-bold font-serif text-slate-900">1. Collapse the Skin Conversion Module into Assets</h2>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">Strong</span>
+              <span class="px-2.5 py-1 text-xs font-mono rounded-full bg-stone-100 text-stone-700">in-process</span>
+            </div>
+          </div>
+
+          <div class="text-xs font-mono text-stone-500 bg-stone-50 px-3 py-2 rounded border border-stone-200">
+            src/converter.rs &bull; src/assets.rs &bull; src/main.rs &bull; src/lib.rs
+          </div>
+
+          <!-- Problem & Solution -->
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="p-3 bg-red-50/50 rounded-lg border border-red-100">
+              <span class="font-semibold text-red-900 text-xs uppercase tracking-wider block mb-1">Problem</span>
+              <p class="text-slate-700 leading-snug">
+                <code class="font-mono text-xs">converter</code> is a shallow module exposing one raw image transformation function, requiring callers to manually coordinate decoding, layout checks, and file writes.
+              </p>
+            </div>
+            <div class="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+              <span class="font-semibold text-emerald-900 text-xs uppercase tracking-wider block mb-1">Solution</span>
+              <p class="text-slate-700 leading-snug">
+                Absorb <code class="font-mono text-xs">converter</code> entirely into <code class="font-mono text-xs">assets</code> as private implementation details of <code class="font-mono text-xs">RawSkin</code> and add format-preserving offline conversion methods.
+              </p>
+            </div>
+          </div>
+
+          <!-- Before / After Diagram -->
+          <div class="grid md:grid-cols-2 gap-6 items-start">
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">Before: Shallow Module Leak</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    CLI[CLI convert] -->|opens DynamicImage| CONV[converter::single2double]
+                    CLI -->|manual encode & save| OUT[Disk File]
+                    SKIN[RawSkin::from_image] -->|aspect ratio check| CONV
+                    CONV -.leaks details.-> CLI
+                    classDef leak stroke:#dc2626,stroke-width:2px;
+                    class CONV leak;
+                </pre>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">After: Deep Assets Seam</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    CLI[CLI convert] -->|RawSkin::convert_file| ASSETS["RawSkin (Deep Module)"]
+                    CALLER[Renderer / Upload] -->|RawSkin::from_file| ASSETS
+                    subgraph ASSETS ["RawSkin (Deep Module)"]
+                      direction TB
+                      INTERNAL["private mirror & double-layer expansion"]
+                    end
+                    ASSETS -->|unified output| OUT[Disk File / Body]
+                    classDef deep fill:#0f172a,stroke:#0f172a,color:#ffffff;
+                    class ASSETS deep;
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wins -->
+          <div class="space-y-2 pt-2 border-t border-stone-100">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Architectural Wins</span>
+            <ul class="grid sm:grid-cols-2 gap-2 text-xs text-slate-700">
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Locality: skin layout invariants concentrate in <code class="font-mono">assets</code></li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Deletion test: passes; removes 1 shallow module and public export</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Leverage: callers test complete asset lifecycle at one seam</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> CLI shrinks: CLI delegates path and save policy cleanly</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Candidate 2 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-bold font-serif text-slate-900">2. Consolidate Equipment & Body Mesh Generation Behind Model Seam</h2>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Worth exploring</span>
+              <span class="px-2.5 py-1 text-xs font-mono rounded-full bg-stone-100 text-stone-700">in-process</span>
+            </div>
+          </div>
+
+          <div class="text-xs font-mono text-stone-500 bg-stone-50 px-3 py-2 rounded border border-stone-200">
+            src/cape.rs &bull; src/elytra.rs &bull; src/model.rs &bull; src/renderer/mod.rs
+          </div>
+
+          <!-- Problem & Solution -->
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="p-3 bg-red-50/50 rounded-lg border border-red-100">
+              <span class="font-semibold text-red-900 text-xs uppercase tracking-wider block mb-1">Problem</span>
+              <p class="text-slate-700 leading-snug">
+                Mesh creation is split into three shallow modules with divergent loaders: OBJ parsing in <code class="font-mono text-xs">model</code>, and ad-hoc procedural mesh builders in <code class="font-mono text-xs">cape</code> and <code class="font-mono text-xs">elytra</code>.
+              </p>
+            </div>
+            <div class="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+              <span class="font-semibold text-emerald-900 text-xs uppercase tracking-wider block mb-1">Solution</span>
+              <p class="text-slate-700 leading-snug">
+                Deepen <code class="font-mono text-xs">model</code> to own all Character visual mesh assets behind a single <code class="font-mono text-xs">ModelCatalog</code> interface, encapsulating hardcoded geometry.
+              </p>
+            </div>
+          </div>
+
+          <!-- Before / After Diagram -->
+          <div class="grid md:grid-cols-2 gap-6 items-start">
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">Before: Fragmented Geometry Setup</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart LR
+                    R[Renderer::new] -->|Model::load_from_obj| M[model.rs]
+                    R -->|cape::build_cape| C[cape.rs]
+                    R -->|elytra::build_elytra| E[elytra.rs]
+                    classDef leak stroke:#dc2626,stroke-width:2px;
+                    class C,E leak;
+                </pre>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">After: Deep Model Catalog</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart LR
+                    R[Renderer::new] -->|ModelCatalog::init| MC["ModelCatalog (Deep Module)"]
+                    subgraph MC ["ModelCatalog (Deep Module)"]
+                      direction TB
+                      B[Body: Classic & Slim]
+                      CP[Back: Cape Mesh]
+                      EL[Back: Elytra Mesh]
+                    end
+                    classDef deep fill:#0f172a,stroke:#0f172a,color:#ffffff;
+                    class MC deep;
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wins -->
+          <div class="space-y-2 pt-2 border-t border-stone-100">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Architectural Wins</span>
+            <ul class="grid sm:grid-cols-2 gap-2 text-xs text-slate-700">
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Locality: GPU vertex buffers and layouts concentrate in one catalog</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Renderer decouples from 4 separate model fields and init calls</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Seam: single test surface verifies all body & equipment geometry</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Deletion test: absorbs <code class="font-mono">cape.rs</code> and <code class="font-mono">elytra.rs</code> files</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Candidate 3 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-bold font-serif text-slate-900">3. Unify Character Visual Asset Ingestion on Renderer</h2>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-800 border border-stone-200">Speculative</span>
+              <span class="px-2.5 py-1 text-xs font-mono rounded-full bg-stone-100 text-stone-700">in-process</span>
+            </div>
+          </div>
+
+          <div class="text-xs font-mono text-stone-500 bg-stone-50 px-3 py-2 rounded border border-stone-200">
+            src/renderer/mod.rs &bull; src/body.rs &bull; src/back_equipment.rs &bull; src/wasm.rs
+          </div>
+
+          <!-- Problem & Solution -->
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="p-3 bg-red-50/50 rounded-lg border border-red-100">
+              <span class="font-semibold text-red-900 text-xs uppercase tracking-wider block mb-1">Problem</span>
+              <p class="text-slate-700 leading-snug">
+                <code class="font-mono text-xs">Renderer</code> exposes 6 narrow pairs of load/upload methods for <code class="font-mono text-xs">Body</code> vs <code class="font-mono text-xs">BackEquipmentAtlas</code>, leaking texture allocation protocol details.
+              </p>
+            </div>
+            <div class="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+              <span class="font-semibold text-emerald-900 text-xs uppercase tracking-wider block mb-1">Solution</span>
+              <p class="text-slate-700 leading-snug">
+                Provide a unified visual asset ingestion method taking an <code class="font-mono text-xs">AssetSource</code> (Path or Bytes) and returning ready-to-attach Character equipment.
+              </p>
+            </div>
+          </div>
+
+          <!-- Before / After Diagram -->
+          <div class="grid md:grid-cols-2 gap-6 items-start">
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">Before: Six Dispersed Load Methods</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    C[Caller / WASM] --> L1[load_body]
+                    C --> L2[load_body_from_memory]
+                    C --> L3[upload_skin]
+                    C --> L4[load_back_equipment_atlas]
+                    C --> L5[load_back_equipment_atlas_from_memory]
+                    C --> L6[upload_cape_atlas]
+                    classDef leak stroke:#dc2626,stroke-width:1px;
+                    class L1,L2,L3,L4,L5,L6 leak;
+                </pre>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <span class="text-xs font-mono font-semibold uppercase tracking-wider text-stone-500">After: Deep Visual Upload Seam</span>
+              <div class="rounded-lg border border-stone-200 bg-stone-50/50 p-4 min-h-[320px] flex flex-col justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    C[Caller / WASM] -->|upload(source, spec)| R["Renderer (Deep Module)"]
+                    subgraph R ["Renderer (Deep Module)"]
+                      direction TB
+                      CACHE["Context check & texture bind"]
+                      BUILD["Body / BackEquipment construct"]
+                    end
+                    R --> B["Body / BackEquipment"]
+                    classDef deep fill:#0f172a,stroke:#0f172a,color:#ffffff;
+                    class R deep;
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wins -->
+          <div class="space-y-2 pt-2 border-t border-stone-100">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Architectural Wins</span>
+            <ul class="grid sm:grid-cols-2 gap-2 text-xs text-slate-700">
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Leverage: reduces Renderer interface surface area by half</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Locality: memory-vs-file dispatch handled behind the seam</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> WASM adapter simplifies: one loader path for all assets</li>
+              <li class="flex items-center gap-1.5"><span class="text-emerald-500 font-bold">&check;</span> Symmetric with <code class="font-mono">OutputIntent</code> pattern in <code class="font-mono">output.rs</code></li>
+            </ul>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- Top Recommendation Section -->
+      <section id="top-recommendation" class="pt-6">
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-xl p-8 shadow-lg border border-slate-700">
+          <div class="flex items-center gap-2 mb-3 text-emerald-400 font-mono text-xs uppercase tracking-wider font-semibold">
+            <span>&starf; Recommended Starting Point</span>
+          </div>
+          <h3 class="text-2xl font-serif font-bold text-white mb-3">
+            <a href="#candidates" class="hover:underline">Candidate 1: Collapse the Skin Conversion Module into Assets</a>
+          </h3>
+          <p class="text-slate-300 text-sm leading-relaxed max-w-3xl mb-6">
+            <code class="text-emerald-300 font-mono">converter</code> is an textbook shallow module: an entire top-level module containing a single pure function whose callers immediately leak layout knowledge and image I/O. Collapsing it into <code class="text-emerald-300 font-mono">assets</code> concentrates single-to-double layer transformation directly behind the <code class="text-emerald-300 font-mono">RawSkin</code> seam, passes the deletion test cleanly, and leaves zero residual complexity in caller code.
+          </p>
+          <a href="#candidates" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-lg text-xs tracking-wide transition-colors">
+            View Candidate Details &rarr;
+          </a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

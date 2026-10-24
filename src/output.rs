@@ -47,6 +47,8 @@ impl StaticFormat {
 pub enum AnimationFormat {
     Gif,
     WebP,
+    Apng,
+    Avif,
 }
 
 impl AnimationFormat {
@@ -54,6 +56,8 @@ impl AnimationFormat {
         match self {
             Self::Gif => "gif",
             Self::WebP => "webp",
+            Self::Apng => "apng",
+            Self::Avif => "avif",
         }
     }
 
@@ -66,8 +70,10 @@ impl AnimationFormat {
         {
             Some("gif") => Ok(Self::Gif),
             Some("webp") => Ok(Self::WebP),
+            Some("apng") => Ok(Self::Apng),
+            Some("avif") => Ok(Self::Avif),
             _ => Err(EidolonError::output(
-                "animation output must end in .gif or .webp",
+                "animation output must end in .gif, .webp, .apng, or .avif",
             )),
         }
     }
@@ -334,6 +340,81 @@ fn write_animation(
                 })?;
             Ok(())
         }
+        AnimationFormat::Apng => {
+            use png::{BitDepth, ColorType, Encoder as PngEncoder};
+            use std::fs::File;
+            use std::io::BufWriter;
+
+            let file = BufWriter::new(File::create(path).map_err(|error| {
+                EidolonError::output(format!("failed to create output: {error}"))
+            })?);
+            let mut encoder = PngEncoder::new(file, size.0, size.1);
+            encoder.set_color(ColorType::Rgba);
+            encoder.set_depth(BitDepth::Eight);
+            encoder
+                .set_animated(schedule.frame_count(), u32::from(loop_count))
+                .map_err(|error| EidolonError::output(format!("failed to set APNG: {error}")))?;
+            encoder
+                .set_frame_delay(1, schedule.fps() as u16)
+                .map_err(|error| EidolonError::output(format!("failed to set APNG delay: {error}")))?;
+
+            let mut writer = encoder
+                .write_header()
+                .map_err(|error| EidolonError::output(format!("failed to write APNG header: {error}")))?;
+
+            for frame_index in 0..schedule.frame_count() {
+                let image = frame_producer(schedule.sample_time(frame_index))?;
+                validate_frame(&image, size)?;
+                writer
+                    .write_image_data(&image)
+                    .map_err(|error| EidolonError::output(format!("failed to write APNG frame: {error}")))?;
+            }
+            writer
+                .finish()
+                .map_err(|error| EidolonError::output(format!("failed to finalize APNG: {error}")))?;
+            Ok(())
+        }
+        AnimationFormat::Avif => {
+            use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
+
+            let mut frames_data: Vec<Vec<RGBA8>> = Vec::with_capacity(schedule.frame_count() as usize);
+            let mut frame_durations: Vec<u32> = Vec::with_capacity(schedule.frame_count() as usize);
+
+            for frame_index in 0..schedule.frame_count() {
+                let image = frame_producer(schedule.sample_time(frame_index))?;
+                validate_frame(&image, size)?;
+                let duration_ms = webp_timestamp_ms(frame_index + 1, schedule.fps())
+                    - webp_timestamp_ms(frame_index, schedule.fps());
+                frame_durations.push(duration_ms);
+
+                let raw = image.into_raw();
+                let rgba_vec: Vec<RGBA8> = raw
+                    .chunks_exact(4)
+                    .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+                    .collect();
+                frames_data.push(rgba_vec);
+            }
+
+            let anim_frames: Vec<AnimFrameRgba> = frames_data
+                .iter()
+                .zip(frame_durations.iter())
+                .map(|(data, &duration_ms)| AnimFrameRgba {
+                    rgba: Img::new(data.as_slice(), size.0 as usize, size.1 as usize),
+                    duration_ms,
+                })
+                .collect();
+
+            let encoder = AvifEncoder::new()
+                .with_speed(6);
+            let encoded = encoder
+                .encode_animation_rgba(&anim_frames)
+                .map_err(|error| EidolonError::output(format!("failed to encode AVIF: {error}")))?;
+
+            std::fs::write(path, &encoded.avif_file).map_err(|error| {
+                EidolonError::output(format!("failed to write output: {error}"))
+            })?;
+            Ok(())
+        }
     }
 }
 
@@ -371,6 +452,14 @@ mod tests {
         assert_eq!(
             AnimationFormat::from_path(Path::new("out.GIF")).unwrap(),
             AnimationFormat::Gif
+        );
+        assert_eq!(
+            AnimationFormat::from_path(Path::new("out.APNG")).unwrap(),
+            AnimationFormat::Apng
+        );
+        assert_eq!(
+            AnimationFormat::from_path(Path::new("out.AVIF")).unwrap(),
+            AnimationFormat::Avif
         );
     }
 
@@ -535,6 +624,75 @@ mod tests {
                     .as_raw()
             );
         }
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn apng_encoder_writes_frames_dimensions_and_animation_metadata() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 4, 1.0).unwrap();
+        let path =
+            std::env::temp_dir().join(format!("eidolon-output-apng-{}.apng", std::process::id()));
+        write_animation(
+            &path,
+            AnimationFormat::Apng,
+            (2, 2),
+            &schedule,
+            2,
+            &mut indexed_rgba_frame,
+        )
+        .unwrap();
+
+        let file = fs::File::open(&path).unwrap();
+        let decoder = png::Decoder::new(file);
+        let mut reader = decoder.read_info().unwrap();
+        assert_eq!(reader.info().size(), (2, 2));
+        assert!(reader.info().is_animated());
+        let actl = reader.info().animation_control().unwrap();
+        assert_eq!(actl.num_frames, 4);
+        assert_eq!(actl.num_plays, 2);
+
+        let mut frame_count = 0;
+        let mut buf = vec![0u8; reader.output_buffer_size()];
+        while let Ok(info) = reader.next_frame(&mut buf) {
+            assert_eq!(info.width, 2);
+            assert_eq!(info.height, 2);
+            assert_eq!(
+                &buf[..info.buffer_size()],
+                indexed_rgba_frame(Duration::from_millis(frame_count as u64 * 250))
+                    .unwrap()
+                    .as_raw()
+            );
+            frame_count += 1;
+            if frame_count == 4 {
+                break;
+            }
+        }
+        assert_eq!(frame_count, 4);
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn avif_encoder_writes_valid_animation() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 4, 1.0).unwrap();
+        let path =
+            std::env::temp_dir().join(format!("eidolon-output-avif-{}.avif", std::process::id()));
+        write_animation(
+            &path,
+            AnimationFormat::Avif,
+            (64, 64),
+            &schedule,
+            0,
+            &mut |_| Ok(RgbaImage::new(64, 64)),
+        )
+        .unwrap();
+
+        let encoded = fs::read(&path).unwrap();
+        assert!(!encoded.is_empty());
+        // Verify AVIF container signature (ftyp box with avif/avis brand)
+        assert!(encoded.len() > 12);
+        assert_eq!(&encoded[4..8], b"ftyp");
         fs::remove_file(path).ok();
     }
 }

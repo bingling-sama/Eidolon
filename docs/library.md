@@ -50,7 +50,7 @@ Key points:
 - Cloning a `Character`, `Body`, or `BackEquipmentAtlas` shares immutable GPU resources. Resources can only be rendered by the `Renderer` that loaded them; load them again for another Renderer.
 - `Camera::new()` defaults: yaw 180° (front view), pitch 90° (level), scale 1.0.
 - `StaticFormat` supports `Png` and `WebP`. `OutputIntent` makes the requested format explicit; the output module normalizes the filename extension and returns the final path.
-- `AnimationFormat` supports `Gif` and animated `WebP`. `OutputIntent::Animation` accepts an `AnimationPreset`, FPS, speed multiplier, loop count, and frame producer, then returns the final path.
+- `AnimationFormat` supports `Gif`, animated `WebP`, `Apng`, and `Avif`. `OutputIntent::Animation` accepts an `AnimationPreset`, FPS, speed multiplier, loop count, and frame producer, then returns the final path.
 
 ## Error Handling
 

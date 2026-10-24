@@ -51,7 +51,7 @@ cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.p
 
 ### Render an Animation
 
-Add `--animate` and use a `.gif` or `.webp` output path:
+Add `--animate` and use a `.gif`, `.webp`, `.apng`, or `.avif` output path:
 
 ```bash
 cargo run -- render resources/bingling_sama.png walk.gif --animate --posture walk

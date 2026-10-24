@@ -15,7 +15,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | Arg | Description | Default |
 |-----|-------------|---------|
 | `<SKIN>` | Path to the skin PNG file | *(required)* |
-| `[OUTPUT]` | Output path. Static: `.png`/`.webp`; animated: `.gif`/`.webp` | `output.png`, or `output.webp` with `--animate` |
+| `[OUTPUT]` | Output path. Static: `.png`/`.webp`; animated: `.gif`/`.webp`/`.apng`/`.avif` | `output.png`, or `output.webp` with `--animate` |
 
 **Options:**
 
@@ -89,20 +89,22 @@ eidolon render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2
 # Override individual joints on top of a posture preset
 eidolon render skin.png --posture walk --head-pitch 15 --left-arm-roll 30
 
-# Animated GIF and lossless Animated WebP
+# Animated exports (GIF, Animated WebP, APNG, AVIF)
 eidolon render skin.png walk.gif --animate --posture walk
 eidolon render skin.png fly.webp --animate --posture fly --elytra cape.png --fps 60 --speed 1.5
 eidolon render skin.png wave.gif --animate --posture wave --loop-count 3 --width 512 --height 512
+eidolon render skin.png run.apng --animate --posture run
+eidolon render skin.png dance.avif --animate --posture dance
 ```
 
-Format is inferred from the output filename extension. `output.png` → PNG, `output.webp` → WebP.
+Format is inferred from the output filename extension. Static output supports PNG (`.png`) and WebP (`.webp`). Animated output supports GIF (`.gif`), WebP (`.webp`), APNG (`.apng`), and AVIF (`.avif`).
 The output path must not contain `..` components (directory traversal is rejected).
 
 `--posture` uses exactly the `AnimationPreset` names and is shared by static rendering, animated
 rendering, and preview. Static rendering samples a representative frame; Walk and Run use the
 quarter-cycle frame, while the other actions use phase zero. With `--animate`, explicit joint,
 Cape, and Elytra overrides are applied after every sample. Animated WebP preserves full alpha and
-uses lossless encoding; GIF uses a 256-color RGBA quantization path. Animated output dimensions
+uses lossless encoding; APNG preserves 8-bit RGBA frames losslessly; AVIF encodes animated AV1 frames with alpha; GIF uses a 256-color RGBA quantization path. Animated output dimensions
 must not exceed 2048×2048.
 
 ## Preview

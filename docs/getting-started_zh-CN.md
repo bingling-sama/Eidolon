@@ -41,7 +41,7 @@ cargo run -- render resources/bingling_sama.png --elytra resources/Turtle_Cape.p
 
 ### 渲染动画
 
-添加 `--animate`，并使用 `.gif` 或 `.webp` 输出路径：
+添加 `--animate`，并使用 `.gif`、`.webp`、`.apng` 或 `.avif` 输出路径：
 
 ```bash
 cargo run -- render resources/bingling_sama.png walk.gif --animate --posture walk
