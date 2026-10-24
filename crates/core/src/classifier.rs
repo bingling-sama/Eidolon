@@ -158,20 +158,18 @@ fn classify_2_to_1_texture(image: &DynamicImage, scale: u32) -> TextureKind {
     //   Cape is at [0..22, 0..17]
     //   Elytra is at [22..46, 0..22]
     //   Area x in [46..64], y in [0..32] is COMPLETELY EMPTY in capes/elytra!
-    let skin_right_arm_has_pixels = region_has_opaque_pixels(image, 46 * scale, 18 * scale, 64 * scale, 32 * scale);
+    let skin_right_arm_has_pixels =
+        region_has_opaque_pixels(image, 46 * scale, 18 * scale, 64 * scale, 32 * scale);
 
-    // 2. Torso front / back (x in [20..36], y in [20..32])
-    let skin_torso_has_pixels = region_has_opaque_pixels(image, 20 * scale, 20 * scale, 36 * scale, 32 * scale);
+    // 2. Elytra wing main region: x in [22..46], y in [0..22]
+    let elytra_region_has_pixels =
+        region_has_opaque_pixels(image, 23 * scale, 2 * scale, 45 * scale, 22 * scale);
 
-    // 3. Elytra wing main region: x in [22..46], y in [0..22]
-    let elytra_region_has_pixels = region_has_opaque_pixels(image, 23 * scale, 2 * scale, 45 * scale, 22 * scale);
+    // 3. Cape main body: x in [0..22], y in [0..17]
+    let cape_body_has_pixels =
+        region_has_opaque_pixels(image, scale, scale, 21 * scale, 16 * scale);
 
-    // 4. Cape main body: x in [0..22], y in [0..17]
-    let cape_body_has_pixels = region_has_opaque_pixels(image, 1 * scale, 1 * scale, 21 * scale, 16 * scale);
-
-    if skin_right_arm_has_pixels && skin_torso_has_pixels {
-        TextureKind::SkinSingleLayer
-    } else if skin_right_arm_has_pixels {
+    if skin_right_arm_has_pixels {
         TextureKind::SkinSingleLayer
     } else if elytra_region_has_pixels && cape_body_has_pixels {
         // Modern Minecraft cape atlas contains BOTH cape texture at [0..22, 0..17]

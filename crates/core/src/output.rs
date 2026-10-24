@@ -389,7 +389,9 @@ fn write_animation(
 
                 let raw = image.into_raw();
                 let rgba_vec: Vec<RGBA8> = raw
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
                     .collect();
                 frames_data.push(rgba_vec);

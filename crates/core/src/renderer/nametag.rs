@@ -171,7 +171,7 @@ pub(crate) fn rasterize_nametag(text: &str) -> Option<NametagImage> {
     let width = (caret.ceil() as u32 + HORIZONTAL_PADDING + SHADOW_OFFSET).max(1);
     let height = (FONT_HEIGHT.ceil() as u32 + VERTICAL_PADDING * 2 + SHADOW_OFFSET).max(1);
     let mut rgba = vec![0; (width * height * 4) as usize];
-    for pixel in rgba.chunks_exact_mut(4) {
+    for pixel in rgba.as_chunks_mut::<4>().0 {
         pixel.copy_from_slice(&[0, 0, 0, 64]);
     }
 
@@ -320,16 +320,22 @@ mod tests {
         assert!(image.width > image.height);
         assert!(image
             .rgba
-            .chunks_exact(4)
-            .any(|pixel| pixel == [0, 0, 0, 64]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel == &[0, 0, 0, 64]));
         assert!(image
             .rgba
-            .chunks_exact(4)
-            .any(|pixel| pixel == [255, 255, 255, 255]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel == &[255, 255, 255, 255]));
         assert!(image
             .rgba
-            .chunks_exact(4)
-            .any(|pixel| pixel == [63, 63, 63, 255]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel == &[63, 63, 63, 255]));
     }
 
     #[test]
@@ -338,12 +344,16 @@ mod tests {
         assert!(image.width > image.height);
         assert!(image
             .rgba
-            .chunks_exact(4)
-            .any(|pixel| pixel == [255, 255, 255, 255]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel == &[255, 255, 255, 255]));
         assert!(image
             .rgba
-            .chunks_exact(4)
-            .any(|pixel| pixel == [63, 63, 63, 255]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel == &[63, 63, 63, 255]));
     }
 
     #[test]

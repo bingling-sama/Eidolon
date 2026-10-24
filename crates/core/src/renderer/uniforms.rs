@@ -73,7 +73,7 @@ pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32, PartId); BODY_PART_COUNT] =
 ///
 /// The mapping is derived from the `PartId` in PART_CONFIGS — no
 /// separate hardcoded order to maintain.
-pub(crate) fn body_part_ref<'a>(i: usize, model: &'a Model) -> &'a BodyPart {
+pub(crate) fn body_part_ref(i: usize, model: &Model) -> &BodyPart {
     match PART_CONFIGS[i].2 {
         PartId::Head => &model.head,
         PartId::RightArm => &model.right_arm,

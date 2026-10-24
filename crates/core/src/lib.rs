@@ -8,6 +8,8 @@ Provides:
 - Headless image output (PNG / WebP / GIF / Animated WebP) and windowed preview
 */
 
+#![cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
+
 pub mod animation;
 pub mod assets;
 pub mod back_equipment;

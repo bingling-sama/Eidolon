@@ -70,7 +70,10 @@ pub fn single2double(img: &DynamicImage) -> Result<DynamicImage, EidolonError> {
         }
     }
 
-    const REGION_PAIRS: &[((u32, u32, u32, u32), (u32, u32, u32, u32))] = &[
+    type Region = (u32, u32, u32, u32);
+    type RegionPair = (Region, Region);
+
+    const REGION_PAIRS: &[RegionPair] = &[
         // Right leg parts → left leg positions
         (RIGHT_LEG_OUTSIDE_RANGE, LEFT_LEG_OUTSIDE_RANGE),
         (RIGHT_LEG_TOP_FRONT_RANGE, LEFT_LEG_TOP_FRONT_RANGE),
