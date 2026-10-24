@@ -9,9 +9,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use eidolon::camera::Camera;
-use eidolon::character::{Character, Posture, SkinType};
-use eidolon::renderer::Renderer;
+use eidolon_core::camera::Camera;
+use eidolon_core::character::{Character, Posture, SkinType};
+use eidolon_core::renderer::Renderer;
 
 /// Golden pixel hash — update when rendering changes intentionally.
 ///

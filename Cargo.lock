@@ -719,25 +719,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "eidolon-example"
-version = "0.0.0"
+name = "eidolon-cli"
+version = "0.0.1-alpha"
 dependencies = [
- "eidolonmc",
+ "cgmath",
+ "clap",
+ "eidolon-core",
  "env_logger",
+ "log",
+ "pollster",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]
-name = "eidolonmc"
+name = "eidolon-core"
 version = "0.0.1-alpha"
 dependencies = [
  "ab_glyph",
  "bytemuck",
  "cgmath",
- "clap",
- "console_error_panic_hook",
- "console_log",
  "criterion",
- "env_logger",
  "futures-channel",
  "getrandom 0.3.3",
  "gif",
@@ -746,13 +748,33 @@ dependencies = [
  "png",
  "pollster",
  "tobj",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
  "webp-animation",
  "wgpu",
  "winit",
  "zenravif",
+]
+
+[[package]]
+name = "eidolon-example"
+version = "0.0.0"
+dependencies = [
+ "eidolon-core",
+ "env_logger",
+]
+
+[[package]]
+name = "eidolon-wasm"
+version = "0.0.1-alpha"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "eidolon-core",
+ "image",
+ "log",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]

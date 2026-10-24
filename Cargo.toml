@@ -1,63 +1,13 @@
 [workspace]
-members = [".", "examples/rust"]
+members = [
+    "crates/core",
+    "examples/rust",
+]
+resolver = "2"
 
-[package]
-name = "eidolonmc"
+[workspace.package]
 version = "0.0.1-alpha"
-description = "A Minecraft skin off-screen renderer written in Rust"
 edition = "2021"
 license-file = "LICENSE"
 homepage = "https://github.com/bingling-sama/eidolon"
 repository = "https://github.com/bingling-sama/eidolon"
-
-[lib]
-name = "eidolon"
-path = "src/lib.rs"
-crate-type = ["rlib", "cdylib"]
-
-[[bin]]
-name = "eidolon"
-path = "src/main.rs"
-
-[[bench]]
-name = "performance_benchmark"
-harness = false
-
-[features]
-wasm = [
-    "dep:console_log",
-    "dep:wasm-bindgen",
-    "dep:wasm-bindgen-futures",
-    "dep:web-sys",
-]
-
-[dependencies]
-ab_glyph = "0.2"
-clap = { version = "4.5", features = ["derive"] }
-log = "0.4"
-wgpu = "25"
-winit = "0.30"
-pollster = "0.4"
-bytemuck = { version = "1", features = ["derive"] }
-image = "0.25.5"
-cgmath = "0.18.0"
-tobj = "4.0.2"
-env_logger = "0.11"
-wasm-bindgen-futures = { version = "0.4", optional = true }
-console_log = { version = "1", optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
-web-sys = { version = "0.3", features = ["HtmlCanvasElement"], optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.7"
-futures-channel = "0.3"
-getrandom = { version = "0.3", features = ["wasm_js"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-gif = "0.13.3"
-webp-animation = "0.10.0"
-png = "0.17"
-zenravif = { version = "0.1.3", default-features = false, features = ["threading"] }
-
-[dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }

@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use eidolon::{
+use eidolon_core::{
     animation::AnimationPreset,
     camera::Camera,
     character::{Character, SkinType},

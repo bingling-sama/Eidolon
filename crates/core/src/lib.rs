@@ -22,5 +22,3 @@ pub mod model;
 pub mod output;
 pub mod renderer;
 mod texture;
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub mod wasm;

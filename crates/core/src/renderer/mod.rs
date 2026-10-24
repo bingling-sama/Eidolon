@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use image::{ImageBuffer, Rgba};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
 use winit::window::Window;
 
 use crate::back_equipment::{BackEquipmentAtlas, BackEquipmentKind};
@@ -92,7 +92,7 @@ impl Renderer {
     }
 
     /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
     pub fn new_windowed(window: Arc<Window>) -> Result<Self, EidolonError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),

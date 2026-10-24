@@ -10,8 +10,8 @@ use crate::texture::Texture;
 
 use super::uniforms::{compute_base_model_matrix, Uniforms};
 
-const PRIMARY_FONT_BYTES: &[u8] = include_bytes!("../../resources/minecraft.ttf");
-const FALLBACK_FONT_BYTES: &[u8] = include_bytes!("../../resources/unifont.otf");
+const PRIMARY_FONT_BYTES: &[u8] = include_bytes!("../../../../resources/minecraft.ttf");
+const FALLBACK_FONT_BYTES: &[u8] = include_bytes!("../../../../resources/unifont.otf");
 const FONT_HEIGHT: f32 = 16.0;
 const HORIZONTAL_PADDING: u32 = 4;
 const VERTICAL_PADDING: u32 = 2;

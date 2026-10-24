@@ -5,12 +5,12 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use eidolon::back_equipment::{BackEquipment, BackEquipmentKind};
-use eidolon::camera::Camera;
-use eidolon::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
-use eidolon::model::Model;
-use eidolon::output::{write_output, OutputIntent, StaticFormat};
-use eidolon::renderer::Renderer;
+use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
+use eidolon_core::camera::Camera;
+use eidolon_core::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
+use eidolon_core::model::Model;
+use eidolon_core::output::{write_output, OutputIntent, StaticFormat};
+use eidolon_core::renderer::Renderer;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
