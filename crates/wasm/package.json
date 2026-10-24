@@ -1,0 +1,28 @@
+{
+  "name": "@eidolonmc/wasm",
+  "version": "0.0.1-alpha",
+  "description": "WebAssembly bindings for Eidolon Minecraft skin renderer",
+  "type": "module",
+  "main": "./pkg/eidolon.js",
+  "types": "./pkg/eidolon.d.ts",
+  "exports": {
+    ".": {
+      "types": "./pkg/eidolon.d.ts",
+      "import": "./pkg/eidolon.js",
+      "default": "./pkg/eidolon.js"
+    }
+  },
+  "files": [
+    "pkg/eidolon_bg.wasm",
+    "pkg/eidolon_bg.wasm.d.ts",
+    "pkg/eidolon.js",
+    "pkg/eidolon.d.ts",
+    "pkg/package.json"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target bundler --out-dir pkg",
+    "build:dev": "wasm-pack build --dev --target bundler --out-dir pkg",
+    "build:web": "wasm-pack build --target web --out-dir pkg/web"
+  },
+  "license": "MIT"
+}

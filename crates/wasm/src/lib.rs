@@ -1,13 +1,15 @@
 //! WASM bindings for Eidolon via WebGPU.
 //!
-//! Build with `wasm-pack build --target bundler --features wasm`, then import from JS.
+//! Build with `wasm-pack build --target bundler`, then import from JS.
 //! Requires a browser with WebGPU support (Chrome 113+, Edge 113+, Firefox Nightly).
 
-use crate::animation::{AnimationPreset, AnimationTimeline, LoopMode};
-use crate::back_equipment::{BackEquipment, BackEquipmentKind};
-use crate::camera::Camera;
-use crate::character::{Character, DefaultPostures, Posture, SkinType};
-use crate::renderer::Renderer;
+#![cfg(target_arch = "wasm32")]
+
+use eidolon_core::animation::{AnimationPreset, AnimationTimeline, LoopMode};
+use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
+use eidolon_core::camera::Camera;
+use eidolon_core::character::{Character, DefaultPostures, Posture, SkinType};
+use eidolon_core::renderer::Renderer;
 use image::ImageFormat;
 use std::io::Cursor;
 use std::time::Duration;
@@ -521,7 +523,8 @@ impl JsTextureReport {
 #[wasm_bindgen]
 pub fn inspect_texture(bytes: &[u8]) -> Result<JsTextureReport, JsValue> {
     let rep =
-        crate::classifier::inspect_texture(bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        eidolon_core::classifier::inspect_texture(bytes)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(JsTextureReport {
         kind: rep.kind.as_str().to_string(),
         width: rep.width,
