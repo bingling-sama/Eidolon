@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use eidolon::{
+use eidolon_core::{
     animation::{AnimationPreset, AnimationTimeline},
     assets::RawSkin,
     back_equipment::{BackEquipment, BackEquipmentKind},
@@ -1783,7 +1783,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     format!("failed to read '{}': {}", texture.display(), e),
                 )) as Box<dyn std::error::Error>
             })?;
-            let report = eidolon::classifier::inspect_texture(&bytes).map_err(|e| {
+            let report = eidolon_core::classifier::inspect_texture(&bytes).map_err(|e| {
                 Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
             })?;
 
