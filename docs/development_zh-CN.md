@@ -16,27 +16,32 @@ cargo build
 
 ```bash
 cargo fmt --check
-cargo clippy --all-targets --all-features
-cargo test
-cargo run -- render --skin-type classic
-cargo run -- preview --skin-type classic
-cargo bench
+cargo clippy --workspace --all-targets --all-features
+cargo test -p eidolon-core --lib -- --test-threads=1
+cargo test -p eidolon-cli
+cargo run -- render resources/bingling_sama.png
+cargo run -- preview resources/bingling_sama.png
+cargo bench -p eidolon-core
+pnpm --dir examples/wasm run test:e2e
 ```
 
 `cargo bench` 会把基准测试渲染输出写入 `.bench/`。
 
 ## 测试说明
 
-当前测试主要覆盖 `src/utils/converter.rs` 中的皮肤图集转换逻辑。渲染路径会初始化真实的
-`wgpu` adapter，因此依赖机器图形环境，更适合用 smoke test 验证：
+- **核心库单元测试** (`crates/core`)：包含 107 个单元测试，全面覆盖相机矩阵计算、皮肤图集转换、纹理分析与格式分类、动画预设与时间轴播放、nametag 光栅化、模型加载与多格式输出编码。使用 `cargo test -p eidolon-core --lib -- --test-threads=1` 运行。
+- **CLI 参数测试** (`crates/cli`)：包含 55 个针对命令行参数解析、默认值及子命令选项的自动化测试。使用 `cargo test -p eidolon-cli` 运行。
+- **WASM 浏览器端 E2E 测试** (`examples/wasm`)：包含 13 个 Playwright 端到端测试，验证真实浏览器中 WebGPU 画布呈现、动画循环、响应式控件与多格式导出。使用 `pnpm --dir examples/wasm run test:e2e` 运行。
+
+可以使用命令行进行手动 smoke test：
 
 ```bash
-cargo run -- render --skin-type classic --filename output.png
-cargo run -- render --skin-type slim --texture resources/bingling_sama.png --format webp
+cargo run -- render resources/bingling_sama.png
+cargo run -- render resources/bingling_sama.png out.webp --slim --posture wave
+cargo run -- identify resources/bingling_sama.png
 ```
 
-修改渲染行为时，建议对比修改前后的输出图片。`resources/` 中的示例资源覆盖 classic、slim
-几何，以及单层皮肤转换。
+修改渲染行为时，建议对比修改前后的输出图片。`resources/` 中的示例资源覆盖 classic、slim 几何，以及单层皮肤转换。
 
 ## 添加资源
 
@@ -44,7 +49,7 @@ cargo run -- render --skin-type slim --texture resources/bingling_sama.png --for
 
 - 使用 PNG。
 - 使用正方形双层皮肤，例如 `64x64`；或旧版单层皮肤，即 `width == height * 2`，例如 `64x32`。
-- 根据皮肤手臂宽度传入匹配的 `--skin-type`。
+- 纤细手臂（Alex 风格，3px）添加 `--slim` 参数，经典手臂（Steve 风格，4px）省略即可。
 
 OBJ 模型：
 

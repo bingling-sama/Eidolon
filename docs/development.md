@@ -17,27 +17,29 @@ root unless you pass absolute paths.
 
 ```bash
 cargo fmt --check
-cargo clippy --all-targets --all-features
-cargo test
+cargo clippy --workspace --all-targets --all-features
+cargo test -p eidolon-core --lib -- --test-threads=1
+cargo test -p eidolon-cli
 cargo run -- render resources/bingling_sama.png
 cargo run -- preview resources/bingling_sama.png
-cargo bench
+cargo bench -p eidolon-core
+pnpm --dir examples/wasm run test:e2e
 ```
 
 `cargo bench` writes rendered benchmark output under `.bench/`.
 
 ## Testing Notes
 
-Unit tests cover:
-- Camera matrix computation (`src/camera.rs`) — 4 tests
-- Skin converter (`src/converter.rs`) — 5 tests
+- **Core Engine Unit Tests** (`crates/core`): 107 unit tests covering camera matrix computation, skin conversion, texture inspection/classification, animation presets and timelines, nametag rasterization, model loading, and output encoding. Run with `cargo test -p eidolon-core --lib -- --test-threads=1`.
+- **CLI Tests** (`crates/cli`): 55 integration tests verifying argument parsing, default options, and subcommand flags. Run with `cargo test -p eidolon-cli`.
+- **WASM Browser E2E Tests** (`examples/wasm`): 13 Playwright tests verifying WebGPU canvas rendering, playback, responsive controls, and format export in a browser environment. Run with `pnpm --dir examples/wasm run test:e2e`.
 
-Model loading tests are `#[ignore]` — they require a GPU adapter. Rendering integration tests
-are in `tests/` and are also `#[ignore]`. Smoke-test rendering manually:
+Smoke-test rendering manually:
 
 ```bash
 cargo run -- render resources/bingling_sama.png
 cargo run -- render resources/bingling_sama.png out.webp --slim --posture wave
+cargo run -- identify resources/bingling_sama.png
 ```
 
 When changing rendering behavior, compare output images before and after the change. The sample

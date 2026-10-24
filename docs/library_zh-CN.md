@@ -1,17 +1,24 @@
 # 作为库使用
 
-Eidolon 可以作为 Rust 库使用。包名为 `eidolonmc`，库 crate 名为 `eidolon`。
+Eidolon 可以作为 Rust 库使用。核心渲染引擎由 `eidolon-core` 提供（库 crate 名为 `eidolon_core`）。
 
 ## 添加依赖
 
-本地开发可使用 path 依赖：
+本地开发或在 Monorepo 内使用 path 依赖：
 
 ```toml
 [dependencies]
-eidolonmc = { path = "../eidolon" }
+eidolon_core = { path = "crates/core" }
 ```
 
-然后以 `eidolon` 引入库。
+或别名为 `eidolon`：
+
+```toml
+[dependencies]
+eidolon = { package = "eidolon-core", path = "crates/core" }
+```
+
+然后以 `eidolon`（或 `eidolon_core`）引入库。
 
 ## 最小示例
 
@@ -141,3 +148,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## 皮肤转换
+
+无需初始化渲染器即可将旧版单层皮肤转换为双层皮肤：
+
+```rust
+use eidolon::converter;
+
+let img = image::open("old_skin.png")?;
+let double_layer = converter::single2double(&img)?;
+double_layer.save("new_skin.png")?;
+```
+
+输入图像必须满足 `width == height * 2`（如 64×32）。输入不合法时返回 `EidolonError::Conversion`。
+
+## 纹理检测与分类
+
+从图片字节自动识别并分类 Minecraft 皮肤、披风或鞘翅纹理：
+
+```rust
+use eidolon::classifier::{inspect_texture, TextureKind};
+
+let bytes = std::fs::read("skin.png")?;
+let report = inspect_texture(&bytes)?;
+
+println!("检测类型: {}", report.kind.as_str());
+println!("尺寸: {}x{}", report.width, report.height);
+println!("高清倍率: {}x (is_hd={})", report.hd_scale, report.is_hd);
+println!("是否支持自动升级为双层: {}", report.can_auto_upgrade);
+```
+
+支持类型包括 `SkinDoubleLayer`、`SkinSingleLayer`、`Cape`、`Elytra`、`CapeAndElytra` 及 `Unknown`。

@@ -1,17 +1,24 @@
 # Library Usage
 
-Eidolon can be used as a Rust library. The package name is `eidolonmc`, and the library crate name is `eidolon`.
+Eidolon can be used as a Rust library. The core rendering engine is provided by the `eidolon-core` package (library crate name `eidolon_core`).
 
 ## Add Dependency
 
-For local development, use a path dependency:
+For local development or within this monorepo, add a path dependency:
 
 ```toml
 [dependencies]
-eidolonmc = { path = "../eidolon" }
+eidolon_core = { path = "crates/core" }
 ```
 
-Then import the library crate as `eidolon`.
+Or alias it to `eidolon`:
+
+```toml
+[dependencies]
+eidolon = { package = "eidolon-core", path = "crates/core" }
+```
+
+Then import types from `eidolon` (or `eidolon_core`).
 
 ## Minimal Example
 
@@ -182,6 +189,24 @@ double_layer.save("new_skin.png")?;
 ```
 
 The input must have `width == height * 2` (e.g., 64×32). Returns `EidolonError::Conversion` on invalid input.
+
+## Texture Inspection & Classification
+
+Inspect and classify Minecraft skin, cape, or elytra textures from image bytes:
+
+```rust
+use eidolon::classifier::{inspect_texture, TextureKind};
+
+let bytes = std::fs::read("skin.png")?;
+let report = inspect_texture(&bytes)?;
+
+println!("Detected kind: {}", report.kind.as_str());
+println!("Dimensions: {}x{}", report.width, report.height);
+println!("HD scale: {}x (is_hd={})", report.hd_scale, report.is_hd);
+println!("Can auto-upgrade: {}", report.can_auto_upgrade);
+```
+
+Supported kinds include `SkinDoubleLayer`, `SkinSingleLayer`, `Cape`, `Elytra`, `CapeAndElytra`, and `Unknown`.
 
 ## Windowed Preview
 

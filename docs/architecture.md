@@ -6,44 +6,48 @@ model loading, frame rendering, and rendered-output policy.
 
 ## Workspace Layout
 
-Eidolon is structured as a Cargo + npm monorepo:
+Eidolon is structured as a Cargo + pnpm monorepo:
 
 - `crates/core` (`eidolon-core`): Pure rendering engine library.
   - `src/lib.rs` exposes core modules: `animation`, `assets`, `back_equipment`, `body`, `camera`, `character`, `classifier`, `constants`, `converter`, `error`, `model`, `output`, `renderer`.
   - `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline` playback, and deterministic `AnimationSchedule` frame times.
+  - `src/classifier.rs` provides texture inspection, HD scale detection, and auto-classification (`inspect_texture`, `classify_texture`).
   - `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing (PNG, WebP, GIF, APNG, AVIF).
-  - `src/renderer/` contains the shared `wgpu` renderer and nametag rasterization.
+  - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
+  - `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
+  - `src/back_equipment.rs` defines the shared Back equipment atlas and Cape/Elytra presentation.
+  - `src/camera.rs` computes view and projection matrices for an orbit camera.
+  - `src/character.rs` defines resource ownership, posture presets (0° = neutral for all joints), and character transforms. A Character always contains a Body or Back equipment.
+  - `src/model.rs` loads the classic and slim OBJ meshes from `resources/`. Supports loading from file path or in-memory bytes.
+  - `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
+  - Private `src/cape.rs` and `src/elytra.rs` build Renderer-owned geometry using skinview3d atlas mappings.
+  - Private `src/texture.rs` uploads PNG atlases and expands legacy single-layer Skins when required.
+  - `src/renderer/` contains the shared `wgpu` renderer split into submodules:
+    - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
+    - `nametag.rs` — Minecraft / Unifont text rasterization, cached label geometry, and billboard transforms.
+    - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
+    - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
+    - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.
+  - `benches/performance_benchmark.rs` renders a fixed batch of images for Criterion benchmarks.
 - `crates/cli` (`eidolon-cli`): Command line interface binary (`eidolon`).
-  - `src/main.rs` defines the CLI commands (`render`, `preview`, `convert`, `identify`) and desktop preview loop.
+  - `src/main.rs`: Lightweight 31-line entry point initializing logger and dispatching parsed CLI subcommands.
+  - `src/args.rs`: Clap argument structs and enums (`Cli`, `Command`, `SceneArgs`, `ViewportArgs`, `RenderAnimationArgs`).
+  - `src/commands.rs`: Execution handlers for `render`, `convert`, and `identify` subcommands.
+  - `src/preview.rs`: Desktop interactive window loop with `winit` and `wgpu` surface presentation.
+  - `src/scene.rs`: Shared scene state resolution, posture overrides, and camera computation.
 - `crates/wasm` (`eidolon-wasm`): WebAssembly bindings and `@eidolonmc/wasm` npm package.
-  - `src/lib.rs` exposes `CanvasRenderer` and `inspect_texture` to JavaScript via `wasm-bindgen`.
+  - `src/lib.rs`: WASM entry point, logger and panic hook initialization, public re-exports.
+  - `src/classifier.rs`: `inspect_texture` JS binding returning `JsTextureReport`.
+  - `src/renderer.rs`: `CanvasRenderer` real-time WebGPU canvas presenter, animation controls, and offscreen frame capture.
 - `examples/rust`: Standalone Rust usage examples depending on `eidolon-core`.
 - `examples/wasm`: Web studio application consuming `@eidolonmc/wasm`.
-- `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
-- `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
-- `src/back_equipment.rs` defines the shared Back equipment atlas and Cape/Elytra presentation.
-- `src/camera.rs` computes view and projection matrices for an orbit camera.
-- Private `src/cape.rs` and `src/elytra.rs` build Renderer-owned geometry using skinview3d atlas mappings.
-- `src/character.rs` defines resource ownership, posture presets (0° = neutral for all joints),
-  and character transforms. A Character always contains a Body or Back equipment.
-- `src/model.rs` loads the classic and slim OBJ meshes from `resources/`. Supports loading from
-  file path or in-memory bytes.
-- Private `src/texture.rs` uploads PNG atlases and expands legacy single-layer Skins when required.
-- `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
-- `src/renderer/` contains the shared `wgpu` renderer split into submodules:
-  - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
-  - `nametag.rs` — Minecraft / Unifont text rasterization, cached label geometry, and billboard transforms.
-  - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
-  - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
-  - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.
-- `benches/performance_benchmark.rs` renders a fixed batch of images for Criterion benchmarks.
 
 ## Render Flow
 
 For `cargo run -- render skin.png`, the flow is:
 
-1. `src/main.rs` parses CLI options into `SceneArgs`.
-2. `scene_state_and_camera_from_scene` resolves resource-independent scene state and a `Camera`.
+1. `crates/cli/src/main.rs` and `args.rs` parse CLI arguments into `Command::Render`.
+2. `commands.rs` calls `scene::scene_state_and_camera_from_scene` to resolve resource-independent scene state and a `Camera`.
 3. `Renderer::new` creates a headless `wgpu` device, queue, render pipeline, and loads both OBJ
    model variants.
 4. `Renderer::load_body` reads the PNG Skin, converts a legacy atlas when needed, uploads it, and

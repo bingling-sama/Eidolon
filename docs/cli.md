@@ -1,6 +1,6 @@
 # Command Line Reference
 
-Eidolon ships a single binary with three subcommands: `render`, `preview`, and `convert`.
+Eidolon ships a single binary with four subcommands: `render`, `preview`, `convert`, and `identify`.
 
 ## Render
 
@@ -150,6 +150,40 @@ eidolon convert <INPUT> [OUTPUT]
 
 ```bash
 eidolon convert old_skin.png new_skin.png
+```
+
+## Identify
+
+Inspect and classify a Minecraft texture (skin, cape, elytra) and check if it is HD or eligible for auto-upgrade.
+
+```bash
+eidolon identify [OPTIONS] <TEXTURE>
+```
+
+| Arg / Flag | Description | Default |
+|------------|-------------|---------|
+| `<TEXTURE>` | Path to the texture PNG image | *(required)* |
+| `--json` | Output the inspection report as JSON | *(human-readable text)* |
+
+### Example
+
+```bash
+eidolon identify resources/bingling_sama.png
+```
+
+Sample output:
+```text
+File: resources/bingling_sama.png
+Kind: SkinDoubleLayer
+Dimensions: 64x64
+HD: false (scale 1x)
+Auto-upgradeable: false
+Description: Modern 1.8+ double-layer player skin (standard resolution)
+```
+
+JSON output:
+```bash
+eidolon identify resources/bingling_sama.png --json
 ```
 
 ## Help

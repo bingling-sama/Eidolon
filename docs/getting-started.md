@@ -89,6 +89,14 @@ Legacy single-layer skins such as 64×32 can be converted to a square double-lay
 cargo run -- convert resources/SSSSSteven.png converted.png
 ```
 
+## Identify a Texture
+
+Detect the texture format and whether it is a modern/legacy skin, cape, or elytra:
+
+```bash
+cargo run -- identify resources/bingling_sama.png
+```
+
 ## Notes
 
 - Single-layer skins (width = 2 × height) are automatically expanded to double-layer on load.

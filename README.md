@@ -10,13 +10,14 @@ Eidolon is a Minecraft skin renderer written in Rust. It can render a 3D model o
 
 - Load and render Minecraft player models
 - Texture mapping support
-- 3D rendering with wgpu (Vulkan / Metal / DX12)
-- Save static PNG/WebP or animated GIF/WebP output
+- 3D rendering with wgpu (Vulkan / Metal / DX12 / WebGPU)
+- Save static PNG/WebP or animated GIF/WebP/APNG/AVIF output
 - Configurable camera, poses, and output size
 - Minecraft-style nametags above player models
 - Cape and elytra back-equipment rendering
-- Headless off-screen rendering and windowed preview
-- Cross-platform: Windows, macOS, Linux
+- Texture inspection and auto-classification (skin/cape/elytra, HD detection)
+- Headless off-screen rendering, windowed desktop preview, and WebAssembly browser studio
+- Cross-platform: Windows, macOS, Linux, and Web (WASM)
 
 ## Documentation
 
@@ -74,7 +75,14 @@ More CLI options are documented in `docs/cli.md`.
 
 ## Library Usage
 
-Eidolon can be used as a Rust library. Minimal example:
+Eidolon can be used as a Rust library:
+
+```toml
+[dependencies]
+eidolon = { package = "eidolon-core", version = "0.0.1-alpha" }
+```
+
+Minimal example:
 
 ```rust
 use eidolon::{

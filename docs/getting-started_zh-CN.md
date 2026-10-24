@@ -76,6 +76,14 @@ cargo run -- preview resources/bingling_sama.png
 cargo run -- convert resources/SSSSSteven.png converted.png
 ```
 
+## 识别纹理类型
+
+分析并识别纹理是单/双层皮肤、披风还是鞘翅：
+
+```bash
+cargo run -- identify resources/bingling_sama.png
+```
+
 ## 说明
 
 - 单层皮肤（宽度 = 高度 × 2）在加载时会自动转换为双层。

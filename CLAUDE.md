@@ -23,11 +23,20 @@ cargo run -- preview resources/bingling_sama.png --slim
 # Convert single-layer → double-layer skin
 cargo run -- convert old_skin.png new_skin.png
 
-# Run tests
-cargo test
+# Identify / inspect texture format and HD status
+cargo run -- identify resources/bingling_sama.png
 
-# Run benchmarks (renders 20 images with varying camera angles → .bench/)
-cargo bench
+# Run core tests (use --test-threads=1 to prevent wgpu parallel test timeout)
+cargo test -p eidolon-core --lib -- --test-threads=1
+
+# Run CLI tests
+cargo test -p eidolon-cli
+
+# Run WASM Playwright E2E tests
+pnpm --dir examples/wasm run test:e2e
+
+# Run benchmarks
+cargo bench -p eidolon-core
 ```
 
 ## Environment
@@ -43,40 +52,64 @@ MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
 
 ## Architecture
 
-This is a **Minecraft skin off-screen renderer** — it loads a player skin PNG and 3D OBJ model, renders them via wgpu to an off-screen framebuffer, and writes static or animated PNG/WebP/GIF output.
+This is a **Minecraft skin off-screen renderer** structured as a Cargo + pnpm monorepo — it loads a player skin PNG and 3D OBJ model, renders them via wgpu to an off-screen framebuffer or canvas, and writes static or animated PNG/WebP/GIF/APNG/AVIF output.
 
-### Crate identity
+### Workspace packages
 
-- Crate name: `eidolonmc` (Cargo.toml `[package]`)
-- Library name: `eidolon` (Cargo.toml `[lib]`)
-- Bin name: `eidolon` (Cargo.toml `[[bin]]`)
+- **`crates/core`** (`eidolon-core`, lib `eidolon_core`): Pure rendering engine library.
+- **`crates/cli`** (`eidolon-cli`, bin `eidolon`): CLI binary supporting `render`, `preview`, `convert`, `identify`.
+- **`crates/wasm`** (`eidolon-wasm`, npm `@eidolonmc/wasm`): WebAssembly bindings for WebGPU in the browser.
+- **`examples/rust`** (`eidolon-example`): Standalone Rust examples consuming `eidolon-core`.
+- **`examples/wasm`**: Vite web studio application and Playwright E2E suite.
 
 ### Module layout
 
 ```
-src/
-├── lib.rs          # Re-exports all public modules
-├── main.rs         # CLI binary — clap with `render`, `preview`, and `convert` subcommands
-├── error.rs        # EidolonError — typed errors for the public API
-├── constants.rs    # WGSL vertex + fragment shaders
-├── animation.rs    # Preset sampling, playback timeline, and offline frame schedules
-├── camera.rs       # Camera: yaw/pitch/scale → view + projection matrices
-├── model.rs        # OBJ loader: parses named objects into BodyParts (main + layer meshes)
-├── body.rs         # Body: Renderer-bound Skin + classic/slim geometry selection
-├── back_equipment.rs # Shared atlas + Cape/Elytra presentation selection
-├── texture.rs      # Private PNG upload and single→double conversion
-├── converter.rs    # single2double(): mirrors right-leg/arm regions to left side
-├── character.rs    # Character: Body/Back equipment ownership, posture, position, rotation
-└── renderer/
-    ├── mod.rs      # Renderer: headless + windowed, shared pipeline
-    ├── pipeline.rs # Render pipeline creation from WGSL shader
-    ├── readback.rs # GPU → CPU buffer copy and RGBA mapping
-    └── uniforms.rs # Per-body-part uniform computation, PART_CONFIGS with PartId enum
+crates/
+├── core/
+│   ├── Cargo.toml
+│   ├── benches/performance_benchmark.rs
+│   └── src/
+│       ├── lib.rs            # Public re-exports
+│       ├── animation.rs      # Preset sampling, playback timeline, and offline frame schedules
+│       ├── assets.rs         # Low-level asset loaders and single2double conversion
+│       ├── back_equipment.rs # Shared atlas + Cape/Elytra presentation selection
+│       ├── body.rs           # Body: Renderer-bound Skin + classic/slim geometry selection
+│       ├── camera.rs         # Camera: yaw/pitch/scale → view + projection matrices
+│       ├── character.rs      # Character: Body/Back equipment ownership, posture, position, rotation
+│       ├── classifier.rs     # Texture classifier (skin/cape/elytra, HD detection)
+│       ├── constants.rs      # WGSL vertex + fragment shaders
+│       ├── converter.rs      # single2double() public conversion wrapper
+│       ├── error.rs          # EidolonError — typed errors for the public API
+│       ├── model.rs          # OBJ loader: parses named objects into BodyParts (main + layer meshes)
+│       ├── output.rs         # Output intent, format validation, timing, encoding (PNG/WebP/GIF/APNG/AVIF)
+│       ├── texture.rs        # Private PNG upload and single→double conversion
+│       └── renderer/
+│           ├── mod.rs        # Renderer: headless + windowed, shared pipeline
+│           ├── nametag.rs    # Minecraft / Unifont text rasterization and billboard geometry
+│           ├── pipeline.rs   # Render pipeline creation from WGSL shader
+│           ├── readback.rs   # GPU → CPU buffer copy and RGBA mapping
+│           └── uniforms.rs   # Per-body-part uniform computation, PART_CONFIGS with PartId enum
+├── cli/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs           # Minimal 31-line entry point dispatching subcommands
+│       ├── args.rs           # Clap CLI arguments (Command::Render/Preview/Convert/Identify)
+│       ├── commands.rs       # Execution handlers for render, convert, identify
+│       ├── preview.rs        # Winit desktop preview window loop
+│       └── scene.rs          # Scene args and camera resolution
+└── wasm/
+    ├── Cargo.toml
+    ├── package.json
+    └── src/
+        ├── lib.rs            # WASM entry point, logger and panic hook
+        ├── classifier.rs     # inspect_texture JS binding returning JsTextureReport
+        └── renderer.rs       # CanvasRenderer WebGPU presenter and offscreen capture
 ```
 
 ### Data flow
 
-1. **CLI** (`main.rs`) parses subcommand → creates `Renderer` (one-time, expensive — initializes wgpu device + compiles shaders + loads both OBJs)
+1. **CLI** (`crates/cli/src/main.rs`, `args.rs`, `commands.rs`) parses subcommand → creates `Renderer` (one-time, expensive — initializes wgpu device + compiles shaders + loads both OBJs)
 2. `Renderer::load_body()` loads and uploads a Skin, auto-detects single-layer (width == height×2), converts it via `converter::single2double()`, and returns a Renderer-bound `Body`
 3. The caller builds a non-empty `Character` from a Body or Back equipment; `Renderer::render()` draws its optional Body and Back equipment using `character.posture`, then reads pixels back as `ImageBuffer`
 4. `output::write_output()` owns output intent, path resolution, animation timing, encoding, and file writing. It asks `Renderer::render()` for RGBA frames and normalizes the final extension while preserving parent directories.

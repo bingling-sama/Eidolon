@@ -675,12 +675,12 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 name = "eidolon-example"
 version = "0.0.0"
 dependencies = [
- "eidolonmc",
+ "eidolon-core",
  "env_logger",
 ]
 
 [[package]]
-name = "eidolonmc"
+name = "eidolon-core"
 version = "0.0.1-alpha"
 dependencies = [
  "bytemuck",

@@ -1,6 +1,6 @@
 # 命令行参考
 
-Eidolon 提供一个可执行程序，包含三个子命令：`render`、`preview`、`convert`。
+Eidolon 提供一个可执行程序，包含四个子命令：`render`、`preview`、`convert`、`identify`。
 
 ## Render
 
@@ -111,6 +111,40 @@ cargo run -- convert <INPUT> [OUTPUT]
 
 ```bash
 cargo run -- convert old_skin.png new_skin.png
+```
+
+## Identify
+
+识别并分析 Minecraft 纹理（皮肤、披风、鞘翅），检测其尺寸、高清倍率以及是否支持自动升级。
+
+```bash
+cargo run -- identify [选项] <纹理 PNG>
+```
+
+参数与选项：
+
+- `<纹理 PNG>` 待分析纹理的 PNG 文件路径
+- `--json` 以 JSON 格式输出分析结果（默认输出易读文本）
+
+示例：
+
+```bash
+cargo run -- identify resources/bingling_sama.png
+```
+
+输出示例：
+```text
+File: resources/bingling_sama.png
+Kind: SkinDoubleLayer
+Dimensions: 64x64
+HD: false (scale 1x)
+Auto-upgradeable: false
+Description: Modern 1.8+ double-layer player skin (standard resolution)
+```
+
+以 JSON 格式输出：
+```bash
+cargo run -- identify resources/bingling_sama.png --json
 ```
 
 ## 帮助

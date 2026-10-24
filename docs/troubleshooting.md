@@ -17,11 +17,15 @@ The renderer cannot infer arm width from the PNG — you must specify it.
 Format is inferred from the output filename extension:
 
 ```bash
-cargo run -- render skin.png output.png     # PNG
-cargo run -- render skin.png output.webp    # WebP
+cargo run -- render skin.png output.png     # Static PNG
+cargo run -- render skin.png output.webp    # Static WebP
+cargo run -- render skin.png walk.gif --animate --posture walk   # Animated GIF
+cargo run -- render skin.png walk.webp --animate --posture walk  # Animated WebP
+cargo run -- render skin.png walk.apng --animate --posture walk  # APNG
+cargo run -- render skin.png walk.avif --animate --posture walk  # Animated AVIF
 ```
 
-Only PNG and WebP are supported. The filename extension is auto-adjusted to match the detected format.
+For static renders, PNG (`.png`) and WebP (`.webp`) are supported. For animated renders (using `--animate`), GIF (`.gif`), Animated WebP (`.webp`), APNG (`.apng`), and AVIF (`.avif`) are supported. The filename extension is normalized to match the detected format.
 
 ## Texture Fails To Load
 
