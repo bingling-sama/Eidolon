@@ -1,0 +1,11 @@
+packages:
+  - "crates/wasm"
+  - "examples/wasm"
+
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - 'esbuild'

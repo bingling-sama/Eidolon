@@ -4,15 +4,21 @@ Eidolon is split into a small CLI binary and a reusable rendering library. The b
 options and delegates frame rendering to the library. The library owns GPU setup, skin loading,
 model loading, frame rendering, and rendered-output policy.
 
-## Crate Layout
+## Workspace Layout
 
-- `src/main.rs` defines the `eidolon` binary and the `render`, `preview`, and `convert` subcommands.
-- `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline`
-  playback, and deterministic `AnimationSchedule` frame times.
-- `src/wasm.rs` is an optional `wasm`-feature adapter that exposes `CanvasRenderer` through
-  `wasm-bindgen` when targeting `wasm32`.
-- `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing.
-- `src/lib.rs` exposes the library modules.
+Eidolon is structured as a Cargo + npm monorepo:
+
+- `crates/core` (`eidolon-core`): Pure rendering engine library.
+  - `src/lib.rs` exposes core modules: `animation`, `assets`, `back_equipment`, `body`, `camera`, `character`, `classifier`, `constants`, `converter`, `error`, `model`, `output`, `renderer`.
+  - `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline` playback, and deterministic `AnimationSchedule` frame times.
+  - `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing (PNG, WebP, GIF, APNG, AVIF).
+  - `src/renderer/` contains the shared `wgpu` renderer and nametag rasterization.
+- `crates/cli` (`eidolon-cli`): Command line interface binary (`eidolon`).
+  - `src/main.rs` defines the CLI commands (`render`, `preview`, `convert`, `identify`) and desktop preview loop.
+- `crates/wasm` (`eidolon-wasm`): WebAssembly bindings and `@eidolonmc/wasm` npm package.
+  - `src/lib.rs` exposes `CanvasRenderer` and `inspect_texture` to JavaScript via `wasm-bindgen`.
+- `examples/rust`: Standalone Rust usage examples depending on `eidolon-core`.
+- `examples/wasm`: Web studio application consuming `@eidolonmc/wasm`.
 - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
 - `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
 - `src/back_equipment.rs` defines the shared Back equipment atlas and Cape/Elytra presentation.

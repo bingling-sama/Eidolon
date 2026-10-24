@@ -30,7 +30,7 @@ After building the WASM package, run `npm run test:e2e` to verify desktop and mo
 
 ## How It Works
 
-1. `wasm-pack` compiles the core crate (`../../src/wasm.rs`, enabled by the `wasm` feature) to a WASM module + JS glue in `pkg/`
+1. `wasm-pack` compiles the WASM binding crate (`crates/wasm/src/lib.rs`) to a WASM module + JS glue in `pkg/`
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
 3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; the core `AnimationTimeline` owns playback state while JS supplies requestAnimationFrame deltas
 4. `set_elytra_angles(pitch, spread)` fixes the wing angles until `reset_elytra_angles()` restores animation-driven values
@@ -41,8 +41,8 @@ After building the WASM package, run `npm run test:e2e` to verify desktop and mo
 
 | File | Purpose |
 |------|---------|
-| `../../Cargo.toml` | Core crate with the opt-in `wasm` feature and `cdylib` output |
-| `../../src/wasm.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
+| `../../crates/wasm/Cargo.toml` | WASM crate with `cdylib` output and npm configuration |
+| `../../crates/wasm/src/lib.rs` | `#[wasm_bindgen]` bindings: `CanvasRenderer` class |
 | `index.html` | UI — skin/back-equipment pickers, animation playback, export controls, result canvas |
 | `main.js` | Vanilla JS — drives controls and handles DOM, camera orbit, and resource loading |
 | `vite.config.js` | Vite config with WASM plugins |

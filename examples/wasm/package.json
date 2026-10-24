@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build:wasm": "wasm-pack build --target bundler --out-dir examples/wasm/pkg ../.. -- --features wasm",
-    "build:wasm:dev": "wasm-pack build --dev --target bundler --out-dir examples/wasm/pkg ../.. -- --features wasm",
+    "build:wasm": "wasm-pack build --target bundler --out-dir pkg ../../crates/wasm",
+    "build:wasm:dev": "wasm-pack build --dev --target bundler --out-dir pkg ../../crates/wasm",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

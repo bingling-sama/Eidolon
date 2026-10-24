@@ -3,15 +3,21 @@
 Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负责解析场景参数并调用库完成单帧
 渲染。库负责 GPU 初始化、皮肤加载、模型加载、单帧渲染与输出策略。
 
-## Crate 结构
+## Workspace 结构
 
-- `src/main.rs` 定义 `eidolon` 可执行程序，以及 `render`、`preview`、`convert` 子命令。
-- `src/animation.rs` 提供无状态 `AnimationPreset` 采样、有状态 `AnimationTimeline` 播放，
-  以及确定性的 `AnimationSchedule` 帧时刻。
-- `src/wasm.rs` 是可选的 `wasm` feature adapter；目标为 `wasm32` 时通过 `wasm-bindgen` 暴露
-  `CanvasRenderer`。
-- `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入。
-- `src/lib.rs` 暴露库模块。
+Eidolon 采用 Cargo + npm Monorepo 架构：
+
+- `crates/core` (`eidolon-core`)：纯渲染引擎核心库。
+  - `src/lib.rs` 暴露核心模块：`animation`、`assets`、`back_equipment`、`body`、`camera`、`character`、`classifier`、`constants`、`converter`、`error`、`model`、`output`、`renderer`。
+  - `src/animation.rs` 提供无状态 `AnimationPreset` 采样、有状态 `AnimationTimeline` 播放，以及确定性的 `AnimationSchedule` 帧时刻。
+  - `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入（PNG、WebP、GIF、APNG、AVIF）。
+  - `src/renderer/` 包含共享的 `wgpu` 渲染器、nametag 光栅化与 billboard 变换、读回、管线和 uniform 逻辑。
+- `crates/cli` (`eidolon-cli`)：命令行程序二进制（`eidolon`）。
+  - `src/main.rs` 定义 `eidolon` 命令行工具以及 `render`、`preview`、`convert`、`identify` 子命令。
+- `crates/wasm` (`eidolon-wasm`)：WebAssembly 绑定与 `@eidolonmc/wasm` npm 包。
+  - `src/lib.rs` 通过 `wasm-bindgen` 向 JS 暴露 `CanvasRenderer` 与 `inspect_texture`。
+- `examples/rust`：依赖 `eidolon-core` 的 Rust 调用示例。
+- `examples/wasm`：基于 Vite 的 Web 端交互演示与自动化评测套件。
 - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
 - `src/body.rs` 定义持有 Skin 与 classic/slim 几何选择的 `Body`。
 - `src/back_equipment.rs` 定义披风与鞘翅共享的后背装备图集及呈现形式。

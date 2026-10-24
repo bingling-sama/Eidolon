@@ -1,0 +1,12 @@
+{
+  "name": "eidolon-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "pnpm --filter @eidolonmc/wasm run build",
+    "build:wasm:web": "pnpm --filter @eidolonmc/wasm run build:web",
+    "dev": "pnpm --filter eidolon-wasm-example run dev",
+    "build": "pnpm --filter eidolon-wasm-example run build",
+    "test:e2e": "pnpm --filter eidolon-wasm-example run test:e2e"
+  }
+}
