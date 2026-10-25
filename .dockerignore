@@ -1,0 +1,11 @@
+target/
+.git/
+node_modules/
+.idea/
+.vscode/
+.trellis/
+.agents/
+skills-lock.json
+*.png
+*.webp
+!resources/*

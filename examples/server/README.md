@@ -11,6 +11,19 @@ A resident high-performance HTTP microservice for offscreen Minecraft skin rende
 
 ## Quick Start
 
+### 1. Docker (Recommended)
+
+```bash
+# Start with docker-compose
+docker compose up -d --build
+
+# Or build & run directly
+docker build -t eidolon-server .
+docker run -d --name eidolon-server -p 8080:8080 eidolon-server
+```
+
+### 2. Native Cargo Run
+
 ```bash
 # Set headless rendering environment (if running without physical display/GPU)
 export LIBGL_ALWAYS_SOFTWARE=1

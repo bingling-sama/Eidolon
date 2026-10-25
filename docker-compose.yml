@@ -1,0 +1,18 @@
+services:
+  eidolon-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eidolon-server:latest
+    container_name: eidolon-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - EIDOLON_HOST=0.0.0.0
+      - EIDOLON_PORT=8080
+      - EIDOLON_WORKERS=2
+      - EIDOLON_QUEUE_CAPACITY=256
+      - EIDOLON_CACHE_ENTRIES=2048
+      - EIDOLON_CACHE_TTL=3600
+      - RUST_LOG=info
