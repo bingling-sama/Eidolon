@@ -131,6 +131,7 @@ impl Renderer {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface,
             force_fallback_adapter: false,
+            ..Default::default()
         }))
         .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -139,6 +140,7 @@ impl Renderer {
             required_limits: wgpu::Limits::default(),
             memory_hints: Default::default(),
             trace: wgpu::Trace::Off,
+            ..Default::default()
         }))
         .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
         Ok((device, queue, adapter))
@@ -147,10 +149,7 @@ impl Renderer {
     /// Headless renderer (no surface): offscreen `Rgba8Unorm` target and CPU readback.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let (device, queue, _) = Self::create_wgpu_device(&instance, None)?;
         Self::init_with_device(device, queue, None)
     }
@@ -158,10 +157,7 @@ impl Renderer {
     /// Windowed renderer: creates a surface and optional second pipeline if the swapchain format differs.
     #[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
     pub fn new_windowed(window: Arc<Window>) -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let surface = instance
             .create_surface(window.clone())
             .map_err(|e| EidolonError::gpu(format!("failed to create surface: {e}")))?;
@@ -197,6 +193,7 @@ impl Renderer {
                 .unwrap_or(surface_caps.alpha_modes[0]),
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         surface.configure(&device, &config);
 
@@ -206,15 +203,13 @@ impl Renderer {
     /// Headless renderer for WASM: offscreen target with async adapter/device creation.
     #[cfg(target_arch = "wasm32")]
     pub async fn new_async() -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                ..Default::default()
             })
             .await
             .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
@@ -225,6 +220,7 @@ impl Renderer {
                 required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
+                ..Default::default()
             })
             .await
             .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
@@ -239,10 +235,7 @@ impl Renderer {
     pub async fn new_windowed_async(
         canvas: impl Into<wgpu::SurfaceTarget<'static>>,
     ) -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::default();
         let surface = instance
             .create_surface(canvas)
             .map_err(|e| EidolonError::gpu(format!("failed to create surface: {e}")))?;
@@ -251,6 +244,7 @@ impl Renderer {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                ..Default::default()
             })
             .await
             .map_err(|e| EidolonError::gpu(format!("failed to request adapter: {e}")))?;
@@ -261,6 +255,7 @@ impl Renderer {
                 required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
+                ..Default::default()
             })
             .await
             .map_err(|e| EidolonError::gpu(format!("failed to request GPU device: {e}")))?;
@@ -292,6 +287,7 @@ impl Renderer {
                 .unwrap_or(caps.alpha_modes[0]),
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         surface.configure(&device, &config);
 
@@ -309,7 +305,7 @@ impl Renderer {
     ) -> Result<Self, EidolonError> {
         // Log wgpu errors (shader compilation, pipeline creation, etc.)
         // instead of letting them silently drop on the GPU error queue.
-        device.on_uncaptured_error(Box::new(|error| {
+        device.on_uncaptured_error(Arc::new(|error| {
             log::error!("wgpu error: {:?}", error);
         }));
 
@@ -360,14 +356,17 @@ impl Renderer {
             address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[
+                Some(&uniform_bind_group_layout),
+                Some(&texture_bind_group_layout),
+            ],
+            immediate_size: 0,
         });
 
         let pipeline = create_pipeline(&device, &pipeline_layout, RENDER_TARGET_FORMAT);
@@ -696,6 +695,7 @@ impl Renderer {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: depth_view,
@@ -707,6 +707,7 @@ impl Renderer {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(pipeline);
@@ -922,7 +923,14 @@ impl Renderer {
         let surface = self.surface.as_ref().expect("Not in windowed mode");
         let config = self.surface_config.as_ref().unwrap();
 
-        let output = surface.get_current_texture()?;
+        let output = match surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t) | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Timeout => return Err(crate::error::SurfaceError::Timeout.into()),
+            wgpu::CurrentSurfaceTexture::Occluded => return Err(crate::error::SurfaceError::Occluded.into()),
+            wgpu::CurrentSurfaceTexture::Outdated => return Err(crate::error::SurfaceError::Outdated.into()),
+            wgpu::CurrentSurfaceTexture::Lost => return Err(crate::error::SurfaceError::Lost.into()),
+            wgpu::CurrentSurfaceTexture::Validation => return Err(crate::error::SurfaceError::Validation.into()),
+        };
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -960,7 +968,7 @@ impl Renderer {
         );
 
         self.queue.submit(Some(encoder.finish()));
-        output.present();
+        self.queue.present(output);
 
         Ok(())
     }

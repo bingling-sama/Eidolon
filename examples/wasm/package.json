@@ -14,9 +14,8 @@
     "bench": "playwright test tests/benchmark.spec.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "vite": "^6",
-    "vite-plugin-top-level-await": "^1",
+    "@playwright/test": "^1.64.1",
+    "vite": "^8.3.5",
     "vite-plugin-wasm": "^3"
   }
 }

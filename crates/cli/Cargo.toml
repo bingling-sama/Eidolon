@@ -12,11 +12,11 @@ name = "eidolon"
 path = "src/main.rs"
 
 [dependencies]
-eidolon-core = { path = "../core", features = ["winit"] }
-clap = { version = "4.5", features = ["derive"] }
-cgmath = "0.18.0"
-env_logger = "0.11"
-log = "0.4"
-pollster = "0.4"
-wgpu = "25"
-winit = "0.30"
+eidolon-core = { workspace = true, features = ["winit"] }
+clap.workspace = true
+cgmath.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+winit.workspace = true

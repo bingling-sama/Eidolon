@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use eidolon_core as eidolon;
 use eidolon::{
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,

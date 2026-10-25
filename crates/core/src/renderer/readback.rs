@@ -90,14 +90,16 @@ pub(crate) fn map_output_buffer_to_rgba(
         let _ = tx.send(result);
     });
     device
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .map_err(|e| EidolonError::gpu(format!("device poll failed: {e}")))?;
     let map_result = rx
         .recv()
         .map_err(|e| EidolonError::gpu(format!("failed to receive buffer map result: {e}")))?;
     map_result.map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice
+        .get_mapped_range()
+        .map_err(|e| EidolonError::gpu(format!("failed to get mapped range: {e}")))?;
     let image = image_from_padded_rgba(&data, width, height, padded_bytes_per_row);
     drop(data);
     output_buffer.unmap();
@@ -119,14 +121,16 @@ pub(crate) async fn map_output_buffer_to_rgba(
     });
     // On WASM, PollType::Wait yields to the browser event loop via requestAnimationFrame.
     device
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .map_err(|e| EidolonError::gpu(format!("device poll failed: {e}")))?;
     let map_result = rx
         .await
         .map_err(|_| EidolonError::gpu("oneshot channel closed"))?;
     map_result.map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice
+        .get_mapped_range()
+        .map_err(|e| EidolonError::gpu(format!("failed to get mapped range: {e}")))?;
     let image = image_from_padded_rgba(&data, width, height, padded_bytes_per_row);
     drop(data);
     output_buffer.unmap();
