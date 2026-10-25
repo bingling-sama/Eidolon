@@ -11,7 +11,9 @@ use winit::event_loop::EventLoop;
 
 use crate::args::{resolve_render_output, RenderAnimationArgs, SceneArgs, ViewportArgs};
 use crate::preview::{PreviewApp, PreviewInteraction, PreviewPlayback};
-use crate::scene::{apply_posture_overrides, load_character, scene_state_and_camera_from_scene, PostureOverrides};
+use crate::scene::{
+    apply_posture_overrides, load_character, scene_state_and_camera_from_scene, PostureOverrides,
+};
 
 pub fn run_render(
     skin: String,

@@ -192,10 +192,7 @@ mod tests {
     #[test]
     fn surface_error_conversion_preserves_recovery_kind() {
         let error: EidolonError = SurfaceError::Lost.into();
-        assert!(matches!(
-            error,
-            EidolonError::Surface(SurfaceError::Lost)
-        ));
+        assert!(matches!(error, EidolonError::Surface(SurfaceError::Lost)));
     }
 
     #[test]
@@ -236,7 +233,10 @@ mod tests {
             "corrupt",
         ));
         assert_eq!(EidolonError::Io(io).to_string(), "I/O error: oops");
-        assert_eq!(EidolonError::Image(img).to_string(), "Image error: Format error decoding `Unknown`: corrupt");
+        assert_eq!(
+            EidolonError::Image(img).to_string(),
+            "Image error: Format error decoding `Unknown`: corrupt"
+        );
         assert_eq!(
             EidolonError::Gpu("shader compile failed".into()).to_string(),
             "GPU error: shader compile failed"

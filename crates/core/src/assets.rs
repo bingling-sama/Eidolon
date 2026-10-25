@@ -152,7 +152,9 @@ impl RawSkin {
     ///
     /// If the input image is single-layer (width == 2 * height), returns a new
     /// double-layer square image with mirrored left limbs.
-    pub fn convert_single_to_double_layer(image: &DynamicImage) -> Result<DynamicImage, EidolonError> {
+    pub fn convert_single_to_double_layer(
+        image: &DynamicImage,
+    ) -> Result<DynamicImage, EidolonError> {
         single2double(image)
     }
 

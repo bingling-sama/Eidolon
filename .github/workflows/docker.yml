@@ -1,0 +1,67 @@
+name: Docker CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'crates/**'
+      - 'examples/server/**'
+      - 'resources/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'crates/**'
+      - 'examples/server/**'
+      - 'resources/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build Docker Image & Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: eidolon-server:ci
+
+      - name: Smoke test container health
+        run: |
+          docker run -d --name eidolon-smoke -p 8080:8080 eidolon-server:ci
+          ready=false
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:8080/health; then
+              ready=true
+              echo "Server health check passed on attempt $i"
+              break
+            fi
+            sleep 1
+          done
+          docker logs eidolon-smoke
+          docker stop eidolon-smoke
+          if [ "$ready" != "true" ]; then
+            echo "Health check failed after 30 seconds"
+            exit 1
+          fi

@@ -292,7 +292,10 @@ impl ApplicationHandler for PreviewApp {
                 if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
                     match renderer.render_frame(character, &self.camera) {
                         Ok(()) => {}
-                        Err(EidolonError::Surface(eidolon_core::error::SurfaceError::Lost | eidolon_core::error::SurfaceError::Outdated)) => {
+                        Err(EidolonError::Surface(
+                            eidolon_core::error::SurfaceError::Lost
+                            | eidolon_core::error::SurfaceError::Outdated,
+                        )) => {
                             if let Some(window) = &self.window {
                                 let size = window.inner_size();
                                 if let Some(r) = &mut self.renderer {
@@ -300,7 +303,9 @@ impl ApplicationHandler for PreviewApp {
                                 }
                             }
                         }
-                        Err(EidolonError::Surface(eidolon_core::error::SurfaceError::OutOfMemory)) => {
+                        Err(EidolonError::Surface(
+                            eidolon_core::error::SurfaceError::OutOfMemory,
+                        )) => {
                             event_loop.exit();
                         }
                         Err(e) => log::error!("Render error: {:?}", e),
@@ -435,8 +440,14 @@ mod tests {
 
     #[test]
     fn preview_posture_selects_the_animation_used_when_playback_starts() {
-        let args = crate::args::Args::try_parse_from(["eidolon", "preview", "skin.png", "--posture", "fly"])
-            .expect("flying preview should parse");
+        let args = crate::args::Args::try_parse_from([
+            "eidolon",
+            "preview",
+            "skin.png",
+            "--posture",
+            "fly",
+        ])
+        .expect("flying preview should parse");
 
         let crate::args::Command::Preview { scene, .. } = args.command else {
             panic!("Expected Preview");

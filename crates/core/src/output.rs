@@ -369,28 +369,31 @@ fn write_animation(
                 .map_err(|error| EidolonError::output(format!("failed to set APNG: {error}")))?;
             encoder
                 .set_frame_delay(1, schedule.fps() as u16)
-                .map_err(|error| EidolonError::output(format!("failed to set APNG delay: {error}")))?;
+                .map_err(|error| {
+                    EidolonError::output(format!("failed to set APNG delay: {error}"))
+                })?;
 
-            let mut writer = encoder
-                .write_header()
-                .map_err(|error| EidolonError::output(format!("failed to write APNG header: {error}")))?;
+            let mut writer = encoder.write_header().map_err(|error| {
+                EidolonError::output(format!("failed to write APNG header: {error}"))
+            })?;
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
-                writer
-                    .write_image_data(&image)
-                    .map_err(|error| EidolonError::output(format!("failed to write APNG frame: {error}")))?;
+                writer.write_image_data(&image).map_err(|error| {
+                    EidolonError::output(format!("failed to write APNG frame: {error}"))
+                })?;
             }
-            writer
-                .finish()
-                .map_err(|error| EidolonError::output(format!("failed to finalize APNG: {error}")))?;
+            writer.finish().map_err(|error| {
+                EidolonError::output(format!("failed to finalize APNG: {error}"))
+            })?;
             Ok(())
         }
         AnimationFormat::Avif => {
             use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
 
-            let mut frames_data: Vec<Vec<RGBA8>> = Vec::with_capacity(schedule.frame_count() as usize);
+            let mut frames_data: Vec<Vec<RGBA8>> =
+                Vec::with_capacity(schedule.frame_count() as usize);
             let mut frame_durations: Vec<u32> = Vec::with_capacity(schedule.frame_count() as usize);
 
             for frame_index in 0..schedule.frame_count() {
@@ -419,8 +422,7 @@ fn write_animation(
                 })
                 .collect();
 
-            let encoder = AvifEncoder::new()
-                .with_speed(6);
+            let encoder = AvifEncoder::new().with_speed(6);
             let encoded = encoder
                 .encode_animation_rgba(&anim_frames)
                 .map_err(|error| EidolonError::output(format!("failed to encode AVIF: {error}")))?;

@@ -85,9 +85,7 @@ impl RenderWorkerPool {
     }
 
     pub fn submit(&self, job: RenderJob) -> Result<(), AppError> {
-        self.sender
-            .try_send(job)
-            .map_err(|_| AppError::QueueFull)
+        self.sender.try_send(job).map_err(|_| AppError::QueueFull)
     }
 }
 
@@ -289,7 +287,12 @@ fn execute_render_both(
     };
 
     let back_frame = renderer
-        .render(&character, &back_camera, total_width - half_width, total_height)
+        .render(
+            &character,
+            &back_camera,
+            total_width - half_width,
+            total_height,
+        )
         .map_err(|e| AppError::RenderError(format!("Rendering back view failed: {e}")))?;
 
     // Stitch horizontally into a single image buffer

@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use eidolon_core::{
-    animation::AnimationPreset,
-    character::Posture,
-};
+use eidolon_core::{animation::AnimationPreset, character::Posture};
 
 /// Minecraft skin renderer and skin-atlas utilities.
 #[derive(Parser, Debug)]

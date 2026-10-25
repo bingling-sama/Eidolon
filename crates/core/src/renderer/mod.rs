@@ -451,7 +451,11 @@ impl Renderer {
         })
     }
 
-    fn acquire_offscreen_target(&self, width: u32, height: u32) -> Result<OffscreenTarget, EidolonError> {
+    fn acquire_offscreen_target(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<OffscreenTarget, EidolonError> {
         readback::validate_dimensions(width, height)?;
         if let Ok(mut pool) = self.offscreen_pool.lock() {
             if let Some(target) = pool.remove(&(width, height)) {
@@ -469,7 +473,11 @@ impl Renderer {
         }
     }
 
-    fn get_or_create_windowed_depth(&self, width: u32, height: u32) -> (wgpu::Texture, wgpu::TextureView) {
+    fn get_or_create_windowed_depth(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
         if let Ok(mut cache) = self.windowed_depth.lock() {
             if let Some((w, h, texture, view)) = cache.as_ref() {
                 if *w == width && *h == height {
@@ -598,7 +606,7 @@ impl Renderer {
         if body.is_some() {
             let uniforms = compute_body_part_uniforms(character, camera, width, height);
             for (i, uniform) in uniforms.iter().enumerate() {
-                let offset = (i as usize) * (self.uniform_aligned_size as usize);
+                let offset = i * (self.uniform_aligned_size as usize);
                 let bytes = bytemuck::bytes_of(uniform);
                 uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
             }
@@ -661,11 +669,13 @@ impl Renderer {
             uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
         }
 
-        let uniform_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Frame Dynamic Uniform Buffer"),
-            contents: &uniform_bytes,
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let uniform_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Frame Dynamic Uniform Buffer"),
+                contents: &uniform_bytes,
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
         let uniform_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Frame Uniform Bind Group"),
@@ -734,18 +744,22 @@ impl Renderer {
                     &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
                 );
                 render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
-                render_pass.set_vertex_buffer(
-                    0,
-                    self.models.cape_model().main.vertex_buffer.slice(..),
-                );
+                render_pass
+                    .set_vertex_buffer(0, self.models.cape_model().main.vertex_buffer.slice(..));
                 render_pass.draw(0..self.models.cape_model().main.vertex_count, 0..1);
             }
 
             if let Some(elytra_atlas) = elytra_atlas {
                 render_pass.set_bind_group(1, &elytra_atlas.bind_group, &[]);
                 for (index, wing) in [
-                    (LEFT_ELYTRA_UNIFORM_INDEX, &self.models.elytra_model().left_wing),
-                    (RIGHT_ELYTRA_UNIFORM_INDEX, &self.models.elytra_model().right_wing),
+                    (
+                        LEFT_ELYTRA_UNIFORM_INDEX,
+                        &self.models.elytra_model().left_wing,
+                    ),
+                    (
+                        RIGHT_ELYTRA_UNIFORM_INDEX,
+                        &self.models.elytra_model().right_wing,
+                    ),
                 ] {
                     render_pass.set_bind_group(
                         0,
@@ -924,12 +938,23 @@ impl Renderer {
         let config = self.surface_config.as_ref().unwrap();
 
         let output = match surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t) | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Timeout => return Err(crate::error::SurfaceError::Timeout.into()),
-            wgpu::CurrentSurfaceTexture::Occluded => return Err(crate::error::SurfaceError::Occluded.into()),
-            wgpu::CurrentSurfaceTexture::Outdated => return Err(crate::error::SurfaceError::Outdated.into()),
-            wgpu::CurrentSurfaceTexture::Lost => return Err(crate::error::SurfaceError::Lost.into()),
-            wgpu::CurrentSurfaceTexture::Validation => return Err(crate::error::SurfaceError::Validation.into()),
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                return Err(crate::error::SurfaceError::Timeout.into())
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                return Err(crate::error::SurfaceError::Occluded.into())
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                return Err(crate::error::SurfaceError::Outdated.into())
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                return Err(crate::error::SurfaceError::Lost.into())
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                return Err(crate::error::SurfaceError::Validation.into())
+            }
         };
         let view = output
             .texture

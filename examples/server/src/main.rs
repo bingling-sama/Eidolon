@@ -22,7 +22,11 @@ use crate::handlers::{
 use crate::worker::RenderWorkerPool;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "High-performance HTTP skin rendering daemon for Eidolon")]
+#[command(
+    author,
+    version,
+    about = "High-performance HTTP skin rendering daemon for Eidolon"
+)]
 struct CliArgs {
     /// Host address to bind
     #[arg(long, default_value = "0.0.0.0", env = "EIDOLON_HOST")]
@@ -94,7 +98,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bind_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    info!("Eidolon HTTP server ready and listening on http://{}", bind_addr);
+    info!(
+        "Eidolon HTTP server ready and listening on http://{}",
+        bind_addr
+    );
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())

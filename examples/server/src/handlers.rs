@@ -109,10 +109,7 @@ async fn handle_render(
         header::CACHE_CONTROL,
         "public, max-age=86400".parse().unwrap(),
     );
-    headers.insert(
-        "X-Render-Time-Ms",
-        elapsed_ms.to_string().parse().unwrap(),
-    );
+    headers.insert("X-Render-Time-Ms", elapsed_ms.to_string().parse().unwrap());
 
     Ok((StatusCode::OK, headers, bytes).into_response())
 }

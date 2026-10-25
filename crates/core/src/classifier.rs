@@ -91,7 +91,10 @@ pub fn inspect_image(image: &DynamicImage) -> TextureReport {
         let (desc, can_auto_upgrade) = match kind {
             TextureKind::SkinSingleLayer => (
                 if is_hd {
-                    format!("HD {}x{} legacy single-layer skin ({}x)", width, height, hd_scale)
+                    format!(
+                        "HD {}x{} legacy single-layer skin ({}x)",
+                        width, height, hd_scale
+                    )
                 } else {
                     "Legacy 64x32 single-layer skin".to_string()
                 },
@@ -255,8 +258,16 @@ mod tests {
         let xs: Vec<u32> = non_transparent.iter().map(|p| p.0).collect();
         let ys: Vec<u32> = non_transparent.iter().map(|p| p.1).collect();
         println!("pixels count: {}", non_transparent.len());
-        println!("x bounds: {}..={}", xs.iter().min().unwrap(), xs.iter().max().unwrap());
-        println!("y bounds: {}..={}", ys.iter().min().unwrap(), ys.iter().max().unwrap());
+        println!(
+            "x bounds: {}..={}",
+            xs.iter().min().unwrap(),
+            xs.iter().max().unwrap()
+        );
+        println!(
+            "y bounds: {}..={}",
+            ys.iter().min().unwrap(),
+            ys.iter().max().unwrap()
+        );
         let rep = inspect_image(&img);
         println!("rep: {:?}", rep);
         assert_eq!(rep.kind, TextureKind::Cape);

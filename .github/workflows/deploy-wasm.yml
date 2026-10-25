@@ -4,8 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
+      - 'crates/**'
       - 'examples/wasm/**'
+      - 'resources/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-wasm.yml'
   workflow_dispatch:
 
@@ -24,40 +29,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust (WASM target)
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cache Rust
+      - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             .
             examples/wasm
-          cache-targets: false
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Setup Node
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: examples/wasm/package-lock.json
+          cache: pnpm
 
-      - name: Install npm dependencies
-        working-directory: examples/wasm
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build WASM
-        working-directory: examples/wasm
-        run: npm run build:wasm
+        run: pnpm --filter eidolon-wasm-example run build:wasm
 
-      - name: Build Vite
-        working-directory: examples/wasm
-        run: npm run build
+      - name: Build Vite application
+        run: pnpm --filter eidolon-wasm-example run build
         env:
           BASE_URL: /Eidolon/
 

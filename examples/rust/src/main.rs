@@ -8,7 +8,6 @@
 
 use std::path::{Path, PathBuf};
 
-use eidolon_core as eidolon;
 use eidolon::{
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
@@ -16,6 +15,7 @@ use eidolon::{
     output::{write_output, OutputIntent, StaticFormat},
     renderer::Renderer,
 };
+use eidolon_core as eidolon;
 
 /// Repo root, derived from `CARGO_MANIFEST_DIR` (works via `cargo run`).
 fn repo_root() -> PathBuf {
