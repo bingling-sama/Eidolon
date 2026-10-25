@@ -207,24 +207,24 @@ fn image_from_padded_rgba(
         return Err(EidolonError::gpu("mapped buffer is shorter than expected"));
     }
 
-    let mut image = ImageBuffer::new(width, height);
-    for y in 0..height {
-        let row_start = (u64::from(y) * u64::from(padded_bytes_per_row)) as usize;
-        for x in 0..width {
-            let offset = row_start + (x * BYTES_PER_PIXEL) as usize;
-            image.put_pixel(
-                x,
-                y,
-                Rgba([
-                    data[offset],
-                    data[offset + 1],
-                    data[offset + 2],
-                    data[offset + 3],
-                ]),
-            );
+    let total_unpadded_bytes = (unpadded_bytes_per_row as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| EidolonError::gpu("image buffer size overflow"))?;
+
+    let raw = if padded_bytes_per_row == unpadded_bytes_per_row {
+        data[..total_unpadded_bytes].to_vec()
+    } else {
+        let unpadded_len = unpadded_bytes_per_row as usize;
+        let mut buffer = Vec::with_capacity(total_unpadded_bytes);
+        for y in 0..height {
+            let row_start = (y as usize) * (padded_bytes_per_row as usize);
+            buffer.extend_from_slice(&data[row_start..row_start + unpadded_len]);
         }
-    }
-    Ok(image)
+        buffer
+    };
+
+    ImageBuffer::from_raw(width, height, raw)
+        .ok_or_else(|| EidolonError::gpu("failed to create image buffer from raw RGBA bytes"))
 }
 
 #[cfg(test)]
@@ -273,6 +273,14 @@ mod tests {
             image.as_raw(),
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         );
+    }
+
+    #[test]
+    fn image_from_padded_rgba_fast_path_when_unpadded() {
+        let unpadded_bytes_per_row = 8;
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let image = image_from_padded_rgba(&data, 2, 2, unpadded_bytes_per_row).unwrap();
+        assert_eq!(image.as_raw(), &data[..]);
     }
 
     #[test]
