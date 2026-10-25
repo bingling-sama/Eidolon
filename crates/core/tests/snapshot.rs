@@ -13,11 +13,13 @@ use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, Posture, SkinType};
 use eidolon_core::renderer::Renderer;
 
-/// Golden pixel hash — update when rendering changes intentionally.
-///
-/// Config: classic skin, bingling_sama.png, yaw=180 pitch=90 scale=1,
-/// standing posture (all defaults), 800×600.
-const GOLDEN_HASH: u64 = 10953113395297316018;
+/// Golden pixel hashes across supported rasterizers / environments:
+/// - 0x98014699d744ecb2 (10953113395297316018): Local Linux / Mesa rasterizer
+/// - 0xa351c6da331c13f2 (11768405941758465010): GitHub Actions Ubuntu runner (Mesa llvmpipe)
+const ACCEPTED_GOLDEN_HASHES: &[u64] = &[
+    10953113395297316018, // 0x98014699d744ecb2
+    11768405941758465010, // 0xa351c6da331c13f2
+];
 
 fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
     let mut h: u64 = 0;
@@ -68,16 +70,21 @@ fn snapshot_classic_standing_front() {
         .collect();
     let hash = hash_pixels(800, 600, &raw);
 
-    if GOLDEN_HASH == 0 {
+    if ACCEPTED_GOLDEN_HASHES.is_empty() {
         panic!(
-            "GOLDEN_HASH not set. Update tests/snapshot.rs:\nconst GOLDEN_HASH: u64 = {};",
+            "ACCEPTED_GOLDEN_HASHES empty. Update tests/snapshot.rs with:\n{}",
             hash
         );
     }
 
-    assert_eq!(
-        hash, GOLDEN_HASH,
-        "Snapshot hash changed!\n  expected: 0x{:016x}\n  actual:   0x{:016x}",
-        GOLDEN_HASH, hash
+    assert!(
+        ACCEPTED_GOLDEN_HASHES.contains(&hash),
+        "Snapshot hash changed!\n  actual:   0x{:016x} ({})\n  accepted: {:x?}",
+        hash,
+        hash,
+        ACCEPTED_GOLDEN_HASHES
+            .iter()
+            .map(|h| format!("0x{:016x}", h))
+            .collect::<Vec<_>>()
     );
 }
