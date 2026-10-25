@@ -13,7 +13,7 @@ use tokio::sync::oneshot;
 use crate::error::AppError;
 use crate::fetcher::TextureFetcher;
 use crate::model::RenderQuery;
-use crate::worker::{RenderJob, RenderWorkerPool};
+use crate::worker::{RenderJob, RenderMode, RenderWorkerPool};
 
 pub struct AppState {
     pub fetcher: TextureFetcher,
@@ -25,19 +25,36 @@ pub async fn render_get_handler(
     State(state): State<Arc<AppState>>,
     Query(query): Query<RenderQuery>,
 ) -> Result<Response, AppError> {
-    handle_render(state, query).await
+    handle_render(state, query, RenderMode::Single).await
 }
 
 pub async fn render_post_handler(
     State(state): State<Arc<AppState>>,
     Json(query): Json<RenderQuery>,
 ) -> Result<Response, AppError> {
-    handle_render(state, query).await
+    handle_render(state, query, RenderMode::Single).await
+}
+
+/// Handler specifically for GET /url/image/both (SkinRenderMC API specification)
+pub async fn render_both_get_handler(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<RenderQuery>,
+) -> Result<Response, AppError> {
+    handle_render(state, query, RenderMode::Both).await
+}
+
+/// Handler for POST /url/image/both
+pub async fn render_both_post_handler(
+    State(state): State<Arc<AppState>>,
+    Json(query): Json<RenderQuery>,
+) -> Result<Response, AppError> {
+    handle_render(state, query, RenderMode::Both).await
 }
 
 async fn handle_render(
     state: Arc<AppState>,
     query: RenderQuery,
+    mode: RenderMode,
 ) -> Result<Response, AppError> {
     let start = Instant::now();
 
@@ -74,6 +91,7 @@ async fn handle_render(
         cape_bytes,
         elytra_bytes,
         query,
+        mode,
         responder: tx,
     };
 

@@ -33,9 +33,36 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 ## API Endpoints
 
-### 1. `GET /render` / `POST /render`
+### 1. `GET /url/image/both` (SkinRenderMC Specification)
 
-Render a player skin with optional accessories and posture settings.
+Standard SkinRenderMC combined dual-perspective layout (front on the left, back on the right).
+
+- **Method**: `GET` (or `POST`)
+- **Path**: `/url/image/both`
+- **Output**: `image/png` raw bytes (600x600 canvas)
+- **Visuals**:
+  - **Left**: Character front view (slight 15° natural turn), nametag rendered if `nameTag` is supplied.
+  - **Right**: Character back view (195° turn to show cape/elytra/back texture), nametag rendered if `nameTag` is supplied.
+  - **Bottom margin**: Feet ground at Y ≈ 438px (in 600px height). After client's `crop((0, 0, width, height * 0.87))` (522px height), ~84px breathing room is preserved at the bottom, perfectly accommodating bottom shadow and watermark text at the bottom-right corner.
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `skinUrl` | string | **Yes** | Direct URL to player skin PNG |
+| `capeUrl` | string | Optional | Direct URL to cape PNG (omitted when player has no cape) |
+| `nameTag` (or `nametag`) | string | Optional | Player name text plate rendered above model |
+| `slim` | bool | Optional | Auto-detected from skin arm transparency if omitted |
+
+#### Example Request
+
+```bash
+curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://littleskin.cn/textures/...&capeUrl=https://littleskin.cn/textures/...&nameTag=BinglingTX" -o both.png
+```
+
+---
+
+### 2. `GET /render` / `POST /render` (Flexible Single View)
 
 #### Parameters
 

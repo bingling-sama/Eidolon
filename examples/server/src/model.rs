@@ -1,4 +1,28 @@
+use image::{DynamicImage, GenericImageView};
 use serde::{de, Deserialize, Deserializer};
+
+/// Heuristic auto-detection for Alex (slim) skins based on arm transparency.
+pub fn is_slim_skin(image: &DynamicImage) -> bool {
+    let (width, height) = image.dimensions();
+    if width != height || width < 64 {
+        return false;
+    }
+    let scale = width / 64;
+    // In Minecraft 64x64 skins:
+    // Right arm in 64-base:
+    // Classic arm is 4px wide, Alex is 3px wide.
+    // For 3px arm, the extra column at x in [54..56], y in [20..32] is unused and fully transparent.
+    // Check alpha in this region.
+    for x in (54 * scale)..(56 * scale) {
+        for y in (20 * scale)..(32 * scale) {
+            let pixel = image.get_pixel(x, y);
+            if pixel[3] > 0 {
+                return false;
+            }
+        }
+    }
+    true
+}
 
 fn deserialize_flexible_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
 where
@@ -78,6 +102,7 @@ pub struct RenderQuery {
     pub slim: Option<bool>,
 
     // Nametag
+    #[serde(alias = "nameTag")]
     pub nametag: Option<String>,
     #[serde(
         default,
@@ -156,8 +181,20 @@ impl RenderQuery {
         self.elytra_url.as_deref().filter(|s| !s.trim().is_empty())
     }
 
-    pub fn is_slim(&self) -> bool {
-        self.slim.unwrap_or(false)
+    pub fn resolved_nametag(&self) -> Option<&str> {
+        self.nametag.as_deref().filter(|s| !s.trim().is_empty())
+    }
+
+    pub fn is_slim(&self, skin_bytes: &[u8]) -> bool {
+        if let Some(s) = self.slim {
+            return s;
+        }
+        // Auto-detect from skin pixels if not specified
+        if let Ok(img) = image::load_from_memory(skin_bytes) {
+            is_slim_skin(&img)
+        } else {
+            false
+        }
     }
 
     pub fn dimensions(&self) -> (u32, u32) {

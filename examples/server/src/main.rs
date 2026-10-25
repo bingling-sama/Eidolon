@@ -15,7 +15,10 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::fetcher::TextureFetcher;
-use crate::handlers::{health_handler, render_get_handler, render_post_handler, AppState};
+use crate::handlers::{
+    health_handler, render_both_get_handler, render_both_post_handler, render_get_handler,
+    render_post_handler, AppState,
+};
 use crate::worker::RenderWorkerPool;
 
 #[derive(Parser, Debug)]
@@ -81,6 +84,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(health_handler))
         .route("/health", get(health_handler))
         .route("/render", get(render_get_handler).post(render_post_handler))
+        .route(
+            "/url/image/both",
+            get(render_both_get_handler).post(render_both_post_handler),
+        )
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
