@@ -52,6 +52,72 @@ pub struct Renderer {
     cached_nametags: Mutex<std::collections::HashMap<String, Arc<CachedNametag>>>,
     /// RGBA clear color for the render pass background. Default: transparent black.
     clear_color: [f64; 4],
+    /// Cached offscreen render targets (indexed by (width, height)).
+    offscreen_pool: Mutex<std::collections::HashMap<(u32, u32), OffscreenTarget>>,
+    /// Cached windowed depth texture & view.
+    windowed_depth: Mutex<Option<(u32, u32, wgpu::Texture, wgpu::TextureView)>>,
+}
+
+pub(crate) struct OffscreenTarget {
+    pub width: u32,
+    pub height: u32,
+    pub render_texture: wgpu::Texture,
+    pub texture_view: wgpu::TextureView,
+    #[allow(dead_code)]
+    pub depth_texture: wgpu::Texture,
+    pub depth_view: wgpu::TextureView,
+    pub staging_buffer: wgpu::Buffer,
+    pub padded_bytes_per_row: u32,
+}
+
+impl OffscreenTarget {
+    fn new(device: &wgpu::Device, width: u32, height: u32) -> Result<Self, EidolonError> {
+        let layout = readback::output_layout(width, height)?;
+        let render_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: RENDER_TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let staging_buffer = readback::create_output_buffer(device, &layout);
+
+        Ok(Self {
+            width,
+            height,
+            render_texture,
+            texture_view,
+            depth_texture,
+            depth_view,
+            staging_buffer,
+            padded_bytes_per_row: layout.padded_bytes_per_row,
+        })
+    }
 }
 
 impl Renderer {
@@ -381,7 +447,45 @@ impl Renderer {
             nametag_see_through_surface_pipeline,
             cached_nametags: Mutex::new(std::collections::HashMap::new()),
             clear_color: [0.0, 0.0, 0.0, 0.0],
+            offscreen_pool: Mutex::new(std::collections::HashMap::new()),
+            windowed_depth: Mutex::new(None),
         })
+    }
+
+    fn acquire_offscreen_target(&self, width: u32, height: u32) -> Result<OffscreenTarget, EidolonError> {
+        readback::validate_dimensions(width, height)?;
+        if let Ok(mut pool) = self.offscreen_pool.lock() {
+            if let Some(target) = pool.remove(&(width, height)) {
+                return Ok(target);
+            }
+        }
+        OffscreenTarget::new(&self.device, width, height)
+    }
+
+    fn release_offscreen_target(&self, target: OffscreenTarget) {
+        if let Ok(mut pool) = self.offscreen_pool.lock() {
+            if pool.len() < 4 {
+                pool.insert((target.width, target.height), target);
+            }
+        }
+    }
+
+    fn get_or_create_windowed_depth(&self, width: u32, height: u32) -> (wgpu::Texture, wgpu::TextureView) {
+        if let Ok(mut cache) = self.windowed_depth.lock() {
+            if let Some((w, h, texture, view)) = cache.as_ref() {
+                if *w == width && *h == height {
+                    return (texture.clone(), view.clone());
+                }
+            }
+            let texture = self.create_depth_texture(width, height);
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            *cache = Some((width, height, texture.clone(), view.clone()));
+            (texture, view)
+        } else {
+            let texture = self.create_depth_texture(width, height);
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            (texture, view)
+        }
     }
 
     fn create_depth_texture(&self, width: u32, height: u32) -> wgpu::Texture {
@@ -708,25 +812,7 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
-        readback::validate_dimensions(width, height)?;
-        let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Render Target"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: RENDER_TARGET_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let depth_texture = self.create_depth_texture(width, height);
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let target = self.acquire_offscreen_target(width, height)?;
 
         let mut encoder = self
             .device
@@ -736,8 +822,8 @@ impl Renderer {
 
         self.encode_render_pass(
             &mut encoder,
-            &texture_view,
-            &depth_view,
+            &target.texture_view,
+            &target.depth_view,
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
@@ -747,9 +833,28 @@ impl Renderer {
             height,
         );
 
+        readback::copy_render_target_to_buffer(
+            &mut encoder,
+            &target.render_texture,
+            &target.staging_buffer,
+            width,
+            height,
+            target.padded_bytes_per_row,
+        );
+
         self.queue.submit(Some(encoder.finish()));
 
-        readback::read_texture_to_rgba(&self.device, &self.queue, &render_texture, width, height)
+        let image = readback::map_output_buffer_to_rgba(
+            &self.device,
+            &target.staging_buffer,
+            width,
+            height,
+            target.padded_bytes_per_row,
+        );
+
+        self.release_offscreen_target(target);
+
+        image
     }
 
     /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
@@ -765,25 +870,7 @@ impl Renderer {
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
         self.validate_character_context(character)?;
-        readback::validate_dimensions(width, height)?;
-        let render_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Render Target"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: RENDER_TARGET_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let texture_view = render_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let depth_texture = self.create_depth_texture(width, height);
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let target = self.acquire_offscreen_target(width, height)?;
 
         let mut encoder = self
             .device
@@ -793,8 +880,8 @@ impl Renderer {
 
         self.encode_render_pass(
             &mut encoder,
-            &texture_view,
-            &depth_view,
+            &target.texture_view,
+            &target.depth_view,
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
@@ -804,10 +891,29 @@ impl Renderer {
             height,
         );
 
+        readback::copy_render_target_to_buffer(
+            &mut encoder,
+            &target.render_texture,
+            &target.staging_buffer,
+            width,
+            height,
+            target.padded_bytes_per_row,
+        );
+
         self.queue.submit(Some(encoder.finish()));
 
-        readback::read_texture_to_rgba(&self.device, &self.queue, &render_texture, width, height)
-            .await
+        let image = readback::map_output_buffer_to_rgba(
+            &self.device,
+            &target.staging_buffer,
+            width,
+            height,
+            target.padded_bytes_per_row,
+        )
+        .await;
+
+        self.release_offscreen_target(target);
+
+        image
     }
 
     /// Present one frame to the window surface (expects `new_windowed`).
@@ -821,8 +927,8 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let depth_texture = self.create_depth_texture(config.width, config.height);
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let (_depth_texture, depth_view) =
+            self.get_or_create_windowed_depth(config.width, config.height);
 
         let pipeline = self.surface_pipeline.as_ref().unwrap_or(&self.pipeline);
         let nametag_pipeline = self

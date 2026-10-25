@@ -4,16 +4,16 @@ use image::{ImageBuffer, Rgba};
 const BYTES_PER_PIXEL: u32 = 4;
 
 #[derive(Debug)]
-struct OutputLayout {
-    padded_bytes_per_row: u32,
-    buffer_size: u64,
+pub(crate) struct OutputLayout {
+    pub(crate) padded_bytes_per_row: u32,
+    pub(crate) buffer_size: u64,
 }
 
 pub(crate) fn validate_dimensions(width: u32, height: u32) -> Result<(), EidolonError> {
     output_layout(width, height).map(|_| ())
 }
 
-fn output_layout(width: u32, height: u32) -> Result<OutputLayout, EidolonError> {
+pub(crate) fn output_layout(width: u32, height: u32) -> Result<OutputLayout, EidolonError> {
     if width == 0 || height == 0 {
         return Err(EidolonError::gpu(
             "readback dimensions must be greater than zero",
@@ -36,7 +36,7 @@ fn output_layout(width: u32, height: u32) -> Result<OutputLayout, EidolonError> 
     })
 }
 
-fn create_output_buffer(device: &wgpu::Device, layout: &OutputLayout) -> wgpu::Buffer {
+pub(crate) fn create_output_buffer(device: &wgpu::Device, layout: &OutputLayout) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Output Buffer"),
         size: layout.buffer_size,
@@ -45,7 +45,7 @@ fn create_output_buffer(device: &wgpu::Device, layout: &OutputLayout) -> wgpu::B
     })
 }
 
-fn copy_render_target_to_buffer(
+pub(crate) fn copy_render_target_to_buffer(
     encoder: &mut wgpu::CommandEncoder,
     render_texture: &wgpu::Texture,
     output_buffer: &wgpu::Buffer,
@@ -76,60 +76,8 @@ fn copy_render_target_to_buffer(
     );
 }
 
-fn submit_texture_copy(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    render_texture: &wgpu::Texture,
-    width: u32,
-    height: u32,
-) -> Result<(wgpu::Buffer, u32), EidolonError> {
-    let layout = output_layout(width, height)?;
-    let output_buffer = create_output_buffer(device, &layout);
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Readback Encoder"),
-    });
-    copy_render_target_to_buffer(
-        &mut encoder,
-        render_texture,
-        &output_buffer,
-        width,
-        height,
-        layout.padded_bytes_per_row,
-    );
-    queue.submit(Some(encoder.finish()));
-    Ok((output_buffer, layout.padded_bytes_per_row))
-}
-
-/// Read a completed render texture into an RGBA image.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn read_texture_to_rgba(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    render_texture: &wgpu::Texture,
-    width: u32,
-    height: u32,
-) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
-    let (output_buffer, padded_bytes_per_row) =
-        submit_texture_copy(device, queue, render_texture, width, height)?;
-    map_output_buffer_to_rgba(device, &output_buffer, width, height, padded_bytes_per_row)
-}
-
-/// Read a completed render texture into an RGBA image without blocking the browser thread.
-#[cfg(target_arch = "wasm32")]
-pub(crate) async fn read_texture_to_rgba(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    render_texture: &wgpu::Texture,
-    width: u32,
-    height: u32,
-) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
-    let (output_buffer, padded_bytes_per_row) =
-        submit_texture_copy(device, queue, render_texture, width, height)?;
-    map_output_buffer_to_rgba(device, &output_buffer, width, height, padded_bytes_per_row).await
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn map_output_buffer_to_rgba(
+pub(crate) fn map_output_buffer_to_rgba(
     device: &wgpu::Device,
     output_buffer: &wgpu::Buffer,
     width: u32,
@@ -157,7 +105,7 @@ fn map_output_buffer_to_rgba(
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn map_output_buffer_to_rgba(
+pub(crate) async fn map_output_buffer_to_rgba(
     device: &wgpu::Device,
     output_buffer: &wgpu::Buffer,
     width: u32,
