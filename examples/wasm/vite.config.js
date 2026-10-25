@@ -29,11 +29,8 @@ function wasmAutoRebuild() {
         '--target',
         'bundler',
         '--out-dir',
-        'examples/wasm/pkg',
-        rootDir,
-        '--',
-        '--features',
-        'wasm',
+        path.resolve(__dirname, 'pkg'),
+        path.resolve(rootDir, 'crates/wasm'),
       ],
       { stdio: 'inherit', cwd: rootDir }
     );
@@ -59,15 +56,21 @@ function wasmAutoRebuild() {
   return {
     name: 'wasm-auto-rebuild',
     configureServer(server) {
-      const srcDir = path.resolve(rootDir, 'src');
+      const coreDir = path.resolve(rootDir, 'crates/core');
+      const wasmDir = path.resolve(rootDir, 'crates/wasm');
       const resourcesDir = path.resolve(rootDir, 'resources');
       const cargoToml = path.resolve(rootDir, 'Cargo.toml');
 
-      server.watcher.add([srcDir, resourcesDir, cargoToml]);
+      server.watcher.add([coreDir, wasmDir, resourcesDir, cargoToml]);
 
       let timer = null;
       const handleChange = (file) => {
-        if (!file.startsWith(srcDir) && !file.startsWith(resourcesDir) && file !== cargoToml) {
+        if (
+          !file.startsWith(coreDir) &&
+          !file.startsWith(wasmDir) &&
+          !file.startsWith(resourcesDir) &&
+          file !== cargoToml
+        ) {
           return;
         }
         clearTimeout(timer);

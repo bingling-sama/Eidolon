@@ -5,18 +5,18 @@ edition = "2021"
 publish = false
 
 [dependencies]
-eidolon-core = { path = "../../crates/core" }
-axum = "0.8"
-tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-moka = { version = "0.12", features = ["future"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-cgmath = "0.18"
-clap = { version = "4", features = ["derive", "env"] }
-image = "0.25"
-base64 = "0.22"
-crossbeam-channel = "0.5"
+eidolon-core.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+moka.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+cgmath.workspace = true
+clap = { workspace = true, features = ["env"] }
+image = { workspace = true, features = ["default"] }
+base64.workspace = true
+crossbeam-channel.workspace = true

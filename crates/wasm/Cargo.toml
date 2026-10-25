@@ -12,12 +12,12 @@ name = "eidolon"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eidolon-core = { path = "../core" }
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-console_log = "1"
-console_error_panic_hook = "0.1.7"
-web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
-image = { version = "0.25.5", default-features = false, features = ["png", "webp", "jpeg"] }
-log = "0.4"
-wgpu = "25"
+eidolon-core.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+console_log.workspace = true
+console_error_panic_hook.workspace = true
+web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
+image = { workspace = true, features = ["png", "webp", "jpeg"] }
+log.workspace = true
+wgpu.workspace = true

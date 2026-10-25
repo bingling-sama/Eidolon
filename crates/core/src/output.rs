@@ -659,7 +659,7 @@ mod tests {
         .unwrap();
 
         let file = fs::File::open(&path).unwrap();
-        let decoder = png::Decoder::new(file);
+        let decoder = png::Decoder::new(std::io::BufReader::new(file));
         let mut reader = decoder.read_info().unwrap();
         assert_eq!(reader.info().size(), (2, 2));
         assert!(reader.info().is_animated());
@@ -668,7 +668,7 @@ mod tests {
         assert_eq!(actl.num_plays, 2);
 
         let mut frame_count = 0;
-        let mut buf = vec![0u8; reader.output_buffer_size()];
+        let mut buf = vec![0u8; reader.output_buffer_size().expect("output buffer size")];
         while let Ok(info) = reader.next_frame(&mut buf) {
             assert_eq!(info.width, 2);
             assert_eq!(info.height, 2);
