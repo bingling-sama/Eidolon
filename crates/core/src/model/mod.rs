@@ -307,11 +307,12 @@ mod tests {
     use super::*;
 
     fn make_device() -> (wgpu::Device, wgpu::Queue) {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
+            ..Default::default()
         }))
         .expect("No wgpu adapter");
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))

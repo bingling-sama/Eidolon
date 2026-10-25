@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,5 +85,5 @@ function wasmAutoRebuild() {
 
 export default defineConfig({
   base: process.env.BASE_URL || '/',
-  plugins: [wasmAutoRebuild(), wasm(), topLevelAwait()],
+  plugins: [wasmAutoRebuild(), wasm()],
 });

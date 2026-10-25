@@ -1,16 +1,5 @@
 packages:
   - "crates/wasm"
   - "examples/wasm"
-
-overrides:
-  '@swc/core': '1.15.47'
-  '@swc/wasm': '1.15.47'
-  uuid: '^11.1.1'
-
 allowBuilds:
-  '@swc/core': true
-  esbuild: true
-
-onlyBuiltDependencies:
-  - '@swc/core'
-  - 'esbuild'
+  '@swc/core': set this to true or false

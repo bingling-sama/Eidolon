@@ -441,11 +441,12 @@ fn load_model_from_bytes_matches_from_file() {
     let slim_bytes = std::fs::read("resources/slim.obj").expect("Failed to read slim.obj");
     let classic_bytes = std::fs::read("resources/classic.obj").expect("Failed to read classic.obj");
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: None,
         force_fallback_adapter: false,
+        ..Default::default()
     }))
     .expect("No wgpu adapter");
     let (device, _queue) =
@@ -470,11 +471,12 @@ fn load_model_from_bytes_matches_from_file() {
 
 #[test]
 fn load_model_from_bytes_invalid_data_errors() {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: None,
         force_fallback_adapter: false,
+        ..Default::default()
     }))
     .expect("No wgpu adapter");
     let (device, _queue) =
@@ -599,11 +601,12 @@ fn load_body_corrupted_png_errors() {
 
 #[test]
 fn load_model_from_bytes_missing_required_part_errors() {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: None,
         force_fallback_adapter: false,
+        ..Default::default()
     }))
     .expect("No wgpu adapter");
     let (device, _queue) =

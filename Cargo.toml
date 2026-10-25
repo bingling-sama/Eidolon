@@ -20,7 +20,7 @@ repository = "https://github.com/bingling-sama/eidolon"
 eidolon-core = { path = "crates/core" }
 
 # Graphics and system
-wgpu = "25"
+wgpu = "30"
 winit = "0.30"
 pollster = "1.0"
 bytemuck = { version = "1", features = ["derive"] }

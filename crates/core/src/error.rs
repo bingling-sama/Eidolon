@@ -22,8 +22,36 @@ pub enum EidolonError {
     /// Output path, format, encoding, or write failure.
     Output(String),
     /// Window surface acquisition or presentation failure.
-    Surface(wgpu::SurfaceError),
+    Surface(SurfaceError),
 }
+
+/// Window surface acquisition or presentation failure kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceError {
+    Timeout,
+    Occluded,
+    Outdated,
+    Lost,
+    Validation,
+    OutOfMemory,
+    Other,
+}
+
+impl fmt::Display for SurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Timeout => write!(f, "Surface timed out"),
+            Self::Occluded => write!(f, "Surface is occluded"),
+            Self::Outdated => write!(f, "Surface is outdated"),
+            Self::Lost => write!(f, "Surface was lost"),
+            Self::Validation => write!(f, "Surface validation error"),
+            Self::OutOfMemory => write!(f, "Surface out of memory"),
+            Self::Other => write!(f, "Unknown surface error"),
+        }
+    }
+}
+
+impl std::error::Error for SurfaceError {}
 
 impl fmt::Display for EidolonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -63,8 +91,8 @@ impl From<image::ImageError> for EidolonError {
     }
 }
 
-impl From<wgpu::SurfaceError> for EidolonError {
-    fn from(error: wgpu::SurfaceError) -> Self {
+impl From<SurfaceError> for EidolonError {
+    fn from(error: SurfaceError) -> Self {
         Self::Surface(error)
     }
 }
@@ -163,10 +191,10 @@ mod tests {
 
     #[test]
     fn surface_error_conversion_preserves_recovery_kind() {
-        let error: EidolonError = wgpu::SurfaceError::Lost.into();
+        let error: EidolonError = SurfaceError::Lost.into();
         assert!(matches!(
             error,
-            EidolonError::Surface(wgpu::SurfaceError::Lost)
+            EidolonError::Surface(SurfaceError::Lost)
         ));
     }
 
