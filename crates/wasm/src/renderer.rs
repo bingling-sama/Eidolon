@@ -6,6 +6,8 @@ use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon_core::renderer::Renderer;
+use image::codecs::jpeg::JpegEncoder;
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageFormat;
 use wasm_bindgen::prelude::*;
 
@@ -361,8 +363,13 @@ impl CanvasRenderer {
         let mut encoded_bytes = Vec::new();
         match format_str.to_ascii_lowercase().as_str() {
             "png" => {
+                let encoder = PngEncoder::new_with_quality(
+                    &mut encoded_bytes,
+                    CompressionType::Fast,
+                    FilterType::Sub,
+                );
                 image_buffer
-                    .write_to(&mut Cursor::new(&mut encoded_bytes), ImageFormat::Png)
+                    .write_with_encoder(encoder)
                     .map_err(|e| JsValue::from_str(&e.to_string()))?;
             }
             "webp" => {
@@ -372,7 +379,8 @@ impl CanvasRenderer {
             }
             "jpeg" | "jpg" => {
                 let rgb = image::DynamicImage::ImageRgba8(image_buffer).to_rgb8();
-                rgb.write_to(&mut Cursor::new(&mut encoded_bytes), ImageFormat::Jpeg)
+                let encoder = JpegEncoder::new_with_quality(&mut encoded_bytes, 80);
+                rgb.write_with_encoder(encoder)
                     .map_err(|e| JsValue::from_str(&e.to_string()))?;
             }
             other => return Err(JsValue::from_str(&format!("unsupported format: '{other}'"))),
