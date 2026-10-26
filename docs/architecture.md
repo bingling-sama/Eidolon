@@ -69,7 +69,7 @@ The anchor transforms the player collision box, computes its scene-space AABB, a
 at the AABB's horizontal center just above its highest point. An unlit billboard pipeline draws it
 after the player mesh. The default path draws a 25%-opacity depth-independent pass followed by the
 normal depth-tested pass; the collision box is 1.8 world units tall and the default label gap is
-0.5 units (both scale with `Camera::scale`); `nametag_see_through = false` skips the first pass.
+0.5 units; `nametag_see_through = false` skips the first pass.
 
 For `preview`, the same scene data and pipeline are used, but `Renderer::new_windowed` creates a
 window surface and `render_frame` presents each frame to the swapchain.
@@ -98,8 +98,9 @@ Textures are sampled with nearest filtering so Minecraft skin pixels stay crisp.
 
 ## Coordinate And Angle Conventions
 
-- **Camera**: yaw and pitch are degrees. `yaw` orbits around the Y axis (0° = front-right, 180° = front). `pitch` is measured from horizontal (90° = level). The eye orbits a fixed look-at point at `(0, 1, 0)` with radius `4.0 / scale`.
-- **Camera scale** (CLI: `--cam-zoom`): positive. Larger = closer. Also scales the model matrix.
+- **Camera**: yaw and pitch are degrees. `yaw` orbits around the Y axis (0° = front-right, 180° = front). `pitch` is measured from horizontal (90° = level). The eye orbits a fixed look-at point `(0, 1, 0)` at a constant radius.
+- **Camera scale** (CLI: `--cam-zoom`): positive. Larger = closer, implemented as a lens zoom:
+  the orbit radius stays fixed and the field of view narrows (clamped to 1-120 degrees).
 - **Posture**: all joint angles are degrees. 0° = neutral (no rotation from the model's bind pose). Positive yaw turns the head right. Positive pitch tilts the head up / swings limbs forward.
 - **Elytra posture**: the mirrored pair rotates around the central upper-back attachment at `(0, 1.5, 0.125)`. Pitch is shared; yaw and roll describe the left side and are mirrored on the right. Local XYZ Euler angles use the upstream `Rz × Ry × Rx` matrix order. `FLYING` uses 20° pitch and a 60° spread.
 - **Character rotation**: Euler rotation in X, then Y, then Z order, applied before per-joint matrices.

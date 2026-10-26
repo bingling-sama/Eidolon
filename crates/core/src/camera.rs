@@ -6,7 +6,8 @@ pub struct Camera {
     pub yaw: f32,
     /// Orbit pitch (degrees). [`Camera::get_view_matrix`] uses `(pitch - 90°)` as polar angle from horizontal.
     pub pitch: f32,
-    /// Positive value moves the eye closer (smaller orbit radius: `4.0 / scale`).
+    /// Magnification. Implemented as a lens zoom: the orbit radius stays fixed and the field
+    /// of view narrows, so a closer look does not exaggerate perspective.
     pub scale: f32,
 }
 
@@ -20,6 +21,15 @@ impl Default for Camera {
     }
 }
 
+/// Orbit radius used by every view. Zoom is a lens zoom, not a dolly.
+const ORBIT_RADIUS: f32 = 4.0;
+/// Field of view at `scale == 1.0` (degrees).
+const DEFAULT_FOVY_DEG: f32 = 60.0;
+/// Field of view stays within [MIN_FOVY, MAX_FOVY] so extreme zooms cannot produce a
+/// degenerate (or mirroring) projection.
+const MIN_FOVY_DEG: f32 = 1.0;
+const MAX_FOVY_DEG: f32 = 120.0;
+
 impl Camera {
     pub fn new() -> Self {
         Self::default()
@@ -27,7 +37,7 @@ impl Camera {
 
     /// Computes the view matrix from camera parameters.
     pub fn get_view_matrix(&self) -> [[f32; 4]; 4] {
-        let distance = 4.0 / self.scale;
+        let distance = ORBIT_RADIUS;
         let yaw_rad = self.yaw.to_radians();
         let pitch_rad = (self.pitch - 90.0).to_radians();
 
@@ -45,7 +55,13 @@ impl Camera {
     /// Computes the projection matrix from camera parameters.
     pub fn get_projection_matrix(&self, width: u32, height: u32) -> [[f32; 4]; 4] {
         let aspect_ratio = width as f32 / height as f32;
-        let fovy = Deg(60.0);
+        // Lens zoom: keep the orbit radius and narrow the field of view instead.
+        let half_angle = ((DEFAULT_FOVY_DEG * 0.5).to_radians().tan() / self.scale).atan();
+        let half_angle = half_angle.clamp(
+            (MIN_FOVY_DEG * 0.5).to_radians(),
+            (MAX_FOVY_DEG * 0.5).to_radians(),
+        );
+        let fovy = Deg(2.0 * half_angle.to_degrees());
         let znear = 0.1;
         let zfar = 1024.0;
         perspective(fovy, aspect_ratio, znear, zfar).into()
@@ -74,22 +90,54 @@ mod tests {
     }
 
     #[test]
-    fn view_matrix_scale_doubles_distance() {
-        // distance = 4.0 / scale; at scale=0.5, distance=8.0 (twice default)
-        let cam_half = Camera {
+    fn zoom_keeps_the_field_of_view_within_bounds() {
+        let fovy = |scale: f32| {
+            let proj = Camera {
+                yaw: 0.0,
+                pitch: 90.0,
+                scale,
+            }
+            .get_projection_matrix(800, 600);
+            2.0 * (1.0 / proj[1][1]).atan().to_degrees()
+        };
+
+        assert!(
+            (fovy(1.0) - 60.0).abs() < 0.01,
+            "default fovy: {}",
+            fovy(1.0)
+        );
+        assert!(fovy(2.0) < fovy(1.0));
+        assert!(
+            (fovy(10_000.0) - 1.0).abs() < 0.01,
+            "max zoom: {}",
+            fovy(10_000.0)
+        );
+        assert!(
+            (fovy(0.0001) - 120.0).abs() < 0.01,
+            "min zoom: {}",
+            fovy(0.0001)
+        );
+    }
+
+    #[test]
+    fn zoom_narrows_the_lens_without_moving_the_camera() {
+        let zoomed = Camera {
             yaw: 0.0,
             pitch: 90.0,
-            scale: 0.5,
+            scale: 2.0,
         };
-        let cam_full = Camera {
+        let wide = Camera {
             yaw: 0.0,
             pitch: 90.0,
             scale: 1.0,
         };
-        let view_half = cam_half.get_view_matrix();
-        let view_full = cam_full.get_view_matrix();
-        // different distance → different matrices
-        assert_ne!(view_half, view_full);
+        // A lens zoom keeps the orbit radius fixed, so the view matrix is unchanged...
+        assert_eq!(zoomed.get_view_matrix(), wide.get_view_matrix());
+        // ...and only the projection narrows.
+        assert_ne!(
+            zoomed.get_projection_matrix(800, 600),
+            wide.get_projection_matrix(800, 600)
+        );
     }
 
     #[test]

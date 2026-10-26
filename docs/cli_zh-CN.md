@@ -30,7 +30,7 @@ cargo run -- render [选项] <皮肤 PNG> [输出]
 - `--elytra-spread <DEG>` 覆盖所选姿势的鞘翅开合角；默认使用姿势自带角度
 - `--cam-yaw <DEG>` 相机 yaw。默认：`180`
 - `--cam-pitch <DEG>` 相机 pitch。默认：`90`
-- `--cam-zoom <FLOAT>` 相机缩放（必须 > 0）。默认：`1.0`
+- `--cam-zoom <FLOAT>` 相机缩放（必须 > 0），实现为镜头变焦（相机距离固定、视场角变化）。默认：`1.0`
 - `--posture <idle|walk|run|wave|fly>` 动作类型。`fly` 会展开左右鞘翅。默认：`idle`
 - `--head-yaw <DEG>` 覆盖头部 yaw
 - `--head-pitch <DEG>` 覆盖头部 pitch

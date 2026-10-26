@@ -60,7 +60,7 @@ RGBA 像素。native 为 `Renderer::render` 同步等待 map，wasm 为 `Rendere
 
 设置 `Character::nametag` 后，Renderer 会将单行文本光栅化为 GPU 资源并存入该 Character；
 克隆 Character 时通过 `Arc` 共享缓存资源。之后通过不受光照影响的 billboard 管线绘制。锚点先变换玩家碰撞箱并计算场景空间 AABB，再放在 AABB 水平中心的最高点
-上方。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位，二者都会随 `Camera::scale` 缩放。
+上方。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位。
 默认先绘制 25% 透明度且忽略深度的遮挡层，再绘制正常深度测试层；
 `nametag_see_through = false` 会跳过第一层。
 
@@ -90,7 +90,8 @@ output adapter，并使用累计取整避免漂移；Renderer 仍然只负责单
 ## 坐标与角度说明
 
 - 相机 yaw 和 pitch 使用角度制。
-- `Camera::scale` 是正数缩放值。数值越大，相机越靠近；当前 uniform 路径中也会缩放模型。
+- `Camera::scale` 是正数缩放值，实现为镜头变焦：相机轨道半径固定，数值越大视场角越窄
+  （限制在 1~120 度），因此放大不会加剧透视。
 - 角色旋转使用 Euler 角，顺序为 X、Y、Z。
 - 姿势字段使用角度制。部分字段按中立 Minecraft 姿势解释，例如头部和腿部 pitch 在渲染器中会
   以 `90` 度为基准偏移。

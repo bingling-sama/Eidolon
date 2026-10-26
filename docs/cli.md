@@ -37,7 +37,7 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--elytra-spread <DEG>` | Override the selected posture's elytra opening angle | *(posture value)* |
 | `--cam-yaw <DEG>` | Camera orbit yaw in degrees | `180` |
 | `--cam-pitch <DEG>` | Camera orbit pitch in degrees | `90` |
-| `--cam-zoom <FLOAT>` | Camera zoom; higher = closer (orbit radius: 4.0 / zoom). Must be > 0 | `1.0` |
+| `--cam-zoom <FLOAT>` | Camera zoom; higher = larger. Narrowing the field of view, not moving the camera. Must be > 0 | `1.0` |
 | `--posture <ACTION>` | Action: `idle`, `walk`, `run`, `wave`, `fly` | `idle` |
 
 **Power-user options** (show in `--help` but not `-h`):

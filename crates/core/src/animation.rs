@@ -288,7 +288,7 @@ impl AnimationPreset {
                 head_pitch: (phase * 2.0).sin() * 1.5,
                 left_arm_roll: 4.0,
                 left_arm_pitch: -wave * 35.0,
-                right_arm_roll: -4.0,
+                right_arm_roll: 4.0,
                 right_arm_pitch: wave * 35.0,
                 left_leg_pitch: wave * 35.0,
                 right_leg_pitch: -wave * 35.0,
@@ -299,9 +299,9 @@ impl AnimationPreset {
                 body_pitch: -8.0,
                 head_yaw: wave * 2.5,
                 head_pitch: -4.0 + (phase * 2.0).sin() * 2.0,
-                left_arm_roll: 10.0,
+                left_arm_roll: 0.0,
                 left_arm_pitch: -wave * 70.0,
-                right_arm_roll: -10.0,
+                right_arm_roll: 0.0,
                 right_arm_pitch: wave * 70.0,
                 left_leg_pitch: wave * 65.0,
                 right_leg_pitch: -wave * 65.0,
@@ -325,7 +325,7 @@ impl AnimationPreset {
                 head_pitch: 42.0 + (phase * 2.0).sin() * 2.0,
                 left_arm_roll: 4.0 + wave * 2.0,
                 left_arm_pitch: -8.0 + wave * 3.0,
-                right_arm_roll: -4.0 - wave * 2.0,
+                right_arm_roll: 4.0 + wave * 2.0,
                 right_arm_pitch: -8.0 - wave * 3.0,
                 left_leg_pitch: -5.0 + wave * 2.0,
                 right_leg_pitch: -5.0 - wave * 2.0,
@@ -440,6 +440,25 @@ mod tests {
         assert_close(fly_quarter.elytra_pitch, 23.0);
         assert_close(fly_half.elytra_pitch, 20.0);
         assert_close(fly_quarter.elytra_roll, 64.782_39);
+    }
+
+    #[test]
+    fn symmetric_presets_store_the_same_arm_roll_for_both_arms() {
+        // The renderer applies the left arm's roll negated (mirrored), so a symmetric pose
+        // stores the same roll value on both arms.
+        for preset in [
+            AnimationPreset::Walk,
+            AnimationPreset::Run,
+            AnimationPreset::Fly,
+        ] {
+            for fraction in 0..4 {
+                let posture = preset.sample(preset.cycle_duration() * fraction / 4);
+                assert_eq!(
+                    posture.left_arm_roll, posture.right_arm_roll,
+                    "{preset:?} should roll both arms the same way in model space"
+                );
+            }
+        }
     }
 
     #[test]

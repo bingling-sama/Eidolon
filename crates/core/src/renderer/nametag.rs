@@ -252,11 +252,11 @@ pub(crate) fn compute_nametag_uniform(
     width: u32,
     height: u32,
 ) -> Uniforms {
-    let base = compute_base_model_matrix(character, camera);
+    let base = compute_base_model_matrix(character);
     let bounds = transformed_collision_box_bounds(base);
     let anchor = Point3::new(
         (bounds.min.x + bounds.max.x) * 0.5,
-        bounds.max.y + NAMETAG_VERTICAL_GAP * camera.scale,
+        bounds.max.y + NAMETAG_VERTICAL_GAP,
         (bounds.min.z + bounds.max.z) * 0.5,
     );
     let view: Matrix4<f32> = camera.get_view_matrix().into();
@@ -267,9 +267,8 @@ pub(crate) fn compute_nametag_uniform(
         Vector4::new(inverse_view.z.x, inverse_view.z.y, inverse_view.z.z, 0.0),
         Vector4::unit_w(),
     );
-    let model = Matrix4::from_translation(Vector3::new(anchor.x, anchor.y, anchor.z))
-        * billboard_rotation
-        * Matrix4::from_scale(camera.scale);
+    let model =
+        Matrix4::from_translation(Vector3::new(anchor.x, anchor.y, anchor.z)) * billboard_rotation;
 
     Uniforms {
         perspective: camera.get_projection_matrix(width, height),
@@ -388,7 +387,7 @@ mod tests {
             character.position = Vector3::new(1.0, 2.0, 3.0);
             character.rotation = Vector3::new(10.0, 25.0, 5.0);
 
-            let base = compute_base_model_matrix(&character, &camera);
+            let base = compute_base_model_matrix(&character);
             let corners = [-0.5, 0.5].into_iter().flat_map(|x| {
                 [0.0, 1.8].into_iter().flat_map(move |y| {
                     [-0.25, 0.25]
@@ -410,7 +409,7 @@ mod tests {
             );
             let expected_anchor = Point3::new(
                 (min.x + max.x) * 0.5,
-                max.y + NAMETAG_VERTICAL_GAP * camera.scale,
+                max.y + NAMETAG_VERTICAL_GAP,
                 (min.z + max.z) * 0.5,
             );
             let uniform = compute_nametag_uniform(&character, &camera, 800, 600);

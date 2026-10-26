@@ -180,7 +180,7 @@ pub struct SceneArgs {
     #[arg(long, default_value_t = 90.0)]
     pub cam_pitch: f32,
 
-    /// Camera zoom; higher = closer (orbit radius: 4.0 / zoom).
+    /// Camera zoom; higher = larger. Narrows the field of view instead of moving the camera.
     #[arg(long, default_value_t = 1.0, value_parser = parse_positive_scale)]
     pub cam_zoom: f32,
 
