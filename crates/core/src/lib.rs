@@ -23,4 +23,6 @@ pub mod error;
 pub mod model;
 pub mod output;
 pub mod renderer;
+#[cfg(test)]
+mod test_support;
 mod texture;

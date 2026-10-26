@@ -15,7 +15,12 @@ fn performance_benchmark(c: &mut Criterion) {
 
     let renderer = Renderer::new().expect("Failed to create renderer");
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../resources/bingling_sama.png")
+                .to_string_lossy(),
+            SkinType::Classic,
+        )
         .expect("Failed to load body");
     let mut character = Character::from_body(body);
 

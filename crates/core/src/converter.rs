@@ -17,8 +17,8 @@ mod tests {
 
     #[test]
     fn test_single2double_reexport_delegation() {
-        let img = image::open("resources/SSSSSteven.png")
-            .expect("SSSSSteven.png not found — run from project root");
+        let img = image::open(crate::test_support::resource("SSSSSteven.png"))
+            .expect("SSSSSteven.png not found");
         let result = single2double(&img);
         assert!(result.is_ok(), "conversion failed: {:?}", result.err());
         let out = result.unwrap();

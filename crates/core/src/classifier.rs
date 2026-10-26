@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn analyze_turtle_cape() {
-        let bytes = std::fs::read("resources/Turtle_Cape.png").unwrap();
+        let bytes = std::fs::read(crate::test_support::resource("Turtle_Cape.png")).unwrap();
         let img = image::load_from_memory(&bytes).unwrap();
         let mut non_transparent = Vec::new();
         for y in 0..img.height() {
