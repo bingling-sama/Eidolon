@@ -9,16 +9,25 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+mod common;
+
+use common::resource_str;
 use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, Posture, SkinType};
 use eidolon_core::renderer::Renderer;
 
-/// Golden pixel hashes across supported rasterizers / environments:
-/// - 0x98014699d744ecb2 (10953113395297316018): Local Linux / Mesa rasterizer
-/// - 0xa351c6da331c13f2 (11768405941758465010): GitHub Actions Ubuntu runner (Mesa llvmpipe)
+/// Golden pixel hashes, one entry per rendering environment. Rasterizer output differs
+/// between backends, so a new environment (or an intentional rendering change) only needs its
+/// own value: run the test and copy the hash it prints.
+///
+/// - 0xed3ec08a32ce058d: Windows / Vulkan
+/// - 0x80fec08a32d1d01c: Linux / Mesa (WSL2)
+///
+/// The GitHub Actions runner uses a different Mesa build, so it still needs its own value:
+/// run the test there and copy the hash it prints.
 const ACCEPTED_GOLDEN_HASHES: &[u64] = &[
-    10953113395297316018, // 0x98014699d744ecb2
-    11768405941758465010, // 0xa351c6da331c13f2
+    17095312935335363981, // 0xed3ec08a32ce058d
+    9295078380729913372,  // 0x80fec08a32d1d01c
 ];
 
 fn hash_pixels(width: u32, height: u32, pixels: &[u8]) -> u64 {
@@ -36,7 +45,7 @@ fn snapshot_classic_standing_front() {
     let renderer = Renderer::new().expect("Failed to create Renderer");
 
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("Failed to load body");
     let mut character = Character::from_body(body);
     character.posture = Posture {
