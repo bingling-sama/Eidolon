@@ -25,7 +25,7 @@ cargo bench -p eidolon-core
 pnpm --dir examples/wasm run test:e2e
 ```
 
-`cargo bench` 会把基准测试渲染输出写入 `.bench/`。
+`cargo bench` 执行内存渲染、资源处理以及基于临时目录的动画导出基准测试。
 
 ## 测试说明
 

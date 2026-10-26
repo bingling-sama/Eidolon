@@ -28,7 +28,7 @@ Eidolon is structured as a Cargo + pnpm monorepo:
     - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
     - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
     - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.
-  - `benches/performance_benchmark.rs` renders a fixed batch of images for Criterion benchmarks.
+  - `benches/performance_benchmark.rs` defines Criterion benchmark suites for resolution scaling, scene variations, asset loading, image processing, animation sampling, and static/animated exports.
 - `crates/cli` (`eidolon-cli`): Command line interface binary (`eidolon`).
   - `src/main.rs`: Lightweight 31-line entry point initializing logger and dispatching parsed CLI subcommands.
   - `src/args.rs`: Clap argument structs and enums (`Cli`, `Command`, `SceneArgs`, `ViewportArgs`, `RenderAnimationArgs`).
