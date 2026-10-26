@@ -148,44 +148,49 @@ test.describe('Eidolon WASM Performance Benchmarks', () => {
     const formats = ['png', 'webp', 'jpeg'];
 
     const benchmarkResults = await page.evaluate(async ({ resolutions, formats }) => {
+      window.__eidolon_suspend_raf = true;
       const renderer = window.__eidolon_renderer;
       if (!renderer) throw new Error('Renderer not available');
 
-      // Warm-up run
-      await renderer.capture_frame(400, 300, 'png');
+      try {
+        // Warm-up run
+        await renderer.capture_frame(400, 300, 'png');
 
-      const records = [];
-      const ITERATIONS = 3;
+        const records = [];
+        const ITERATIONS = 3;
 
-      for (const res of resolutions) {
-        for (const fmt of formats) {
-          const times = [];
-          let byteSize = 0;
+        for (const res of resolutions) {
+          for (const fmt of formats) {
+            const times = [];
+            let byteSize = 0;
 
-          for (let i = 0; i < ITERATIONS; i++) {
-            const t0 = performance.now();
-            const bytes = await renderer.capture_frame(res.w, res.h, fmt);
-            const duration = performance.now() - t0;
-            times.push(duration);
-            byteSize = bytes.length;
+            for (let i = 0; i < ITERATIONS; i++) {
+              const t0 = performance.now();
+              const bytes = await renderer.capture_frame(res.w, res.h, fmt);
+              const duration = performance.now() - t0;
+              times.push(duration);
+              byteSize = bytes.length;
+            }
+
+            times.sort((a, b) => a - b);
+            const medianMs = times[Math.floor(times.length / 2)];
+            const megapixels = (res.w * res.h) / 1_000_000;
+            const throughputMpSec = (megapixels / (medianMs / 1000));
+
+            records.push({
+              resName: res.name,
+              format: fmt.toUpperCase(),
+              medianMs,
+              sizeKb: byteSize / 1024,
+              throughputMpSec,
+            });
           }
-
-          times.sort((a, b) => a - b);
-          const medianMs = times[Math.floor(times.length / 2)];
-          const megapixels = (res.w * res.h) / 1_000_000;
-          const throughputMpSec = (megapixels / (medianMs / 1000));
-
-          records.push({
-            resName: res.name,
-            format: fmt.toUpperCase(),
-            medianMs,
-            sizeKb: byteSize / 1024,
-            throughputMpSec,
-          });
         }
-      }
 
-      return records;
+        return records;
+      } finally {
+        window.__eidolon_suspend_raf = false;
+      }
     }, { resolutions, formats });
 
     console.log('\n================ CAPTURE & ENCODE BENCHMARK ==================');
@@ -212,22 +217,27 @@ test.describe('Eidolon WASM Performance Benchmarks', () => {
     await loadSkin(page);
 
     const memStats = await page.evaluate(async () => {
+      window.__eidolon_suspend_raf = true;
       const renderer = window.__eidolon_renderer;
       if (!renderer) throw new Error('Renderer not available');
 
-      const initialMem = performance.memory ? performance.memory.usedJSHeapSize : null;
+      try {
+        const initialMem = performance.memory ? performance.memory.usedJSHeapSize : null;
 
-      // Perform 10 consecutive capture operations across formats
-      for (let i = 0; i < 10; i++) {
-        await renderer.capture_frame(400, 300, i % 2 === 0 ? 'png' : 'webp');
+        // Perform 10 consecutive capture operations across formats
+        for (let i = 0; i < 10; i++) {
+          await renderer.capture_frame(400, 300, i % 2 === 0 ? 'png' : 'webp');
+        }
+
+        const postMem = performance.memory ? performance.memory.usedJSHeapSize : null;
+
+        return {
+          initialMb: initialMem ? initialMem / (1024 * 1024) : null,
+          postMb: postMem ? postMem / (1024 * 1024) : null,
+        };
+      } finally {
+        window.__eidolon_suspend_raf = false;
       }
-
-      const postMem = performance.memory ? performance.memory.usedJSHeapSize : null;
-
-      return {
-        initialMb: initialMem ? initialMem / (1024 * 1024) : null,
-        postMb: postMem ? postMem / (1024 * 1024) : null,
-      };
     });
 
     if (memStats.initialMb !== null && memStats.postMb !== null) {

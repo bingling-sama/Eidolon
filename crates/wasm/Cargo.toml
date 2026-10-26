@@ -12,7 +12,7 @@ name = "eidolon"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eidolon-core.workspace = true
+eidolon-core = { workspace = true, features = ["webgl"] }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 console_log.workspace = true
@@ -20,4 +20,4 @@ console_error_panic_hook.workspace = true
 web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
 image = { workspace = true, features = ["png", "webp", "jpeg"] }
 log.workspace = true
-wgpu.workspace = true
+wgpu = { workspace = true, features = ["webgl"] }

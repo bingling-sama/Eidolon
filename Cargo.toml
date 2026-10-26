@@ -58,6 +58,7 @@ crossbeam-channel = "0.5"
 # WASM
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
 console_log = "1"
 console_error_panic_hook = "0.1.7"
 web-sys = "0.3"

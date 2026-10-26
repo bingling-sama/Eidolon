@@ -231,15 +231,20 @@ test('renderer captures frames in png, webp, and jpeg formats with correct magic
   await loadSkin(page);
 
   const results = await page.evaluate(async () => {
+    window.__eidolon_suspend_raf = true;
     const renderer = window.__eidolon_renderer;
     if (!renderer) throw new Error('Renderer not available on window');
 
-    const png = Array.from(await renderer.capture_frame(128, 128, 'png'));
-    const webp = Array.from(await renderer.capture_frame(128, 128, 'webp'));
-    const jpeg = Array.from(await renderer.capture_frame(128, 128, 'jpeg'));
-    const def = Array.from(await renderer.capture_frame(128, 128));
+    try {
+      const png = Array.from(await renderer.capture_frame(128, 128, 'png'));
+      const webp = Array.from(await renderer.capture_frame(128, 128, 'webp'));
+      const jpeg = Array.from(await renderer.capture_frame(128, 128, 'jpeg'));
+      const def = Array.from(await renderer.capture_frame(128, 128));
 
-    return { png, webp, jpeg, def };
+      return { png, webp, jpeg, def };
+    } finally {
+      window.__eidolon_suspend_raf = false;
+    }
   });
 
   // PNG magic: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A

@@ -170,7 +170,7 @@ window.addEventListener('resize', resizeCanvas);
 
 // ---- rAF render loop ----
 function frame(timestamp) {
-  if (renderer) {
+  if (renderer && !window.__eidolon_suspend_raf) {
     if (hasModel()) {
       const wasPlaying = playback.playing;
       if (playback.lastTimestamp != null) {
@@ -642,6 +642,7 @@ btnCopy.addEventListener('click', async () => {
     const w = Math.max(64, Math.min(4096, parseInt(inputSizeW.value, 10) || 800));
     const h = Math.max(64, Math.min(4096, parseInt(inputSizeH.value, 10) || 600));
     renderer.set_background(bg.r, bg.g, bg.b, bg.a);
+    window.__eidolon_suspend_raf = true;
     const pngBytes = await renderer.capture_frame(w, h, 'png');
     syncBackground();
     const blob = new Blob([pngBytes], { type: 'image/png' });
@@ -664,6 +665,7 @@ btnCopy.addEventListener('click', async () => {
       btnCopy.textContent = 'Copy to Clipboard';
     }, 2000);
   } finally {
+    window.__eidolon_suspend_raf = false;
     btnCopy.disabled = false;
   }
 });
@@ -682,6 +684,7 @@ btnExport.addEventListener('click', async () => {
     const h = Math.max(64, Math.min(4096, parseInt(inputSizeH.value, 10) || 600));
     // Set true RGBA for export (supports transparency), then restore preview color.
     renderer.set_background(bg.r, bg.g, bg.b, bg.a);
+    window.__eidolon_suspend_raf = true;
     const bytes = await renderer.capture_frame(w, h, currentFormat);
     syncBackground(); // restore preview-adapted color
 
@@ -731,6 +734,7 @@ btnExport.addEventListener('click', async () => {
   } catch (e) {
     console.error('Export failed:', e);
   } finally {
+    window.__eidolon_suspend_raf = false;
     btnExport.disabled = false;
     setExportFormat(currentFormat);
   }

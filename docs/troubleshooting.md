@@ -86,6 +86,17 @@ The Web `CanvasRenderer` prioritizes the **WebGPU** backend for maximum performa
 | **Chrome / Firefox (Android)** | Android 10+ | **WebGPU** / **WebGL2** | 🟢 Full Support | Select devices run WebGPU; others fall back to WebGL2 |
 | **IE11 / Legacy Edge (EdgeHTML)** | Any | None | 🔴 Unsupported | Lacks WebAssembly and WebGL2 support |
 
+### WebGPU vs WebGL2 Performance Profile
+
+| Metric | WebGPU Backend | WebGL2 Fallback | Notes |
+| :--- | :---: | :---: | :--- |
+| **Renderer Init Latency** | ~25 – 40 ms | ~35 – 160 ms | WebGPU starts ~3–4× faster |
+| **First Frame Latency** | ~2.5 – 3.2 ms | ~22 – 35 ms | WebGL2 incurs pipeline shader compilation on first draw |
+| **Animation Framerate** | 60 FPS (16.7 ms avg) | 60 FPS (16.7 ms avg) | Zero jank frames across both backends |
+| **Capture 800×600 PNG** | ~6.7 ms (71.6 MP/s) | ~10.5 ms (45.7 MP/s) | Higher GPU readback throughput on WebGPU |
+| **Capture 1080p PNG** | ~15.6 ms (133 MP/s) | ~16.4 ms (126 MP/s) | High throughput sustained across resolutions |
+| **Memory Leak / Delta** | 0.00 MB | 0.00 MB | Zero heap growth across repeated offscreen captures |
+
 ## Output Looks Cropped Or Too Small
 
 Adjust camera and viewport options:

@@ -31,7 +31,8 @@ pub struct CanvasRenderer {
 impl CanvasRenderer {
     /// Attach to a `<canvas>` element. Call as `await CanvasRenderer.new(canvas)`.
     pub async fn new(canvas: web_sys::HtmlCanvasElement) -> Result<CanvasRenderer, JsValue> {
-        let inner = Renderer::new_windowed_async(wgpu::SurfaceTarget::Canvas(canvas))
+        let surface_target = wgpu::SurfaceTarget::Canvas(canvas);
+        let inner = Renderer::new_windowed_async(surface_target)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         log::info!("Canvas renderer created");

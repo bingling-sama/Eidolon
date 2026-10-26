@@ -107,6 +107,16 @@ pub(crate) fn map_output_buffer_to_rgba(
 }
 
 #[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+export function yield_to_event_loop() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+"#)]
+extern "C" {
+    fn yield_to_event_loop() -> js_sys::Promise;
+}
+
+#[cfg(target_arch = "wasm32")]
 pub(crate) async fn map_output_buffer_to_rgba(
     device: &wgpu::Device,
     output_buffer: &wgpu::Buffer,
@@ -115,17 +125,21 @@ pub(crate) async fn map_output_buffer_to_rgba(
     padded_bytes_per_row: u32,
 ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
     let buffer_slice = output_buffer.slice(..);
-    let (tx, rx) = futures_channel::oneshot::channel();
+    let (tx, mut rx) = futures_channel::oneshot::channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
         let _ = tx.send(result);
     });
-    // On WASM, PollType::Wait yields to the browser event loop via requestAnimationFrame.
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| EidolonError::gpu(format!("device poll failed: {e}")))?;
-    let map_result = rx
-        .await
-        .map_err(|_| EidolonError::gpu("oneshot channel closed"))?;
+
+    let map_result = loop {
+        let _ = device.poll(wgpu::PollType::Poll);
+        match rx.try_recv() {
+            Ok(Some(result)) => break result,
+            Ok(None) => {
+                let _ = wasm_bindgen_futures::JsFuture::from(yield_to_event_loop()).await;
+            }
+            Err(_) => return Err(EidolonError::gpu("oneshot channel closed")),
+        }
+    };
     map_result.map_err(|e| EidolonError::gpu(format!("buffer map failed: {e:?}")))?;
 
     let data = buffer_slice
