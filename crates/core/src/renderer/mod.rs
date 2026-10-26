@@ -203,7 +203,10 @@ impl Renderer {
     /// Headless renderer for WASM: offscreen target with async adapter/device creation.
     #[cfg(target_arch = "wasm32")]
     pub async fn new_async() -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::util::new_instance_with_webgpu_detection(
+            wgpu::InstanceDescriptor::new_without_display_handle(),
+        )
+        .await;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -217,7 +220,8 @@ impl Renderer {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Eidolon Device"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    .using_resolution(adapter.limits()),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
                 ..Default::default()
@@ -235,7 +239,10 @@ impl Renderer {
     pub async fn new_windowed_async(
         canvas: impl Into<wgpu::SurfaceTarget<'static>>,
     ) -> Result<Self, EidolonError> {
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::util::new_instance_with_webgpu_detection(
+            wgpu::InstanceDescriptor::new_without_display_handle(),
+        )
+        .await;
         let surface = instance
             .create_surface(canvas)
             .map_err(|e| EidolonError::gpu(format!("failed to create surface: {e}")))?;
@@ -252,7 +259,8 @@ impl Renderer {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Eidolon Device"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    .using_resolution(adapter.limits()),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
                 ..Default::default()

@@ -124,13 +124,8 @@ async function boot() {
     return;
   }
 
-  if (!navigator.gpu) {
-    showError(
-      'WebGPU is not supported in this browser.',
-      'Please use Chrome 113+, Edge 113+, or enable WebGPU (e.g. dom.webgpu.enabled in Firefox about:config; or launch Chrome with --enable-features=Vulkan on Linux).',
-    );
-    return;
-  }
+  // Fallback to WebGL2 when navigator.gpu is unavailable.
+  // wgpu automatically detects and falls back to WebGL2 on wasm32.
   try {
     console.log('Initializing WebGPU renderer…');
     renderer = await CanvasRenderer.new(canvas);
@@ -154,7 +149,7 @@ async function boot() {
     console.log('Renderer ready');
     requestAnimationFrame(frame);
   } catch (e) {
-    showError('Renderer initialization failed. Check WebGPU support.', String(e));
+    showError('Renderer initialization failed. Ensure WebGPU or WebGL2 is supported.', String(e));
   }
 }
 
@@ -436,7 +431,7 @@ fileInput.addEventListener('change', () => {
   if (!renderer) {
     showError(
       'Renderer not ready',
-      'WebGPU is not initialized. Please ensure your browser supports WebGPU and the page is loaded over localhost or HTTPS.',
+      'Renderer is not initialized. Please ensure your browser supports WebGPU or WebGL2.',
     );
     return;
   }
