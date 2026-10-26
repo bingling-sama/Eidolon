@@ -69,6 +69,23 @@ Useful checks:
 - On Linux, ensure graphics drivers and Vulkan loader packages are installed.
 - For `preview`, confirm a desktop session or window server is available.
 
+## Web (WASM) Browser Compatibility & Fallback
+
+The Web `CanvasRenderer` prioritizes the **WebGPU** backend for maximum performance. If the host environment or browser lacks WebGPU support, it automatically falls back to **WebGL2**.
+
+### Browser Compatibility Matrix
+
+| Browser Platform | Minimum Version | Graphics Backend | Status | Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| **Chrome / Edge (Desktop)** | 113+ | **WebGPU** | 🟢 Full Support | WebGPU enabled by default, optimal performance |
+| **Chrome / Edge (Desktop)** | 79 ~ 112 | **WebGL2** | 🟢 Fallback | Automatically falls back to WebGL2 |
+| **Firefox (Desktop)** | 115+ | **WebGL2** | 🟢 Full Support | Stable WebGL2 execution |
+| **Firefox Nightly** | Latest | **WebGPU** | 🟡 Experimental | Requires enabling `dom.webgpu.enabled` in `about:config` |
+| **Safari (macOS / iPadOS)** | 17.0+ | **WebGL2** | 🟢 Full Support | Stable WebGL2 (WebGPU remains preview/experimental) |
+| **Safari (iOS)** | iOS 15.0+ | **WebGL2** | 🟢 Full Support | Stable WebGL2 execution on mobile |
+| **Chrome / Firefox (Android)** | Android 10+ | **WebGPU** / **WebGL2** | 🟢 Full Support | Select devices run WebGPU; others fall back to WebGL2 |
+| **IE11 / Legacy Edge (EdgeHTML)** | Any | None | 🔴 Unsupported | Lacks WebAssembly and WebGL2 support |
+
 ## Output Looks Cropped Or Too Small
 
 Adjust camera and viewport options:

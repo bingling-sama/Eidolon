@@ -7,7 +7,7 @@ Minecraft skin renderer running in the browser via WebGPU + WASM.
 - [Rust](https://rustup.rs) with `wasm32-unknown-unknown` target
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/) (`cargo install wasm-pack`)
 - [Node.js](https://nodejs.org) 18+
-- Browser with WebGPU support (Chrome 113+, Edge 113+)
+- Browser with WebGPU or WebGL2 support (Chrome, Edge, Firefox, Safari 15+)
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ After building the WASM package, run `npm run test:e2e` to verify desktop and mo
 2. Vite serves the HTML/JS and bundles the WASM module via `vite-plugin-wasm`
 3. JS creates a `CanvasRenderer`, loads the selected skin PNG, and optionally loads cape or elytra; the core `AnimationTimeline` owns playback state while JS supplies requestAnimationFrame deltas
 4. `set_elytra_angles(pitch, spread)` fixes the wing angles until `reset_elytra_angles()` restores animation-driven values
-5. The browser renders the model directly to a WebGPU canvas in a requestAnimationFrame loop; reduced-motion preferences start playback paused and page visibility changes reset the frame-time baseline
+5. The browser renders the model directly to a canvas in a requestAnimationFrame loop via WebGPU or WebGL2; reduced-motion preferences start playback paused and page visibility changes reset the frame-time baseline
 6. Export captures an offscreen PNG at the selected resolution
 
 ## Files

@@ -73,6 +73,23 @@ Eidolon 基于 `wgpu` 构建。机器必须提供兼容的 Vulkan、Metal、DX12
 - Linux 环境下确认已安装显卡驱动与 Vulkan loader 运行时（如 `libvulkan1`、`mesa-vulkan-drivers`）。
 - 使用 `preview` 时确认存在桌面会话或活跃的显示服务（X11/Wayland）。
 
+## Web (WASM) 浏览器兼容性与回退
+
+Web 端的 `CanvasRenderer` 优先检测并选用 **WebGPU** 后端；当运行环境或浏览器不支持 WebGPU 时，会自动无缝回退至 **WebGL2** 后端。
+
+### 浏览器兼容性支持列表
+
+| 浏览器平台 | 最低版本要求 | 运行渲染后端 | 支持状态 | 关键依赖 / 注意事项 |
+| :--- | :---: | :---: | :---: | :--- |
+| **Chrome / Edge (Desktop)** | 113+ | **WebGPU** | 🟢 完全支持 | 默认原生开启 WebGPU，性能最优 |
+| **Chrome / Edge (Desktop)** | 79 ~ 112 | **WebGL2** | 🟢 兼容回退 | 自动降级至 WebGL2 |
+| **Firefox (Desktop)** | 115+ | **WebGL2** | 🟢 完全支持 | 稳定运行 WebGL2 |
+| **Firefox Nightly** | 最新版 | **WebGPU** | 🟡 实验支持 | 需在 `about:config` 中开启 `dom.webgpu.enabled` |
+| **Safari (macOS / iPadOS)** | 17.0+ | **WebGL2** | 🟢 完全支持 | 稳定运行 WebGL2（WebGPU 仍在预览阶段） |
+| **Safari (iOS)** | iOS 15.0+ | **WebGL2** | 🟢 完全支持 | 移动端良好兼容 WebGL2 |
+| **Chrome / Firefox (Android)** | Android 10+ | **WebGPU** / **WebGL2** | 🟢 完全支持 | 部分支持 WebGPU，其余自动走 WebGL2 |
+| **IE11 / 旧版 Edge (EdgeHTML)** | 任意版本 | 无 | 🔴 不支持 | 缺少 WebAssembly 及 WebGL2 支持 |
+
 ## 输出被裁切或角色太小
 
 可调整视口大小与相机参数：
