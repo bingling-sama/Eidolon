@@ -84,6 +84,10 @@ cargo run -- preview <皮肤 PNG> [选项]
 `Space` 播放/暂停，左右方向键按 30fps 单帧 seek，数字键 `1–5` 切换 Idle、Walk、Run、Wave、Fly，
 `-`/`+` 调整速度。切换动作后会回到相位 0。
 
+窗口默认使用不透明深色背景。加上 `--transparent` 会把背景改为逐像素透明：Windows 上走
+DirectComposition 交换链，macOS 与 Wayland 使用窗口自带的透明合成，X11 需要合成器（无合成器时
+透明区域显示为黑色）。
+
 示例：
 
 ```bash
@@ -92,6 +96,7 @@ cargo run -- preview resources/bingling_sama.png --cape cape.png
 cargo run -- preview resources/bingling_sama.png --elytra cape.png
 cargo run -- preview resources/bingling_sama.png --nametag Steve
 cargo run -- preview resources/bingling_sama.png --posture walk
+cargo run -- preview resources/bingling_sama.png --transparent
 ```
 
 ## Convert

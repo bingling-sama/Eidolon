@@ -20,6 +20,10 @@ repository = "https://github.com/bingling-sama/eidolon"
 eidolon-core = { path = "crates/core" }
 
 # Graphics and system
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_DirectComposition",
+] }
 wgpu = "30"
 winit = "0.30"
 pollster = "1.0"

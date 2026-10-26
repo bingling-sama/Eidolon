@@ -121,6 +121,11 @@ In the preview window, drag with the left mouse button to pan, drag with the rig
 Use `Space` to play or pause, Left/Right to seek by one nominal 30fps frame, `1`–`5` to select
 Idle/Walk/Run/Wave/Fly, and `-`/`+` to adjust playback speed. Switching presets resets phase to zero.
 
+The window uses an opaque dark backdrop by default. `--transparent` switches to a per-pixel
+transparent background: Windows renders through a DirectComposition swap chain, macOS and Wayland
+use the window's own transparent composition, and X11 needs a compositing window manager (without
+one the transparent area shows black).
+
 ### Examples
 
 ```bash
@@ -131,6 +136,7 @@ eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png
 eidolon preview skin.png --posture run --width 1024 --height 768
 eidolon preview skin.png --posture walk
+eidolon preview skin.png --transparent
 ```
 
 ## Convert

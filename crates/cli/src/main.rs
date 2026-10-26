@@ -1,5 +1,7 @@
 mod args;
 mod commands;
+#[cfg(windows)]
+mod dcomp;
 mod preview;
 mod scene;
 
@@ -22,9 +24,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => run_render(skin, output, viewport, scene, animation),
         Command::Preview {
             skin,
+            transparent,
             viewport,
             scene,
-        } => run_preview(skin, viewport, scene),
+        } => run_preview(skin, viewport, scene, transparent),
         Command::Convert { input, output } => run_convert(input, output),
         Command::Identify { texture, json } => run_identify(texture, json),
     }
