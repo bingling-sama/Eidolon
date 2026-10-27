@@ -40,7 +40,8 @@ pub struct Posture {
     pub head_yaw: f32,
     /// Head pitch around X (degrees). 0° = level, positive = look up.
     pub head_pitch: f32,
-    /// Left arm roll around Z (degrees); negated internally for the left-arm matrix.
+    /// Left arm roll around Z (degrees). The renderer mirrors the left arm, so a symmetric
+    /// pose stores the same value as [`Posture::right_arm_roll`].
     pub left_arm_roll: f32,
     /// Left arm pitch around X (degrees).
     pub left_arm_pitch: f32,
@@ -99,9 +100,9 @@ impl DefaultPostures {
         elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
-        left_arm_roll: 5.32,
+        left_arm_roll: 4.0,
         left_arm_pitch: -28.65,
-        right_arm_roll: -5.32,
+        right_arm_roll: 4.0,
         right_arm_pitch: 28.65,
         left_leg_pitch: 28.65,
         right_leg_pitch: -28.65,
@@ -115,9 +116,9 @@ impl DefaultPostures {
         elytra_roll: 15.0,
         head_yaw: 0.0,
         head_pitch: 0.0,
-        left_arm_roll: 12.27,
+        left_arm_roll: 0.0,
         left_arm_pitch: -85.94,
-        right_arm_roll: -12.27,
+        right_arm_roll: 0.0,
         right_arm_pitch: 85.94,
         left_leg_pitch: 74.48,
         right_leg_pitch: -74.48,
