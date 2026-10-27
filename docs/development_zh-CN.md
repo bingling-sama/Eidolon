@@ -29,7 +29,7 @@ pnpm --dir examples/wasm run test:e2e
 
 ## 测试说明
 
-- **核心库单元测试** (`crates/core`)：包含 107 个单元测试，全面覆盖相机矩阵计算、皮肤图集转换、纹理分析与格式分类、动画预设与时间轴播放、nametag 光栅化、模型加载与多格式输出编码。使用 `cargo test -p eidolon-core --lib -- --test-threads=1` 运行。
+- **核心库单元测试** (`crates/core`)：包含 111 个单元测试，全面覆盖相机矩阵计算、皮肤图集转换、纹理分析与格式分类、动画预设与时间轴播放、nametag 光栅化、模型加载与多格式输出编码。使用 `cargo test -p eidolon-core --lib -- --test-threads=1` 运行。
 - **CLI 参数测试** (`crates/cli`)：包含 55 个针对命令行参数解析、默认值及子命令选项的自动化测试。使用 `cargo test -p eidolon-cli` 运行。
 - **WASM 浏览器端 E2E 测试** (`examples/wasm`)：包含 13 个 Playwright 端到端测试，验证真实浏览器中 WebGPU 画布呈现、动画循环、响应式控件与多格式导出。使用 `pnpm --dir examples/wasm run test:e2e` 运行。
 
