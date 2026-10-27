@@ -9,6 +9,7 @@ pub struct JsTextureReport {
     pub(crate) hd_scale: u32,
     pub(crate) is_hd: bool,
     pub(crate) can_auto_upgrade: bool,
+    pub(crate) skin_type: Option<String>,
     pub(crate) description: String,
 }
 
@@ -45,6 +46,11 @@ impl JsTextureReport {
     }
 
     #[wasm_bindgen(getter)]
+    pub fn skin_type(&self) -> Option<String> {
+        self.skin_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
     pub fn description(&self) -> String {
         self.description.clone()
     }
@@ -62,6 +68,10 @@ pub fn inspect_texture(bytes: &[u8]) -> Result<JsTextureReport, JsValue> {
         hd_scale: rep.hd_scale,
         is_hd: rep.is_hd,
         can_auto_upgrade: rep.can_auto_upgrade,
+        skin_type: rep.skin_type.map(|s| match s {
+            eidolon_core::body::SkinType::Classic => "classic".to_string(),
+            eidolon_core::body::SkinType::Slim => "slim".to_string(),
+        }),
         description: rep.description,
     })
 }
