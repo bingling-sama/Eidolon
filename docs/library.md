@@ -225,6 +225,19 @@ let character = Character::from_body(body);
 renderer.render_frame(&character, &camera)?;
 ```
 
+A window created with `with_transparent(true)` still presents through an HWND swap chain, which
+ignores per-pixel alpha on Windows. To get a transparent background there, create the window
+without a redirection surface and let the renderer present into a DirectComposition visual:
+
+```rust
+#[cfg(windows)]
+let renderer = unsafe { Renderer::new_windowed_composition(visual_ptr, width, height)? };
+```
+
+`visual_ptr` is the raw `*mut c_void` behind an `IDCompositionVisual` and must outlive the
+renderer. The constructor forces the DX12 backend, the only one that can present into a
+composition visual.
+
 ## Notes
 
 - `Renderer::new()` and `Renderer::new_windowed()` load both bundled OBJ models from `resources/`, so run from the repository root or keep those resource paths available.

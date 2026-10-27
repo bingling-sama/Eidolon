@@ -87,6 +87,7 @@ pub fn run_preview(
     skin: String,
     viewport: ViewportArgs,
     scene: SceneArgs,
+    transparent: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (scene_state, camera) = scene_state_and_camera_from_scene(&scene);
     let posture_overrides = PostureOverrides::from(&scene);
@@ -103,6 +104,9 @@ pub fn run_preview(
         cape_atlas_path: scene.cape,
         elytra_atlas_path: scene.elytra,
         initial_size: PhysicalSize::new(viewport.width, viewport.height),
+        transparent,
+        #[cfg(windows)]
+        composition: None,
         interaction: PreviewInteraction::default(),
         playback,
         posture_overrides,

@@ -20,3 +20,6 @@ log.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
 winit.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

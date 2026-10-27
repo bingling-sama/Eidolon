@@ -164,7 +164,49 @@ impl Renderer {
         let (device, queue, adapter) = Self::create_wgpu_device(&instance, Some(&surface))?;
 
         let size = window.inner_size();
-        let surface_caps = surface.get_capabilities(&adapter);
+        let (config, surface_format) =
+            Self::windowed_surface_config(&surface, &adapter, &device, size.width, size.height);
+
+        Self::init_with_device(device, queue, Some((surface, config, surface_format)))
+    }
+
+    /// Windowed renderer backed by a DirectComposition visual, giving the window per-pixel
+    /// alpha on Windows.
+    ///
+    /// # Safety
+    ///
+    /// `visual` must stay valid for as long as the renderer is alive.
+    #[cfg(windows)]
+    pub unsafe fn new_windowed_composition(
+        visual: *mut std::ffi::c_void,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, EidolonError> {
+        // Only DX12 can present into a DirectComposition visual.
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::DX12,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+        let surface = unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CompositionVisual(visual))
+        }
+        .map_err(|e| EidolonError::gpu(format!("failed to create composition surface: {e}")))?;
+        let (device, queue, adapter) = Self::create_wgpu_device(&instance, Some(&surface))?;
+        let (config, surface_format) =
+            Self::windowed_surface_config(&surface, &adapter, &device, width, height);
+
+        Self::init_with_device(device, queue, Some((surface, config, surface_format)))
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), any(feature = "winit", windows)))]
+    fn windowed_surface_config(
+        surface: &wgpu::Surface<'_>,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+    ) -> (wgpu::SurfaceConfiguration, wgpu::TextureFormat) {
+        let surface_caps = surface.get_capabilities(adapter);
         let surface_format = surface_caps
             .formats
             .iter()
@@ -175,8 +217,8 @@ impl Renderer {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: size.width.max(1),
-            height: size.height.max(1),
+            width: width.max(1),
+            height: height.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps
                 .alpha_modes
@@ -195,9 +237,8 @@ impl Renderer {
             desired_maximum_frame_latency: 2,
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
-        surface.configure(&device, &config);
-
-        Self::init_with_device(device, queue, Some((surface, config, surface_format)))
+        surface.configure(device, &config);
+        (config, surface_format)
     }
 
     /// Headless renderer for WASM: offscreen target with async adapter/device creation.

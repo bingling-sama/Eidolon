@@ -180,3 +180,30 @@ println!("是否支持自动升级为双层: {}", report.can_auto_upgrade);
 ```
 
 支持类型包括 `SkinDoubleLayer`、`SkinSingleLayer`、`Cape`、`Elytra`、`CapeAndElytra` 及 `Unknown`。
+
+## 窗口预览
+
+交互式预览使用 `Renderer::new_windowed` 配合 `winit` 窗口：
+
+```rust
+use std::sync::Arc;
+use winit::window::Window;
+
+let window = Arc::new(/* winit Window */);
+let renderer = Renderer::new_windowed(window)?;
+let body = renderer.load_body("skin.png", SkinType::Classic)?;
+let character = Character::from_body(body);
+
+// 在事件循环中：
+renderer.render_frame(&character, &camera)?;
+```
+
+用 `with_transparent(true)` 创建的窗口依然通过 HWND 交换链呈现，在 Windows 上会忽略逐像素 alpha。若要在 Windows 上得到透明背景，需要创建不带重定向表面的窗口，并让渲染器呈现到 DirectComposition visual：
+
+```rust
+#[cfg(windows)]
+let renderer = unsafe { Renderer::new_windowed_composition(visual_ptr, width, height)? };
+```
+
+`visual_ptr` 是 `IDCompositionVisual` 背后的裸 `*mut c_void`，生命周期必须长于渲染器。该构造函数强制使用 DX12 后端，它是唯一能呈现到 composition visual 的后端。
+

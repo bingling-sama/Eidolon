@@ -96,6 +96,7 @@ crates/
 │       ├── main.rs           # Minimal 31-line entry point dispatching subcommands
 │       ├── args.rs           # Clap CLI arguments (Command::Render/Preview/Convert/Identify)
 │       ├── commands.rs       # Execution handlers for render, convert, identify
+│       ├── dcomp.rs          # DirectComposition visual for a transparent preview window (Windows)
 │       ├── preview.rs        # Winit desktop preview window loop
 │       └── scene.rs          # Scene args and camera resolution
 └── wasm/

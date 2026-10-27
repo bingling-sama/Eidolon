@@ -249,6 +249,10 @@ pub enum Command {
         /// Path to the skin PNG file.
         skin: String,
 
+        /// Use a transparent window background instead of the opaque backdrop.
+        #[arg(long)]
+        transparent: bool,
+
         #[command(flatten)]
         viewport: ViewportArgs,
 
@@ -791,6 +795,22 @@ mod tests {
                 "{legacy_name} should be rejected"
             );
         }
+    }
+
+    #[test]
+    fn cli_preview_accepts_transparent_background() {
+        let args =
+            Args::try_parse_from(["eidolon", "preview", "skin.png", "--transparent"]).unwrap();
+        let Command::Preview { transparent, .. } = args.command else {
+            panic!("Expected Preview");
+        };
+        assert!(transparent);
+
+        let args = Args::try_parse_from(["eidolon", "preview", "skin.png"]).unwrap();
+        let Command::Preview { transparent, .. } = args.command else {
+            panic!("Expected Preview");
+        };
+        assert!(!transparent);
     }
 
     #[test]

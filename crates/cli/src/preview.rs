@@ -28,6 +28,10 @@ pub struct PreviewApp {
     pub cape_atlas_path: Option<String>,
     pub elytra_atlas_path: Option<String>,
     pub initial_size: PhysicalSize<u32>,
+    pub transparent: bool,
+    /// Keeps the DirectComposition objects alive for the surface (Windows transparency).
+    #[cfg(windows)]
+    pub composition: Option<crate::dcomp::CompositionVisual>,
     pub interaction: PreviewInteraction,
     pub playback: PreviewPlayback,
     pub posture_overrides: PostureOverrides,
@@ -175,19 +179,91 @@ impl PreviewInteraction {
     }
 }
 
+/// Whether this machine can host a DirectComposition swap chain: a DX12 adapter and a
+/// composition device. Checked before the window is created, because a window without a
+/// redirection surface cannot be used by the plain HWND path.
+#[cfg(windows)]
+fn dcomp_available() -> bool {
+    if !crate::dcomp::device_available() {
+        return false;
+    }
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::DX12,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).is_ok()
+}
+
 impl ApplicationHandler for PreviewApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
         }
 
+        // A transparent window needs the DirectComposition path, which only exists on DX12.
+        #[cfg(windows)]
+        let composition_enabled = self.transparent && dcomp_available();
+        // Request transparency only when the composition path will actually be used, so the
+        // fallback gets a regular opaque window.
+        #[cfg(windows)]
+        let transparent = composition_enabled;
+        #[cfg(not(windows))]
+        let transparent = self.transparent;
+
         let window_attrs = Window::default_attributes()
             .with_title("Eidolon Preview")
-            .with_inner_size(self.initial_size);
+            .with_inner_size(self.initial_size)
+            .with_transparent(transparent);
+        #[cfg(windows)]
+        let window_attrs = if composition_enabled {
+            // DirectComposition content only shows up on a window without a redirection surface.
+            use winit::platform::windows::WindowAttributesExtWindows;
+            window_attrs.with_no_redirection_bitmap(true)
+        } else {
+            window_attrs
+        };
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
-        let mut renderer =
-            Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
+        #[cfg(windows)]
+        let composition = if composition_enabled {
+            Some(
+                crate::dcomp::CompositionVisual::attach(window.as_ref())
+                    .expect("Failed to set up DirectComposition"),
+            )
+        } else {
+            None
+        };
+
+        #[cfg(windows)]
+        let mut renderer = if let Some(composition) = &composition {
+            let size = window.inner_size();
+            unsafe {
+                Renderer::new_windowed_composition(composition.as_ptr(), size.width, size.height)
+            }
+            .expect("Failed to create composition renderer")
+        } else {
+            if self.transparent {
+                log::warn!(
+                    "DX12 or DirectComposition is unavailable; using an opaque preview background"
+                );
+            }
+            let mut renderer =
+                Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
+            renderer.set_clear_color(0.094, 0.106, 0.129, 1.0);
+            renderer
+        };
+
+        #[cfg(not(windows))]
+        let mut renderer = {
+            let mut renderer =
+                Renderer::new_windowed(window.clone()).expect("Failed to create windowed renderer");
+            // The renderer clears to transparent black by default, which is what the offscreen
+            // PNG path wants. An opaque window needs its own backdrop.
+            if !self.transparent {
+                renderer.set_clear_color(0.094, 0.106, 0.129, 1.0);
+            }
+            renderer
+        };
         let body = renderer
             .load_body(&self.texture_path, self.scene_state.skin_type)
             .expect("Failed to load body");
@@ -205,9 +281,17 @@ impl ApplicationHandler for PreviewApp {
         }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
+        #[cfg(windows)]
+        if let Some(composition) = &composition {
+            composition.commit();
+        }
 
         self.renderer = Some(renderer);
         self.character = Some(character);
+        #[cfg(windows)]
+        {
+            self.composition = composition;
+        }
         self.window = Some(window);
     }
 
@@ -224,6 +308,11 @@ impl ApplicationHandler for PreviewApp {
             WindowEvent::Resized(physical_size) => {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.resize(physical_size.width, physical_size.height);
+                }
+                #[cfg(windows)]
+                if let Some(composition) = &self.composition {
+                    // A reconfigured surface may hand a new swap chain to the visual.
+                    composition.commit();
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -301,6 +390,11 @@ impl ApplicationHandler for PreviewApp {
                                 if let Some(r) = &mut self.renderer {
                                     r.resize(size.width, size.height);
                                 }
+                            }
+                            #[cfg(windows)]
+                            if let Some(composition) = &self.composition {
+                                // The reconfigured surface may hold a new swap chain.
+                                composition.commit();
                             }
                         }
                         Err(EidolonError::Surface(
