@@ -5,6 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+mod common;
+
+use common::{resource, resource_str};
 use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
@@ -18,7 +21,7 @@ fn make_renderer() -> Renderer {
 
 fn character_with_skin(renderer: &Renderer) -> Character {
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("Failed to load body");
     let mut c = Character::from_body(body);
     c.posture = Posture {
@@ -51,7 +54,7 @@ fn camera_default() -> Camera {
 fn cape_can_render_without_body() {
     let renderer = make_renderer();
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     let character =
         Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
@@ -70,7 +73,7 @@ fn cape_can_render_without_body() {
 fn elytra_can_render_without_body() {
     let renderer = make_renderer();
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     let character =
         Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
@@ -89,7 +92,7 @@ fn elytra_can_render_without_body() {
 fn removing_the_only_visible_resource_is_rejected() {
     let renderer = make_renderer();
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     let mut character =
         Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
@@ -105,7 +108,7 @@ fn removing_the_only_visible_resource_is_rejected() {
 fn removing_a_missing_resource_is_idempotent() {
     let renderer = make_renderer();
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     let mut equipment_only =
         Character::from_back_equipment(BackEquipment::new(atlas, BackEquipmentKind::Cape));
@@ -115,7 +118,7 @@ fn removing_a_missing_resource_is_idempotent() {
         .is_none());
 
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("load body failed");
     let mut body_only = Character::from_body(body);
     assert!(body_only.unequip().expect("unequip failed").is_none());
@@ -125,7 +128,7 @@ fn removing_a_missing_resource_is_idempotent() {
 fn removing_the_only_body_is_rejected() {
     let renderer = make_renderer();
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("load body failed");
     let mut character = Character::from_body(body);
 
@@ -140,7 +143,7 @@ fn removing_the_only_body_is_rejected() {
 fn body_is_owned_by_character_and_renders() {
     let renderer = make_renderer();
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("load body failed");
     let character = Character::from_body(body);
 
@@ -167,7 +170,7 @@ fn character_resources_cannot_cross_renderer_contexts() {
     let source_renderer = make_renderer();
     let target_renderer = make_renderer();
     let body = source_renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("load body failed");
     let character = Character::from_body(body);
 
@@ -323,7 +326,7 @@ fn enabling_elytra_changes_the_back_view() {
         .expect("render without elytra failed");
 
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
     let with_elytra = renderer
@@ -343,7 +346,7 @@ fn flying_posture_changes_the_elytra_back_view() {
         scale: 1.0,
     };
     let atlas = renderer
-        .load_back_equipment_atlas("resources/Turtle_Cape.png")
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
         .expect("load back equipment atlas failed");
     character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
 
@@ -363,7 +366,7 @@ fn flying_posture_changes_the_elytra_back_view() {
 fn elytra_rejects_non_cape_atlas_dimensions() {
     let renderer = make_renderer();
     let error = renderer
-        .load_back_equipment_atlas("resources/bingling_sama.png")
+        .load_back_equipment_atlas(&resource_str("bingling_sama.png"))
         .expect_err("square skin must not be accepted as an elytra atlas");
 
     assert!(error.to_string().contains("64x32"));
@@ -438,8 +441,8 @@ fn load_body_invalid_path_returns_error() {
 
 #[test]
 fn load_model_from_bytes_matches_from_file() {
-    let slim_bytes = std::fs::read("resources/slim.obj").expect("Failed to read slim.obj");
-    let classic_bytes = std::fs::read("resources/classic.obj").expect("Failed to read classic.obj");
+    let slim_bytes = std::fs::read(resource("slim.obj")).expect("Failed to read slim.obj");
+    let classic_bytes = std::fs::read(resource("classic.obj")).expect("Failed to read classic.obj");
 
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -453,8 +456,8 @@ fn load_model_from_bytes_matches_from_file() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("No wgpu device");
 
-    let from_file =
-        Model::load_from_obj(&device, "resources/slim.obj").expect("load_from_obj slim failed");
+    let from_file = Model::load_from_obj(&device, &resource_str("slim.obj"))
+        .expect("load_from_obj slim failed");
     let from_bytes = Model::load_from_obj_bytes(&device, &slim_bytes, "slim.obj")
         .expect("load_from_obj_bytes slim failed");
 
@@ -570,7 +573,7 @@ fn load_body_auto_converts_single_layer_skin() {
     // load_body must detect this and auto-convert to 64×64 via single2double.
     let renderer = make_renderer();
     let body = renderer
-        .load_body("resources/SSSSSteven.png", SkinType::Classic)
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
         .expect("Failed to load single-layer skin");
     let character = Character::from_body(body);
     let image = renderer
@@ -678,7 +681,7 @@ fn depth_texture_cache_hit_on_repeated_same_dimensions() {
 fn model_switching_slim_and_classic_in_same_renderer() {
     let renderer = make_renderer();
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("Failed to load body");
     let cam = camera_default();
     let mut character = Character::from_body(body);
@@ -715,7 +718,7 @@ fn model_switching_slim_and_classic_in_same_renderer() {
 fn render_all_posture_presets_with_both_skin_types() {
     let renderer = make_renderer();
     let body = renderer
-        .load_body("resources/bingling_sama.png", SkinType::Classic)
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
         .expect("Failed to load body");
     let cam = camera_default();
     let postures = [

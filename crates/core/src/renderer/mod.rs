@@ -1038,7 +1038,10 @@ mod tests {
     fn renderer_concurrent_render_different_threads() {
         let renderer = Arc::new(Renderer::new().expect("Failed to create renderer"));
         let body = renderer
-            .load_body("resources/bingling_sama.png", SkinType::Classic)
+            .load_body(
+                &crate::test_support::resource_str("bingling_sama.png"),
+                SkinType::Classic,
+            )
             .expect("Failed to load body");
         let character = Arc::new(Character::from_body(body));
 
