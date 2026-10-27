@@ -204,16 +204,18 @@ impl ApplicationHandler for PreviewApp {
         #[cfg(windows)]
         let composition_enabled = self.transparent && dcomp_available();
 
-        let mut window_attrs = Window::default_attributes()
+        let window_attrs = Window::default_attributes()
             .with_title("Eidolon Preview")
             .with_inner_size(self.initial_size)
             .with_transparent(self.transparent);
         #[cfg(windows)]
-        if composition_enabled {
+        let window_attrs = if composition_enabled {
             // DirectComposition content only shows up on a window without a redirection surface.
             use winit::platform::windows::WindowAttributesExtWindows;
-            window_attrs = window_attrs.with_no_redirection_bitmap(true);
-        }
+            window_attrs.with_no_redirection_bitmap(true)
+        } else {
+            window_attrs
+        };
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
         #[cfg(windows)]
