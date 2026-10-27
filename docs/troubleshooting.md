@@ -105,7 +105,8 @@ Adjust camera and viewport options:
 cargo run -- render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2 --width 1024 --height 1024
 ```
 
-`--cam-zoom` must be greater than `0`. Larger values make the character appear closer.
+`--cam-zoom` must be greater than `0`. Larger values magnify by narrowing the field of view;
+  the orbit radius stays fixed.
 
 ## Skin Arms Look Wrong
 

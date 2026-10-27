@@ -116,4 +116,4 @@ cargo run -- render skin.png preview.png \
   --cam-zoom 1.2
 ```
 
-`--cam-zoom` 必须大于 `0`。数值越大，相机距离角色越近（相机轨道半径公式为 `4.0 / zoom`）。
+`--cam-zoom` 必须大于 `0`。数值越大画面越大，实现为镜头变焦：相机轨道半径固定，视场角随之变窄。

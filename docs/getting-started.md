@@ -70,7 +70,7 @@ cargo run -- render resources/bingling_sama.png \
   --height 1024
 ```
 
-`--cam-zoom` must be > 0. Larger values move the camera closer (orbit radius: 4.0 / zoom).
+`--cam-zoom` must be > 0. Larger values magnify by narrowing the field of view; the orbit radius stays fixed.
 
 ## Preview in a Window
 
