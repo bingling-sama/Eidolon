@@ -17,7 +17,10 @@ fn performance_benchmark(c: &mut Criterion) {
     let body = renderer
         .load_body(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../resources/bingling_sama.png")
+                .join("..")
+                .join("..")
+                .join("resources")
+                .join("bingling_sama.png")
                 .to_string_lossy(),
             SkinType::Classic,
         )

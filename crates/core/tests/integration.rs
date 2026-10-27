@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::resource_str;
+use common::{resource, resource_str};
 use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, CharacterError, DefaultPostures, Posture, SkinType};
@@ -441,9 +441,8 @@ fn load_body_invalid_path_returns_error() {
 
 #[test]
 fn load_model_from_bytes_matches_from_file() {
-    let slim_bytes = std::fs::read(resource_str("slim.obj")).expect("Failed to read slim.obj");
-    let classic_bytes =
-        std::fs::read(resource_str("classic.obj")).expect("Failed to read classic.obj");
+    let slim_bytes = std::fs::read(resource("slim.obj")).expect("Failed to read slim.obj");
+    let classic_bytes = std::fs::read(resource("classic.obj")).expect("Failed to read classic.obj");
 
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
