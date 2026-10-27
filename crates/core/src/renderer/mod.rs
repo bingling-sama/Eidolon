@@ -176,7 +176,7 @@ impl Renderer {
     /// # Safety
     ///
     /// `visual` must stay valid for as long as the renderer is alive.
-    #[cfg(all(windows, feature = "winit"))]
+    #[cfg(windows)]
     pub unsafe fn new_windowed_composition(
         visual: *mut std::ffi::c_void,
         width: u32,
@@ -198,7 +198,7 @@ impl Renderer {
         Self::init_with_device(device, queue, Some((surface, config, surface_format)))
     }
 
-    #[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
+    #[cfg(all(not(target_arch = "wasm32"), any(feature = "winit", windows)))]
     fn windowed_surface_config(
         surface: &wgpu::Surface<'_>,
         adapter: &wgpu::Adapter,

@@ -203,11 +203,17 @@ impl ApplicationHandler for PreviewApp {
         // A transparent window needs the DirectComposition path, which only exists on DX12.
         #[cfg(windows)]
         let composition_enabled = self.transparent && dcomp_available();
+        // Request transparency only when the composition path will actually be used, so the
+        // fallback gets a regular opaque window.
+        #[cfg(windows)]
+        let transparent = composition_enabled;
+        #[cfg(not(windows))]
+        let transparent = self.transparent;
 
         let window_attrs = Window::default_attributes()
             .with_title("Eidolon Preview")
             .with_inner_size(self.initial_size)
-            .with_transparent(self.transparent);
+            .with_transparent(transparent);
         #[cfg(windows)]
         let window_attrs = if composition_enabled {
             // DirectComposition content only shows up on a window without a redirection surface.
@@ -237,8 +243,8 @@ impl ApplicationHandler for PreviewApp {
             .expect("Failed to create composition renderer")
         } else {
             if self.transparent {
-                eprintln!(
-                    "eidolon: DirectComposition is unavailable; using an opaque preview background"
+                log::warn!(
+                    "DX12 or DirectComposition is unavailable; using an opaque preview background"
                 );
             }
             let mut renderer =

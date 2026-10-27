@@ -32,13 +32,13 @@ pub fn device_available() -> bool {
 
 impl CompositionVisual {
     /// Attach a composition visual to `window` and make it the window's root content.
-    pub fn attach(window: &impl HasWindowHandle) -> Result<Self, String> {
+    pub fn attach(window: &impl HasWindowHandle) -> Result<Self, Box<dyn std::error::Error>> {
         let handle = window
             .window_handle()
             .map_err(|e| format!("no window handle: {e}"))?
             .as_raw();
         let RawWindowHandle::Win32(win32) = handle else {
-            return Err("expected a Win32 window handle".to_owned());
+            return Err("expected a Win32 window handle".into());
         };
         // The HWND is only read, never owned, so a transient wrapper is fine.
         let hwnd = HWND(win32.hwnd.get() as *mut c_void);
