@@ -65,8 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   内置 Minecraft 像素字体与 Unifont 回退字体、白字深色阴影、半透明黑底和场景深度测试；仅支持单行，最多渲染
   64 个字符；字体不包含的字形会显示字体自身的缺字方框。
 - 标签先变换玩家碰撞箱并计算场景空间 AABB，定位在 AABB 水平中心的最高点上方，再沿场景垂直
-  Y 轴增加间距。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位，二者都会随
-  `Camera::scale` 缩放。被遮挡的像素默认以 25% 透明度绘制，然后叠加正常深度测试层；将
+  Y 轴增加间距。碰撞箱高度为 1.8 个世界单位，默认间距为 0.5 个单位。被遮挡的像素默认以 25% 透明度绘制，然后叠加正常深度测试层；将
   `Character::nametag_see_through` 设为 `false` 可完全隐藏被遮挡的像素。
 - 使用 `Renderer::load_back_equipment_atlas()` 加载披风与鞘翅共享的 2:1 图集，再用
   `BackEquipment::new(atlas, BackEquipmentKind::Cape)` 或 `Elytra` 选择呈现形式。修改
@@ -83,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 默认姿势包含建议的披风角度：`STAND`、`WAVE`、`WALKING` 为 `10.8` 度，
   `RUNNING` 为 `54` 度。CLI 选择姿势时会自动应用该角度。
 - `Renderer::new` 和 `Renderer::new_windowed` 会从 `resources/` 加载两套内置 OBJ 模型，因此建议从仓库根目录运行，或确保这些资源路径可用。
+- `Camera::scale`（CLI 里是 `cam_zoom`）以镜头变焦实现放大：相机轨道半径固定，视场角随 `scale` 增大而变窄。
 
 ## 程序化动画
 

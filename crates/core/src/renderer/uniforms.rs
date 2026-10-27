@@ -1,6 +1,6 @@
 //! Per-body-part [`Uniforms`] for the six-part draw loop.
 //!
-//! `Camera::scale` is folded into the base model matrix (uniform scale).
+//! Zoom lives in the projection matrix only; the base model matrix is camera-independent.
 //! The body entry uses a small positive `offset` so the outer layer mesh
 //! clears the inner mesh along normals.
 //!
@@ -84,7 +84,7 @@ pub(crate) fn body_part_ref(i: usize, model: &Model) -> &BodyPart {
     }
 }
 
-pub(crate) fn compute_base_model_matrix(character: &Character, camera: &Camera) -> Matrix4<f32> {
+pub(crate) fn compute_base_model_matrix(character: &Character) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(character.position);
     let character_rotation = Matrix4::from_angle_x(Rad(character.rotation.x.to_radians()))
         * Matrix4::from_angle_y(Rad(character.rotation.y.to_radians()))
@@ -93,7 +93,7 @@ pub(crate) fn compute_base_model_matrix(character: &Character, camera: &Camera) 
         * Matrix4::from_angle_x(Rad(character.posture.body_pitch.to_radians()))
         * Matrix4::from_translation(-BODY_PIVOT);
 
-    translation * character_rotation * Matrix4::from_scale(camera.scale) * body_rotation
+    translation * character_rotation * body_rotation
 }
 
 pub(crate) fn compute_body_part_uniforms(
@@ -105,7 +105,7 @@ pub(crate) fn compute_body_part_uniforms(
     let perspective: [[f32; 4]; 4] = camera.get_projection_matrix(width, height);
     let view: [[f32; 4]; 4] = camera.get_view_matrix();
 
-    let base_model_matrix = compute_base_model_matrix(character, camera);
+    let base_model_matrix = compute_base_model_matrix(character);
 
     let posture = &character.posture;
 
@@ -178,7 +178,7 @@ pub(crate) fn compute_cape_uniform(
     width: u32,
     height: u32,
 ) -> Uniforms {
-    let base = compute_base_model_matrix(character, camera);
+    let base = compute_base_model_matrix(character);
     // skinview3d uses -Z for the back; this renderer uses +Z, so invert pitch.
     let cape_rotation = Matrix4::from_angle_x(Rad(-character.posture.cape_pitch.to_radians()));
     let model = base
@@ -201,7 +201,7 @@ pub(crate) fn compute_elytra_uniforms(
     width: u32,
     height: u32,
 ) -> [Uniforms; 2] {
-    let base = compute_base_model_matrix(character, camera);
+    let base = compute_base_model_matrix(character);
     let projection = camera.get_projection_matrix(width, height);
     let view = camera.get_view_matrix();
 
@@ -273,7 +273,7 @@ mod tests {
             let mut character = Character::empty_for_test();
             character.posture = posture;
             let uniforms = compute_elytra_uniforms(&character, &camera, 800, 600);
-            let base = compute_base_model_matrix(&character, &camera);
+            let base = compute_base_model_matrix(&character);
 
             for uniform in &uniforms {
                 let model: Matrix4<f32> = uniform.model.into();
@@ -330,7 +330,7 @@ mod tests {
         let rotation = Matrix4::from_angle_z(Rad(41.0_f32.to_radians()))
             * Matrix4::from_angle_y(Rad(-17.0_f32.to_radians()))
             * Matrix4::from_angle_x(Rad(-23.0_f32.to_radians()));
-        let expected = compute_base_model_matrix(&character, &camera)
+        let expected = compute_base_model_matrix(&character)
             * Matrix4::from_translation(ELYTRA_PIVOT)
             * rotation
             * Matrix4::from_translation(-ELYTRA_PIVOT);
