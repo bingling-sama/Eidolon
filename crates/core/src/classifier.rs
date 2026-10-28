@@ -256,10 +256,11 @@ pub fn infer_skin_type(image: &DynamicImage) -> Option<SkinType> {
     // Classic Steve arm has width 4 (perimeter 4+4+4+4 = 16px).
     // Slim Alex arm has width 3 (perimeter 4+3+4+3 = 14px).
     //
-    // Check 1: Overlay layer validation (highest confidence signal).
+    // Check 1: Overlay layer validation (strong Slim signal when sleeves are cleanly tailored).
     // If the skin wears sleeve overlays (outer layer active), Alex skins strictly avoid
-    // the 4th column strip ([54..56, 36..48] for right arm, [62..64, 48..64] for left arm),
-    // whereas Classic skins texture those outer columns.
+    // the 4th column strip ([54..56, 36..48] for right arm, [62..64, 48..64] for left arm).
+    // Note: We do NOT immediately conclude Classic here if there are stray pixels,
+    // because artists or skin editors often leave stray brushstrokes/cuffs in outer overlays.
     let (r_over_act, _) = sample_grid_opaque_count(image, scale, 44, 36, 53, 48);
     let (r_over_un, r_over_tot) = sample_grid_opaque_count(image, scale, 54, 36, 56, 48);
     let (l_over_act, _) = sample_grid_opaque_count(image, scale, 52, 48, 61, 64);
@@ -280,15 +281,12 @@ pub fn infer_skin_type(image: &DynamicImage) -> Option<SkinType> {
         if r_ratio < 0.05 && l_ratio < 0.05 {
             return Some(SkinType::Slim);
         }
-        if r_ratio > 0.15 || l_ratio > 0.15 {
-            return Some(SkinType::Classic);
-        }
     }
 
-    // Check 2: Adjacent column discontinuity / dummy marker fill.
-    // In Alex skins where the base layer unused strip is filled (solid placeholder or skin tone),
-    // there is a sharp color discontinuity between the arm edge (x=53 on right arm, x=45 on left arm)
-    // and the unused strip (x=54 on right arm, x=46 on left arm).
+    // Check 2: Adjacent column discontinuity / dummy marker fill in base layer.
+    // In Alex skins where the base layer unused strip is filled (solid placeholder like pure black/red,
+    // or flat skin tone), there is a sharp color discontinuity between the arm edge (x=53 on right arm,
+    // x=45 on left arm) and the unused strip (x=54 on right arm, x=46 on left arm).
     let diff_r = avg_column_color_diff(image, scale, 53, 54, 20, 32);
     let diff_l = avg_column_color_diff(image, scale, 45, 46, 52, 64);
     if diff_r > 70.0 || diff_l > 70.0 {
@@ -727,6 +725,11 @@ mod tests {
             ("identify/777293.png", TextureKind::Cape, None),
             (
                 "identify/777364.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Slim),
+            ),
+            (
+                "identify/776646.png",
                 TextureKind::SkinDoubleLayer,
                 Some(SkinType::Slim),
             ),
