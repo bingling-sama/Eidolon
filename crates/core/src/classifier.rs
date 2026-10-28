@@ -168,59 +168,61 @@ pub fn inspect_texture(bytes: &[u8]) -> Result<TextureReport, EidolonError> {
 
 /// Heuristic analyzer for 2:1 textures (64x32 base).
 fn classify_2_to_1_texture(image: &DynamicImage, scale: u32) -> TextureKind {
-    // Check specific sampling regions (in base 64x32 coords multiplied by scale)
-    // 1. Right arm & right leg lower regions (x in [46..64], y in [16..32])
-    // In a 64x32 skin:
-    //   Right arm is at x: 40..56, y: 16..32
-    //   Right leg is at x: 0..16, y: 16..32
-    //   Torso is at x: 16..40, y: 16..32
-    // A skin has pixels all across y in [16..32] spanning x: 0 to 56.
-    // In Minecraft official capes / elytra:
-    //   Cape is at [0..22, 0..17]
-    //   Elytra is at [22..46, 0..22]
-    //   Area x in [46..64], y in [0..32] is COMPLETELY EMPTY in capes/elytra!
-    let skin_right_arm_has_pixels =
-        region_has_opaque_pixels(image, 46 * scale, 18 * scale, 64 * scale, 32 * scale);
+    let trans_ratio = measure_transparency_ratio(image, scale);
 
-    // 2. Elytra wing main region: x in [22..46], y in [0..22]
-    let elytra_region_has_pixels =
-        region_has_opaque_pixels(image, 23 * scale, 2 * scale, 45 * scale, 22 * scale);
+    // Grid-based sampling in base 64x32 coordinates (sampling center of each base texel)
+    // 1. Lower body: x in [0..56], y in [24..32] (legs, lower torso, lower right arm in skin)
+    let (lower_opaque, _lower_total) = sample_grid_opaque_count(image, scale, 0, 24, 56, 32);
 
-    // 3. Cape main body: x in [0..22], y in [0..17]
-    let cape_body_has_pixels =
-        region_has_opaque_pixels(image, scale, scale, 21 * scale, 16 * scale);
+    // 2. Right arm exclusive: x in [48..56], y in [22..32]
+    // In Minecraft elytra textures, the wing reaches x up to ~46-47 and y up to ~22.
+    // [48..56, 22..32] is exclusively right arm / skin territory.
+    let (arm_opaque, _arm_total) = sample_grid_opaque_count(image, scale, 48, 22, 56, 32);
 
-    if skin_right_arm_has_pixels {
-        TextureKind::SkinSingleLayer
-    } else if elytra_region_has_pixels && cape_body_has_pixels {
-        // Modern Minecraft cape atlas contains BOTH cape texture at [0..22, 0..17]
-        // AND matching elytra texture at [22..46, 0..22] (e.g. Turtle Cape).
-        // Since it provides both, it is the standard Back Equipment / Cape atlas!
-        TextureKind::Cape
-    } else if elytra_region_has_pixels {
-        TextureKind::Elytra
-    } else if cape_body_has_pixels {
-        TextureKind::Cape
+    // 3. Cape main body: x in [1..21], y in [1..16]
+    let (cape_opaque, cape_total) = sample_grid_opaque_count(image, scale, 1, 1, 21, 16);
+    let cape_density = if cape_total > 0 {
+        cape_opaque as f32 / cape_total as f32
     } else {
-        TextureKind::Unknown
-    }
-}
+        0.0
+    };
 
-/// Returns true if region contains any pixel with alpha > 10.
-fn region_has_opaque_pixels(image: &DynamicImage, x0: u32, y0: u32, x1: u32, y1: u32) -> bool {
-    let (w, h) = image.dimensions();
-    let x_end = x1.min(w);
-    let y_end = y1.min(h);
+    // 4. Elytra wing main region: x in [23..45], y in [2..21]
+    let (elytra_opaque, elytra_total) = sample_grid_opaque_count(image, scale, 23, 2, 45, 21);
+    let elytra_density = if elytra_total > 0 {
+        elytra_opaque as f32 / elytra_total as f32
+    } else {
+        0.0
+    };
 
-    for y in y0.min(h)..y_end {
-        for x in x0.min(w)..x_end {
-            let p = image.get_pixel(x, y);
-            if p[3] > 10 {
-                return true;
-            }
+    // Case 1: Standard textures with transparency (trans_ratio > 0.15)
+    if trans_ratio > 0.15 {
+        if lower_opaque > 0 || arm_opaque > 0 {
+            return TextureKind::SkinSingleLayer;
         }
+        if cape_density > 0.05 && elytra_density > 0.05 {
+            // Modern Minecraft cape atlas contains BOTH cape texture at [0..22, 0..17]
+            // AND matching elytra texture at [22..46, 0..22] (e.g. Turtle Cape).
+            return TextureKind::Cape;
+        }
+        if elytra_density > 0.05 {
+            return TextureKind::Elytra;
+        }
+        if cape_density > 0.05 {
+            return TextureKind::Cape;
+        }
+        return TextureKind::Unknown;
     }
-    false
+
+    // Case 2: Fully opaque or near-opaque textures (trans_ratio <= 0.15)
+    // Legacy skins have human facial features with high contrast/variance across [8..16, 8..16].
+    // Solid, chroma-keyed, or continuous gradient capes lack skin face features (stdev < 15.0).
+    let stdev = face_luminance_stdev(image, scale);
+    if stdev < 15.0 {
+        return TextureKind::Cape;
+    }
+
+    TextureKind::SkinSingleLayer
 }
 
 /// Heuristically infers the player skin arm model (`Classic` 4px vs `Slim` 3px / Steve vs Alex).
@@ -253,50 +255,76 @@ pub fn infer_skin_type(image: &DynamicImage) -> Option<SkinType> {
     // 2. Square double-layer skins:
     // Classic Steve arm has width 4 (perimeter 4+4+4+4 = 16px).
     // Slim Alex arm has width 3 (perimeter 4+3+4+3 = 14px).
-    // In Alex skins, the rightmost 2 columns of each arm texture wrap are unused:
-    // - Right arm base layer unused zone: x in [54..56], y in [20..32] (24 base px)
-    // - Left arm base layer unused zone:  x in [46..48], y in [52..64] (24 base px)
-    // - Right arm overlay unused zone:    x in [54..56], y in [36..48] (24 base px)
-    // - Left arm overlay unused zone:     x in [62..64], y in [52..64] (24 base px)
-    let r_base = analyze_region_stats(image, 54 * scale, 20 * scale, 56 * scale, 32 * scale);
-    let l_base = analyze_region_stats(image, 46 * scale, 52 * scale, 48 * scale, 64 * scale);
+    //
+    // Check 1: Overlay layer validation (highest confidence signal).
+    // If the skin wears sleeve overlays (outer layer active), Alex skins strictly avoid
+    // the 4th column strip ([54..56, 36..48] for right arm, [62..64, 48..64] for left arm),
+    // whereas Classic skins texture those outer columns.
+    let (r_over_act, _) = sample_grid_opaque_count(image, scale, 44, 36, 53, 48);
+    let (r_over_un, r_over_tot) = sample_grid_opaque_count(image, scale, 54, 36, 56, 48);
+    let (l_over_act, _) = sample_grid_opaque_count(image, scale, 52, 48, 61, 64);
+    let (l_over_un, l_over_tot) = sample_grid_opaque_count(image, scale, 62, 48, 64, 64);
 
-    // Rule 1: Synthetic placeholder / marker fill detection.
-    // Some skins or test fixtures fill unused zones with a solid dummy marker (e.g. solid red)
-    // rather than transparency. If variance is near 0 and color sharply differs from adjacent arm, it's Slim.
-    if is_marker_fill(image, scale, 54, 53, 20, 32, &r_base)
-        || is_marker_fill(image, scale, 46, 45, 52, 64, &l_base)
+    if r_over_act > 4 || l_over_act > 4 {
+        let r_ratio = if r_over_tot > 0 {
+            r_over_un as f32 / r_over_tot as f32
+        } else {
+            0.0
+        };
+        let l_ratio = if l_over_tot > 0 {
+            l_over_un as f32 / l_over_tot as f32
+        } else {
+            0.0
+        };
+
+        if r_ratio < 0.05 && l_ratio < 0.05 {
+            return Some(SkinType::Slim);
+        }
+        if r_ratio > 0.15 || l_ratio > 0.15 {
+            return Some(SkinType::Classic);
+        }
+    }
+
+    // Check 2: Adjacent column discontinuity / dummy marker fill.
+    // In Alex skins where the base layer unused strip is filled (solid placeholder or skin tone),
+    // there is a sharp color discontinuity between the arm edge (x=53 on right arm, x=45 on left arm)
+    // and the unused strip (x=54 on right arm, x=46 on left arm).
+    let diff_r = avg_column_color_diff(image, scale, 53, 54, 20, 32);
+    let diff_l = avg_column_color_diff(image, scale, 45, 46, 52, 64);
+    if diff_r > 70.0 || diff_l > 70.0 {
+        return Some(SkinType::Slim);
+    }
+
+    // Check 3: Base layer transparency in unused zones:
+    // - Right arm base unused: [54..56, 20..32], active: [40..54, 20..32]
+    // - Left arm base unused:  [46..48, 52..64], active: [32..46, 52..64]
+    let (r_base_act, _) = sample_grid_opaque_count(image, scale, 40, 20, 54, 32);
+    let (r_base_un, r_base_tot) = sample_grid_opaque_count(image, scale, 54, 20, 56, 32);
+    let (l_base_act, _) = sample_grid_opaque_count(image, scale, 32, 52, 46, 64);
+    let (l_base_un, l_base_tot) = sample_grid_opaque_count(image, scale, 46, 52, 48, 64);
+
+    let r_has_arm = r_base_act > 0 || r_base_un > 0;
+    let l_has_arm = l_base_act > 0 || l_base_un > 0;
+
+    let r_trans = if r_base_tot > 0 {
+        1.0 - (r_base_un as f32 / r_base_tot as f32)
+    } else {
+        0.0
+    };
+    let l_trans = if l_base_tot > 0 {
+        1.0 - (l_base_un as f32 / l_base_tot as f32)
+    } else {
+        0.0
+    };
+
+    if (r_has_arm && l_has_arm && r_trans > 0.70 && l_trans > 0.70)
+        || (r_has_arm && !l_has_arm && r_trans > 0.70)
+        || (!r_has_arm && l_has_arm && l_trans > 0.70)
     {
         return Some(SkinType::Slim);
     }
 
-    // Rule 2: Active classic pixels check.
-    // If either the right or left arm unused column contains significant opaque textured pixels,
-    // this skin is designed for the 4px Classic arm geometry (otherwise these pixels would be discarded).
-    let r_has_classic = r_base.opaque_count > (r_base.total_pixels / 4);
-    let l_has_classic = l_base.opaque_count > (l_base.total_pixels / 4);
-
-    if r_has_classic || l_has_classic {
-        return Some(SkinType::Classic);
-    }
-
-    // Rule 3: Overlay layer validation.
-    // If either overlay layer has pixels in the unused strip, it's Classic.
-    let r_over = analyze_region_stats(image, 54 * scale, 36 * scale, 56 * scale, 48 * scale);
-    let l_over = analyze_region_stats(image, 62 * scale, 52 * scale, 64 * scale, 64 * scale);
-    if r_over.opaque_count > (2 * scale * scale) || l_over.opaque_count > (2 * scale * scale) {
-        return Some(SkinType::Classic);
-    }
-
-    // Rule 4: If unused arm strips are predominantly transparent, it's Slim.
-    let r_trans_ratio = r_base.transparent_count as f32 / r_base.total_pixels as f32;
-    let l_trans_ratio = l_base.transparent_count as f32 / l_base.total_pixels as f32;
-
-    if r_trans_ratio > 0.75 && l_trans_ratio > 0.75 {
-        return Some(SkinType::Slim);
-    }
-
-    // Default fallback: Classic
+    // Fallback: Classic Steve
     Some(SkinType::Classic)
 }
 
@@ -306,75 +334,111 @@ pub fn infer_skin_type_from_bytes(bytes: &[u8]) -> Result<Option<SkinType>, Eido
     Ok(infer_skin_type(&img))
 }
 
-#[derive(Debug, Clone, Copy)]
-struct RegionStats {
-    total_pixels: u32,
-    transparent_count: u32,
-    opaque_count: u32,
-    unique_colors: usize,
-}
-
-fn analyze_region_stats(image: &DynamicImage, x0: u32, y0: u32, x1: u32, y1: u32) -> RegionStats {
-    let mut total_pixels = 0;
-    let mut transparent_count = 0;
-    let mut opaque_count = 0;
-    let mut colors = std::collections::HashSet::new();
-
+fn sample_grid_opaque_count(
+    image: &DynamicImage,
+    scale: u32,
+    bx0: u32,
+    by0: u32,
+    bx1: u32,
+    by1: u32,
+) -> (u32, u32) {
     let (w, h) = image.dimensions();
-    let x_end = x1.min(w);
-    let y_end = y1.min(h);
+    let mut opaque = 0;
+    let mut total = 0;
 
-    for y in y0.min(h)..y_end {
-        for x in x0.min(w)..x_end {
-            total_pixels += 1;
-            let p = image.get_pixel(x, y);
-            if p[3] <= 10 {
-                transparent_count += 1;
-            } else {
-                opaque_count += 1;
-                if colors.len() <= 8 {
-                    colors.insert(p);
-                }
+    for by in by0..by1 {
+        for bx in bx0..bx1 {
+            let px = ((bx as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+            let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
+            total += 1;
+            if image.get_pixel(px, py)[3] > 10 {
+                opaque += 1;
             }
         }
     }
 
-    RegionStats {
-        total_pixels,
-        transparent_count,
-        opaque_count,
-        unique_colors: colors.len(),
+    (opaque, total)
+}
+
+fn measure_transparency_ratio(image: &DynamicImage, scale: u32) -> f32 {
+    let (width, height) = image.dimensions();
+    let mut total = 0u64;
+    let mut trans = 0u64;
+    let step = scale.max(1);
+
+    for y in (0..height).step_by(step as usize) {
+        for x in (0..width).step_by(step as usize) {
+            total += 1;
+            if image.get_pixel(x, y)[3] <= 10 {
+                trans += 1;
+            }
+        }
+    }
+
+    if total > 0 {
+        trans as f32 / total as f32
+    } else {
+        0.0
     }
 }
 
-fn is_marker_fill(
+fn face_luminance_stdev(image: &DynamicImage, scale: u32) -> f32 {
+    let (w, h) = image.dimensions();
+    let mut lums = Vec::with_capacity(64);
+
+    for by in 8..16 {
+        for bx in 8..16 {
+            let px = ((bx as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+            let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
+            let p = image.get_pixel(px, py);
+            let lum = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
+            lums.push(lum);
+        }
+    }
+
+    if lums.is_empty() {
+        return 0.0;
+    }
+
+    let mean = lums.iter().sum::<f32>() / lums.len() as f32;
+    let variance = lums.iter().map(|&l| (l - mean).powi(2)).sum::<f32>() / lums.len() as f32;
+    variance.sqrt()
+}
+
+fn avg_column_color_diff(
     image: &DynamicImage,
     scale: u32,
-    unused_col_x: u32,
-    adj_col_x: u32,
-    y0: u32,
-    y1: u32,
-    stats: &RegionStats,
-) -> bool {
-    if stats.opaque_count > 0 && stats.unique_colors <= 2 {
-        let mut total_diff: u64 = 0;
-        let mut count: u64 = 0;
+    bx_a: u32,
+    bx_b: u32,
+    by0: u32,
+    by1: u32,
+) -> f32 {
+    let (w, h) = image.dimensions();
+    let mut total_diff: f64 = 0.0;
+    let mut count: usize = 0;
 
-        for y in (y0 * scale)..(y1 * scale) {
-            let p_adj = image.get_pixel(adj_col_x * scale, y);
-            let p_unused = image.get_pixel(unused_col_x * scale, y);
-            let diff = (p_adj[0] as i32 - p_unused[0] as i32).abs() as u64
-                + (p_adj[1] as i32 - p_unused[1] as i32).abs() as u64
-                + (p_adj[2] as i32 - p_unused[2] as i32).abs() as u64;
+    for by in by0..by1 {
+        let px_a = ((bx_a as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+        let px_b = ((bx_b as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+        let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
+
+        let pa = image.get_pixel(px_a, py);
+        let pb = image.get_pixel(px_b, py);
+
+        if pa[3] > 10 && pb[3] > 10 {
+            let diff = (pa[0] as f64 - pb[0] as f64).abs()
+                + (pa[1] as f64 - pb[1] as f64).abs()
+                + (pa[2] as f64 - pb[2] as f64).abs();
             total_diff += diff;
             count += 1;
         }
-
-        if count > 0 && (total_diff / count) > 100 {
-            return true;
-        }
     }
-    false
+
+    if count > 0 {
+        (total_diff / count as f64) as f32
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -543,5 +607,148 @@ mod tests {
         }
         let img = DynamicImage::ImageRgba8(buf);
         assert_eq!(infer_skin_type(&img), Some(SkinType::Classic));
+    }
+
+    #[test]
+    fn test_synthetic_hd_cape_with_elytra() {
+        let mut buf = ImageBuffer::new(1024, 512);
+        let scale = 16;
+        // Paint cape body at [1..21, 1..16]
+        for y in scale..(16 * scale) {
+            for x in scale..(21 * scale) {
+                buf.put_pixel(x, y, Rgba([200, 50, 50, 255]));
+            }
+        }
+        // Paint elytra wing at [23..45, 2..21]
+        for y in (2 * scale)..(21 * scale) {
+            for x in (23 * scale)..(45 * scale) {
+                buf.put_pixel(x, y, Rgba([50, 200, 50, 255]));
+            }
+        }
+        let img = DynamicImage::ImageRgba8(buf);
+        let rep = inspect_image(&img);
+        assert_eq!(rep.kind, TextureKind::Cape);
+        assert_eq!(rep.skin_type, None);
+    }
+
+    #[test]
+    fn test_synthetic_cape_with_bottom_right_watermark() {
+        let mut buf = ImageBuffer::new(2048, 1024);
+        let scale = 32;
+        // Paint cape body at [1..21, 1..16]
+        for y in scale..(16 * scale) {
+            for x in scale..(21 * scale) {
+                buf.put_pixel(x, y, Rgba([200, 50, 50, 255]));
+            }
+        }
+        // Paint elytra wing at [23..45, 2..21]
+        for y in (2 * scale)..(21 * scale) {
+            for x in (23 * scale)..(45 * scale) {
+                buf.put_pixel(x, y, Rgba([50, 200, 50, 255]));
+            }
+        }
+        // Paint small watermark in bottom-right corner [62..64, 30..32]
+        for y in (30 * scale)..(32 * scale) {
+            for x in (62 * scale)..(64 * scale) {
+                buf.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+            }
+        }
+        let img = DynamicImage::ImageRgba8(buf);
+        let rep = inspect_image(&img);
+        assert_eq!(rep.kind, TextureKind::Cape);
+        assert_eq!(rep.skin_type, None);
+    }
+
+    #[test]
+    fn test_synthetic_chroma_key_opaque_cape() {
+        let mut buf = ImageBuffer::new(64, 32);
+        // Fill canvas with flat chroma green background
+        for y in 0..32 {
+            for x in 0..64 {
+                buf.put_pixel(x, y, Rgba([0, 208, 22, 255]));
+            }
+        }
+        // Paint cape front [1..11, 1..17] and back [12..22, 1..17] with subtle green gradient
+        for y in 1..17 {
+            for x in 1..22 {
+                buf.put_pixel(x, y, Rgba([30, 215, 40, 255]));
+            }
+        }
+        let img = DynamicImage::ImageRgba8(buf);
+        let rep = inspect_image(&img);
+        assert_eq!(rep.kind, TextureKind::Cape);
+        assert_eq!(rep.skin_type, None);
+    }
+
+    #[test]
+    fn test_synthetic_alex_with_overlay_sleeves() {
+        let mut buf = ImageBuffer::new(64, 64);
+        // Paint base layer arm columns 40..56 (even if unused column has fill)
+        for y in 20..32 {
+            for x in 40..56 {
+                buf.put_pixel(x, y, Rgba([220, 180, 140, 255]));
+            }
+        }
+        // Paint overlay sleeve on 44..54 (active 3px Alex sleeve), leaving 54..56 empty
+        for y in 36..48 {
+            for x in 44..54 {
+                buf.put_pixel(x, y, Rgba([50, 100, 200, 255]));
+            }
+        }
+        let img = DynamicImage::ImageRgba8(buf);
+        assert_eq!(infer_skin_type(&img), Some(SkinType::Slim));
+    }
+
+    #[test]
+    fn test_synthetic_alex_with_column_discontinuity() {
+        let mut buf = ImageBuffer::new(64, 64);
+        // Paint base layer right arm: columns 40..54 blue shirt, column 54..56 skin tone
+        for y in 20..32 {
+            for x in 40..54 {
+                buf.put_pixel(x, y, Rgba([30, 60, 100, 255]));
+            }
+            for x in 54..56 {
+                buf.put_pixel(x, y, Rgba([230, 180, 140, 255]));
+            }
+        }
+        let img = DynamicImage::ImageRgba8(buf);
+        assert_eq!(infer_skin_type(&img), Some(SkinType::Slim));
+    }
+
+    #[test]
+    fn test_identify_dataset_files_if_present() {
+        let test_cases = [
+            ("identify/776877.png", TextureKind::Cape, None),
+            ("identify/777050.png", TextureKind::Cape, None),
+            ("identify/777234.png", TextureKind::Cape, None),
+            ("identify/777235.png", TextureKind::Cape, None),
+            ("identify/777236.png", TextureKind::Cape, None),
+            ("identify/777278.png", TextureKind::Cape, None),
+            ("identify/777293.png", TextureKind::Cape, None),
+            (
+                "identify/777364.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Slim),
+            ),
+        ];
+
+        for (rel_path, expected_kind, expected_skin_type) in test_cases {
+            let full_path = crate::test_support::resource(rel_path);
+            if full_path.exists() {
+                let bytes = std::fs::read(&full_path).unwrap();
+                let img = image::load_from_memory(&bytes).unwrap();
+                let rep = inspect_image(&img);
+                assert_eq!(
+                    rep.kind, expected_kind,
+                    "Failed kind check for {}",
+                    rel_path
+                );
+                assert_eq!(
+                    rep.skin_type, expected_skin_type,
+                    "Failed skin_type check for {}",
+                    rel_path
+                );
+            }
+        }
     }
 }
