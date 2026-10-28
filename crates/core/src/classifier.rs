@@ -225,6 +225,43 @@ fn classify_2_to_1_texture(image: &DynamicImage, scale: u32) -> TextureKind {
     TextureKind::SkinSingleLayer
 }
 
+/// Coordinates of arm regions on the standard 64x64 skin template.
+///
+/// In Minecraft:
+/// - Steve arms are 4px wide (perimeter 4+4+4+4 = 16 texels; caps 4x4 = 16 texels).
+/// - Alex arms are 3px wide (perimeter 4+3+4+3 = 14 texels; caps 3x4 = 12 texels).
+/// - The remaining 2 columns in side panels and cap strips are left unused in Alex UV.
+struct ArmRegion {
+    bx0: u32,
+    by0: u32,
+    bx1: u32,
+    by1: u32,
+}
+
+impl ArmRegion {
+    const fn new(bx0: u32, by0: u32, bx1: u32, by1: u32) -> Self {
+        Self { bx0, by0, bx1, by1 }
+    }
+}
+
+// Right arm layout (base: [40..56, 16..32], overlay: [40..56, 32..48])
+const RIGHT_ARM_BASE_ACTIVE_SIDES: ArmRegion = ArmRegion::new(40, 20, 54, 32);
+const RIGHT_ARM_BASE_UNUSED_SIDES: ArmRegion = ArmRegion::new(54, 20, 56, 32);
+const RIGHT_ARM_BASE_ACTIVE_CAP: ArmRegion = ArmRegion::new(44, 16, 50, 20);
+const RIGHT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(50, 16, 52, 20);
+
+const RIGHT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(44, 36, 54, 48);
+const RIGHT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(54, 36, 56, 48);
+
+// Left arm layout (base: [32..48, 48..64], overlay: [48..64, 48..64])
+const LEFT_ARM_BASE_ACTIVE_SIDES: ArmRegion = ArmRegion::new(32, 52, 46, 64);
+const LEFT_ARM_BASE_UNUSED_SIDES: ArmRegion = ArmRegion::new(46, 52, 48, 64);
+const LEFT_ARM_BASE_ACTIVE_CAP: ArmRegion = ArmRegion::new(36, 48, 42, 52);
+const LEFT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(42, 48, 44, 52);
+
+const LEFT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(52, 52, 62, 64);
+const LEFT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(62, 52, 64, 64);
+
 /// Heuristically infers the player skin arm model (`Classic` 4px vs `Slim` 3px / Steve vs Alex).
 ///
 /// Returns:
@@ -253,90 +290,129 @@ pub fn infer_skin_type(image: &DynamicImage) -> Option<SkinType> {
     let scale = width / 64;
 
     // 2. Square double-layer skins:
-    // Classic Steve arm has width 4 (perimeter 4+4+4+4 = 16px).
-    // Slim Alex arm has width 3 (perimeter 4+3+4+3 = 14px).
-    //
-    // Check 1: Base layer transparency in Alex-unused zones (strongest definitive signal).
-    // In standard Minecraft skins, Classic Steve models have 4px wide arms and cannot have
-    // transparent pixels on the base layer. Standard Alex skins have the unused strips left transparent:
-    // - Right arm side: [54..56, 20..32] (2x12 = 24 texels)
-    // - Left arm side:  [46..48, 52..64] (2x12 = 24 texels)
-    // - Right arm cap:  [50..52, 16..20] (2x4 = 8 texels)
-    // - Left arm cap:   [42..44, 48..52] (2x4 = 8 texels)
-    let (r_base_act, _) = sample_grid_opaque_count(image, scale, 40, 20, 54, 32);
-    let (r_base_un_op, r_base_un_tot) = sample_grid_opaque_count(image, scale, 54, 20, 56, 32);
-    let (l_base_act, _) = sample_grid_opaque_count(image, scale, 32, 52, 46, 64);
-    let (l_base_un_op, l_base_un_tot) = sample_grid_opaque_count(image, scale, 46, 52, 48, 64);
-    let (r_cap_act, _) = sample_grid_opaque_count(image, scale, 44, 16, 50, 20);
-    let (r_cap_un_op, r_cap_un_tot) = sample_grid_opaque_count(image, scale, 50, 16, 52, 20);
-    let (l_cap_act, _) = sample_grid_opaque_count(image, scale, 36, 48, 42, 52);
-    let (l_cap_un_op, l_cap_un_tot) = sample_grid_opaque_count(image, scale, 42, 48, 44, 52);
+    // Follow a 3-stage decision pipeline (highest certainty -> heuristic indicators -> fallback):
 
-    let r_base_un_trans = r_base_un_tot.saturating_sub(r_base_un_op);
-    let l_base_un_trans = l_base_un_tot.saturating_sub(l_base_un_op);
-    let r_cap_un_trans = r_cap_un_tot.saturating_sub(r_cap_un_op);
-    let l_cap_un_trans = l_cap_un_tot.saturating_sub(l_cap_un_op);
-
-    let r_side_slim = r_base_act > 0 && r_base_un_trans >= 12;
-    let l_side_slim = l_base_act > 0 && l_base_un_trans >= 12;
-    let r_cap_slim = r_cap_act > 0 && r_cap_un_trans >= 4;
-    let l_cap_slim = l_cap_act > 0 && l_cap_un_trans >= 4;
-
-    if r_side_slim || l_side_slim || r_cap_slim || l_cap_slim {
+    // Stage 1: Absolute geometry transparency (authoritative Alex signal)
+    if check_unused_transparency(image, scale) {
         return Some(SkinType::Slim);
     }
 
-    // Check 2: Overlay sleeve analysis for skins where base layer unused columns are opaque.
-    // Right arm overlay: active [44..54, 36..48], unused 4th column [54..56, 36..48]
-    // Left arm overlay:  active [52..62, 52..64], unused 4th column [62..64, 52..64]
-    let (r_over_act, _) = sample_grid_opaque_count(image, scale, 44, 36, 54, 48);
-    let (r_over_un, _) = sample_grid_opaque_count(image, scale, 54, 36, 56, 48);
-    let (l_over_act, _) = sample_grid_opaque_count(image, scale, 52, 52, 62, 64);
-    let (l_over_un, _) = sample_grid_opaque_count(image, scale, 62, 52, 64, 64);
+    // Stage 2: Outer overlay sleeve coverage
+    if let Some(inferred) = check_overlay_sleeve_evidence(image, scale) {
+        return Some(inferred);
+    }
 
-    // 2A. If overlay heavily covers the 4th column strip in an opaque-base skin,
-    // both layers are texturing a 4px wide arm -> Classic Steve.
+    // Stage 3: Dummy placeholder fill or boundary discontinuity
+    if check_dummy_fill_or_boundary(image, scale) {
+        return Some(SkinType::Slim);
+    }
+
+    // Default fallback: Classic Steve 4px arm
+    Some(SkinType::Classic)
+}
+
+/// Stage 1: Checks if any active arm has transparent pixels in the Alex-unused zones.
+/// In standard Minecraft skins, Classic Steve skins are completely opaque across all 4px.
+fn check_unused_transparency(image: &DynamicImage, scale: u32) -> bool {
+    let (r_side_act, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_BASE_ACTIVE_SIDES);
+    let (r_side_un_op, r_side_un_tot) =
+        sample_region_opaque_count(image, scale, &RIGHT_ARM_BASE_UNUSED_SIDES);
+    let (l_side_act, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_BASE_ACTIVE_SIDES);
+    let (l_side_un_op, l_side_un_tot) =
+        sample_region_opaque_count(image, scale, &LEFT_ARM_BASE_UNUSED_SIDES);
+
+    let (r_cap_act, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_BASE_ACTIVE_CAP);
+    let (r_cap_un_op, r_cap_un_tot) =
+        sample_region_opaque_count(image, scale, &RIGHT_ARM_BASE_UNUSED_CAP);
+    let (l_cap_act, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_BASE_ACTIVE_CAP);
+    let (l_cap_un_op, l_cap_un_tot) =
+        sample_region_opaque_count(image, scale, &LEFT_ARM_BASE_UNUSED_CAP);
+
+    let r_side_un_trans = r_side_un_tot.saturating_sub(r_side_un_op);
+    let l_side_un_trans = l_side_un_tot.saturating_sub(l_side_un_op);
+    let r_cap_un_trans = r_cap_un_tot.saturating_sub(r_cap_un_op);
+    let l_cap_un_trans = l_cap_un_tot.saturating_sub(l_cap_un_op);
+
+    // If an arm is drawn, and at least half the unused texels are transparent -> Slim Alex
+    let r_side_slim = r_side_act > 0 && r_side_un_trans >= (r_side_un_tot / 2);
+    let l_side_slim = l_side_act > 0 && l_side_un_trans >= (l_side_un_tot / 2);
+    let r_cap_slim = r_cap_act > 0 && r_cap_un_trans >= (r_cap_un_tot / 2);
+    let l_cap_slim = l_cap_act > 0 && l_cap_un_trans >= (l_cap_un_tot / 2);
+
+    r_side_slim || l_side_slim || r_cap_slim || l_cap_slim
+}
+
+/// Stage 2: Analyzes outer overlay sleeve layers when the base layer is completely opaque.
+fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<SkinType> {
+    let (r_over_act, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_OVER_ACTIVE_SIDES);
+    let (r_over_un, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_OVER_UNUSED_SIDES);
+    let (l_over_act, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_ACTIVE_SIDES);
+    let (l_over_un, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
+
+    // 2A: Heavy drawing on the 4th column of overlay sleeves (>= 8 texels / 33% of 24)
+    // demonstrates intentional 4px arm texturing -> Classic Steve.
     if r_over_un >= 8 || l_over_un >= 8 {
         return Some(SkinType::Classic);
     }
 
-    // 2B. Clean tailored 3px overlay sleeves: active sleeve overlay present,
-    // but the 4th column is strictly empty/transparent -> Slim Alex.
+    // 2B: Clean tailored 3px overlay sleeves: substantial sleeve texture present (>= 20 texels),
+    // but the 4th column strip is left completely untouched (<= 1 texel) -> Slim Alex.
     if (r_over_act >= 20 && r_over_un <= 1) || (l_over_act >= 20 && l_over_un <= 1) {
         return Some(SkinType::Slim);
     }
 
-    // Check 3: Base layer dummy solid fill detection (e.g. 776646).
-    // Some skin editors/converters fill the unused 2px strip with a solid placeholder color (e.g. #000000 or red)
-    // rather than transparency.
-    let r_base_colors = count_distinct_colors(image, scale, 54, 20, 56, 32);
-    let l_base_colors = count_distinct_colors(image, scale, 46, 52, 48, 64);
-    let r_cap_colors = count_distinct_colors(image, scale, 50, 16, 52, 20);
-    let l_cap_colors = count_distinct_colors(image, scale, 42, 48, 44, 52);
+    None
+}
 
+/// Stage 3: Checks for dummy solid color fills (e.g. flat #000000 or skin tone) or severe boundary discontinuities.
+fn check_dummy_fill_or_boundary(image: &DynamicImage, scale: u32) -> bool {
+    let r_base_colors = count_region_distinct_colors(image, scale, &RIGHT_ARM_BASE_UNUSED_SIDES);
+    let l_base_colors = count_region_distinct_colors(image, scale, &LEFT_ARM_BASE_UNUSED_SIDES);
+    let r_cap_colors = count_region_distinct_colors(image, scale, &RIGHT_ARM_BASE_UNUSED_CAP);
+    let l_cap_colors = count_region_distinct_colors(image, scale, &LEFT_ARM_BASE_UNUSED_CAP);
+
+    // Discontinuity across column 53 (arm edge) and 54 (unused strip start) on right arm,
+    // and across column 45 (arm edge) and 46 (unused strip start) on left arm.
     let diff_r = avg_column_color_diff(image, scale, 53, 54, 20, 32);
     let diff_l = avg_column_color_diff(image, scale, 45, 46, 52, 64);
 
+    // 3A: Placeholder dummy fill (e.g. solid #000000 with sharp color boundary jump).
     if ((r_base_colors <= 2 && diff_r > 70.0) || (l_base_colors <= 2 && diff_l > 70.0))
         && (r_cap_colors <= 2 || l_cap_colors <= 2)
     {
-        return Some(SkinType::Slim);
+        return true;
     }
 
-    // Check 4: Dual-arm boundary discontinuity with completely untouched overlay (e.g. 777364).
-    // Both arms end at 3px width with a sharp boundary jump, and overlay doesn't touch unused columns.
+    // 3B: Dual-arm boundary discontinuity with completely untouched overlay.
+    let (r_over_un, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_OVER_UNUSED_SIDES);
+    let (l_over_un, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
     if diff_r > 150.0 && diff_l > 150.0 && r_over_un == 0 && l_over_un == 0 {
-        return Some(SkinType::Slim);
+        return true;
     }
 
-    // Fallback: Classic Steve
-    Some(SkinType::Classic)
+    false
 }
 
 /// Infer skin arm model from raw image bytes.
 pub fn infer_skin_type_from_bytes(bytes: &[u8]) -> Result<Option<SkinType>, EidolonError> {
     let img = image::load_from_memory(bytes)?;
     Ok(infer_skin_type(&img))
+}
+
+fn sample_region_opaque_count(
+    image: &DynamicImage,
+    scale: u32,
+    region: &ArmRegion,
+) -> (u32, u32) {
+    sample_grid_opaque_count(image, scale, region.bx0, region.by0, region.bx1, region.by1)
+}
+
+fn count_region_distinct_colors(
+    image: &DynamicImage,
+    scale: u32,
+    region: &ArmRegion,
+) -> usize {
+    count_distinct_colors(image, scale, region.bx0, region.by0, region.bx1, region.by1)
 }
 
 fn sample_grid_opaque_count(
