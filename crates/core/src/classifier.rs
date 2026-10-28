@@ -252,6 +252,8 @@ const RIGHT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(50, 16, 52, 20);
 
 const RIGHT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(44, 36, 54, 48);
 const RIGHT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(54, 36, 56, 48);
+const RIGHT_ARM_OVER_CAP_BOTTOM: ArmRegion = ArmRegion::new(47, 32, 50, 36);
+const RIGHT_ARM_OVER_CAP_TOP: ArmRegion = ArmRegion::new(44, 32, 47, 36);
 
 // Left arm layout (base: [32..48, 48..64], overlay: [48..64, 48..64])
 const LEFT_ARM_BASE_ACTIVE_SIDES: ArmRegion = ArmRegion::new(32, 52, 46, 64);
@@ -261,6 +263,11 @@ const LEFT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(42, 48, 44, 52);
 
 const LEFT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(52, 52, 62, 64);
 const LEFT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(62, 52, 64, 64);
+const LEFT_ARM_OVER_CAP_BOTTOM: ArmRegion = ArmRegion::new(55, 48, 58, 52);
+const LEFT_ARM_OVER_CAP_TOP: ArmRegion = ArmRegion::new(52, 48, 55, 52);
+
+// Void region outside standard texture areas (corner above head: [0..8, 0..8])
+const VOID_TOP_LEFT_CORNER: ArmRegion = ArmRegion::new(0, 0, 8, 8);
 
 /// Heuristically infers the player skin arm model (`Classic` 4px vs `Slim` 3px / Steve vs Alex).
 ///
@@ -342,6 +349,20 @@ fn check_unused_transparency(image: &DynamicImage, scale: u32) -> bool {
     r_side_slim || l_side_slim || r_cap_slim || l_cap_slim
 }
 
+/// Checks if the entire texture canvas has been flood-filled with a single uniform background color
+/// (e.g. solid #525252 as in `777053.png`), meaning unused columns will naturally carry this background color.
+fn get_uniform_canvas_fill_color(image: &DynamicImage, scale: u32) -> Option<(u8, u8, u8)> {
+    let (corner_opaque, total) = sample_region_opaque_count(image, scale, &VOID_TOP_LEFT_CORNER);
+    if corner_opaque == total && total > 0 {
+        let (distinct, mut colors) =
+            collect_region_colors(image, scale, &VOID_TOP_LEFT_CORNER);
+        if distinct == 1 {
+            return colors.pop();
+        }
+    }
+    None
+}
+
 /// Stage 2: Analyzes outer overlay sleeve layers when the base layer is completely opaque.
 fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<SkinType> {
     let (r_over_act, _) = sample_region_opaque_count(image, scale, &RIGHT_ARM_OVER_ACTIVE_SIDES);
@@ -349,19 +370,115 @@ fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<Ski
     let (l_over_act, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_ACTIVE_SIDES);
     let (l_over_un, _) = sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
 
-    // 2A: Heavy drawing on the 4th column of overlay sleeves (>= 8 texels / 33% of 24)
+    let canvas_fill = get_uniform_canvas_fill_color(image, scale);
+
+    // If unused overlay columns are uniformly filled with the canvas background color,
+    // they represent background template canvas fill rather than intentional 4px arm texturing.
+    let r_un_is_bg = match canvas_fill {
+        Some(bg) => {
+            let (count, colors) =
+                collect_region_colors(image, scale, &RIGHT_ARM_OVER_UNUSED_SIDES);
+            count == 1 && colors.first() == Some(&bg)
+        }
+        None => false,
+    };
+    let l_un_is_bg = match canvas_fill {
+        Some(bg) => {
+            let (count, colors) =
+                collect_region_colors(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
+            count == 1 && colors.first() == Some(&bg)
+        }
+        None => false,
+    };
+
+    // 2A: Check for 3px Alex overlay cap signatures (e.g. 3px epaulets/cuffs with 3px transparent complement).
+    // In Alex UV, top cap is [44..47, 32..36] (3x4) and bottom cap is [47..50, 32..36] (3x4).
+    // In Classic UV, caps are 4x4: top [44..48] and bottom [48..52].
+    // An active feature drawn specifically on [47..50] (bottom cap) while [44..47] is transparent
+    // is a definitive 3px Alex geometry indicator.
+    if has_slim_overlay_cap_feature(image, scale, canvas_fill) {
+        return Some(SkinType::Slim);
+    }
+
+    // 2B: Heavy drawing on the 4th column of overlay sleeves (>= 8 texels / 33% of 24)
     // demonstrates intentional 4px arm texturing -> Classic Steve.
-    if r_over_un >= 8 || l_over_un >= 8 {
+    // (Only applies when the column is not just canvas background flood-fill).
+    let r_heavy_classic = r_over_un >= 8 && !r_un_is_bg;
+    let l_heavy_classic = l_over_un >= 8 && !l_un_is_bg;
+    if r_heavy_classic || l_heavy_classic {
         return Some(SkinType::Classic);
     }
 
-    // 2B: Clean tailored 3px overlay sleeves: substantial sleeve texture present (>= 20 texels),
-    // but the 4th column strip is left completely untouched (<= 1 texel) -> Slim Alex.
-    if (r_over_act >= 20 && r_over_un <= 1) || (l_over_act >= 20 && l_over_un <= 1) {
+    // 2C: Clean tailored 3px overlay sleeves: substantial sleeve texture present (>= 20 texels),
+    // but the 4th column strip is left untouched (transparent or background fill) -> Slim Alex.
+    let r_clean_slim = r_over_act >= 20 && (r_over_un <= 1 || r_un_is_bg);
+    let l_clean_slim = l_over_act >= 20 && (l_over_un <= 1 || l_un_is_bg);
+    if r_clean_slim || l_clean_slim {
         return Some(SkinType::Slim);
     }
 
     None
+}
+
+/// Detects distinct 3px Alex overlay cap features (e.g. golden epaulets or shoulder pads).
+fn has_slim_overlay_cap_feature(
+    image: &DynamicImage,
+    scale: u32,
+    canvas_fill: Option<(u8, u8, u8)>,
+) -> bool {
+    let check_arm = |top: &ArmRegion, bot: &ArmRegion| -> bool {
+        let (top_op, top_tot) = sample_region_opaque_count(image, scale, top);
+        let (bot_op, bot_tot) = sample_region_opaque_count(image, scale, bot);
+
+        let (bot_non_bg, bot_distinct) = count_region_non_bg_colors(image, scale, bot, canvas_fill);
+        let (top_non_bg, top_distinct) = count_region_non_bg_colors(image, scale, top, canvas_fill);
+
+        // Pattern 1: Bottom cap has active artwork (e.g. epaulet) while top cap is empty/transparent.
+        // In Steve, top cap is [44..48], so [47..50] crossing into [48] cannot happen as a single 3px block.
+        if top_op == 0 && bot_op == bot_tot && bot_non_bg >= (bot_tot / 2) && bot_distinct >= 2 {
+            return true;
+        }
+
+        // Pattern 2: Top cap has active artwork while bottom cap is empty/transparent.
+        if bot_op == 0 && top_op == top_tot && top_non_bg >= (top_tot / 2) && top_distinct >= 2 {
+            return true;
+        }
+
+        false
+    };
+
+    check_arm(&RIGHT_ARM_OVER_CAP_TOP, &RIGHT_ARM_OVER_CAP_BOTTOM)
+        || check_arm(&LEFT_ARM_OVER_CAP_TOP, &LEFT_ARM_OVER_CAP_BOTTOM)
+}
+
+fn count_region_non_bg_colors(
+    image: &DynamicImage,
+    scale: u32,
+    region: &ArmRegion,
+    canvas_fill: Option<(u8, u8, u8)>,
+) -> (u32, usize) {
+    let (w, h) = image.dimensions();
+    let mut non_bg_count = 0;
+    let mut colors = Vec::new();
+
+    for by in region.by0..region.by1 {
+        for bx in region.bx0..region.bx1 {
+            let px = ((bx as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+            let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
+            let p = image.get_pixel(px, py);
+            if p[3] > 10 {
+                let rgb = (p[0], p[1], p[2]);
+                if Some(rgb) != canvas_fill {
+                    non_bg_count += 1;
+                    if !colors.contains(&rgb) {
+                        colors.push(rgb);
+                    }
+                }
+            }
+        }
+    }
+
+    (non_bg_count, colors.len())
 }
 
 /// Stage 3: Checks for dummy solid color fills (e.g. flat #000000 or skin tone) or severe boundary discontinuities.
@@ -407,12 +524,37 @@ fn sample_region_opaque_count(
     sample_grid_opaque_count(image, scale, region.bx0, region.by0, region.bx1, region.by1)
 }
 
+fn collect_region_colors(
+    image: &DynamicImage,
+    scale: u32,
+    region: &ArmRegion,
+) -> (usize, Vec<(u8, u8, u8)>) {
+    let (w, h) = image.dimensions();
+    let mut colors: Vec<(u8, u8, u8)> = Vec::new();
+
+    for by in region.by0..region.by1 {
+        for bx in region.bx0..region.bx1 {
+            let px = ((bx as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
+            let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
+            let p = image.get_pixel(px, py);
+            if p[3] > 10 {
+                let rgb = (p[0], p[1], p[2]);
+                if !colors.contains(&rgb) {
+                    colors.push(rgb);
+                }
+            }
+        }
+    }
+
+    (colors.len(), colors)
+}
+
 fn count_region_distinct_colors(
     image: &DynamicImage,
     scale: u32,
     region: &ArmRegion,
 ) -> usize {
-    count_distinct_colors(image, scale, region.bx0, region.by0, region.bx1, region.by1)
+    collect_region_colors(image, scale, region).0
 }
 
 fn sample_grid_opaque_count(
@@ -520,34 +662,6 @@ fn avg_column_color_diff(
     } else {
         0.0
     }
-}
-
-fn count_distinct_colors(
-    image: &DynamicImage,
-    scale: u32,
-    bx0: u32,
-    by0: u32,
-    bx1: u32,
-    by1: u32,
-) -> usize {
-    let (w, h) = image.dimensions();
-    let mut colors: Vec<(u8, u8, u8)> = Vec::new();
-
-    for by in by0..by1 {
-        for bx in bx0..bx1 {
-            let px = ((bx as u64 * 2 + 1) * scale as u64 / 2).min((w - 1) as u64) as u32;
-            let py = ((by as u64 * 2 + 1) * scale as u64 / 2).min((h - 1) as u64) as u32;
-            let p = image.get_pixel(px, py);
-            if p[3] > 10 {
-                let rgb = (p[0], p[1], p[2]);
-                if !colors.contains(&rgb) {
-                    colors.push(rgb);
-                }
-            }
-        }
-    }
-
-    colors.len()
 }
 
 #[cfg(test)]
@@ -883,6 +997,11 @@ mod tests {
                 "identify/372012.png",
                 TextureKind::SkinDoubleLayer,
                 Some(SkinType::Classic),
+            ),
+            (
+                "identify/777053.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Slim),
             ),
         ];
 
