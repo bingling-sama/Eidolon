@@ -421,30 +421,28 @@ fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<Ski
 }
 
 /// Detects distinct 3px Alex overlay cap features (e.g. golden epaulets or shoulder pads).
+///
+/// In Minecraft UV:
+/// - Alex bottom cap is [47..50, 32..36] (Right) and [55..58, 48..52] (Left), exactly 3x4 texels.
+/// - Classic Steve caps are 4x4: Top is [44..48] / [52..56], and Bottom is [48..52] / [56..60].
+///
+/// An active 3px feature drawn across [47..50] (or [55..58]) while the top cap [44..47] (or [52..55])
+/// is completely empty straddles the Steve 4px cap boundary (x=47|48 or 55|56). This cannot occur
+/// in standard Classic texturing and is a definitive 3px Alex bottom cap indicator.
 fn has_slim_overlay_cap_feature(
     image: &DynamicImage,
     scale: u32,
     canvas_fill: Option<(u8, u8, u8)>,
 ) -> bool {
     let check_arm = |top: &ArmRegion, bot: &ArmRegion| -> bool {
-        let (top_op, top_tot) = sample_region_opaque_count(image, scale, top);
+        let (top_op, _) = sample_region_opaque_count(image, scale, top);
         let (bot_op, bot_tot) = sample_region_opaque_count(image, scale, bot);
 
         let (bot_non_bg, bot_distinct) = count_region_non_bg_colors(image, scale, bot, canvas_fill);
-        let (top_non_bg, top_distinct) = count_region_non_bg_colors(image, scale, top, canvas_fill);
 
-        // Pattern 1: Bottom cap has active artwork (e.g. epaulet) while top cap is empty/transparent.
+        // Pattern: Bottom cap has active artwork (e.g. epaulet) while top cap is empty/transparent.
         // In Steve, top cap is [44..48], so [47..50] crossing into [48] cannot happen as a single 3px block.
-        if top_op == 0 && bot_op == bot_tot && bot_non_bg >= (bot_tot / 2) && bot_distinct >= 2 {
-            return true;
-        }
-
-        // Pattern 2: Top cap has active artwork while bottom cap is empty/transparent.
-        if bot_op == 0 && top_op == top_tot && top_non_bg >= (top_tot / 2) && top_distinct >= 2 {
-            return true;
-        }
-
-        false
+        top_op == 0 && bot_op == bot_tot && bot_non_bg >= (bot_tot / 2) && bot_distinct >= 2
     };
 
     check_arm(&RIGHT_ARM_OVER_CAP_TOP, &RIGHT_ARM_OVER_CAP_BOTTOM)
@@ -1002,6 +1000,31 @@ mod tests {
                 "identify/777053.png",
                 TextureKind::SkinDoubleLayer,
                 Some(SkinType::Slim),
+            ),
+            (
+                "identify/10605.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Classic),
+            ),
+            (
+                "identify/105214.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Classic),
+            ),
+            (
+                "identify/108588.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Classic),
+            ),
+            (
+                "identify/113152.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Classic),
+            ),
+            (
+                "identify/185977.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Classic),
             ),
         ];
 
