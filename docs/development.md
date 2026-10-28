@@ -26,7 +26,7 @@ cargo bench -p eidolon-core
 pnpm --dir examples/wasm run test:e2e
 ```
 
-`cargo bench` writes rendered benchmark output under `.bench/`.
+`cargo bench` executes in-memory rendering, processing, and transient animation export benchmarks.
 
 ## Testing Notes
 

@@ -27,7 +27,7 @@ Eidolon 采用 Cargo + pnpm Monorepo 架构：
     - `pipeline.rs` — 基于嵌入式 WGSL 着色器构建 wgpu 渲染管线。
     - `readback.rs` — GPU → CPU 缓冲区复制（处理行对齐 padding）、映射读取为 `ImageBuffer`。
     - `uniforms.rs` — 各身体部件 uniform 数据及绘制顺序控制（`PartId`、`PART_CONFIGS`）。
-  - `benches/performance_benchmark.rs` 使用 Criterion 测量批量渲染和单周期动画导出。
+  - `benches/performance_benchmark.rs` 定义覆盖分辨率缩放、场景变化、资源加载、图像处理、动画采样以及静态/动画导出的 Criterion 基准测试套件。
 - `crates/cli` (`eidolon-cli`)：命令行程序二进制（`eidolon`）。
   - `src/main.rs`：31 行精简入口，初始化日志并分发子命令。
   - `src/args.rs`：使用 Clap 定义参数结构体与枚举（`Cli`、`Command`、`SceneArgs`、`ViewportArgs`、`RenderAnimationArgs`）。
