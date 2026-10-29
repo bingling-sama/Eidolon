@@ -252,6 +252,7 @@ const RIGHT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(50, 16, 52, 20);
 
 const RIGHT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(44, 36, 54, 48);
 const RIGHT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(54, 36, 56, 48);
+const RIGHT_ARM_OVER_UNUSED_INNER_COL: ArmRegion = ArmRegion::new(54, 36, 55, 48);
 const RIGHT_ARM_OVER_CAP_BOTTOM: ArmRegion = ArmRegion::new(47, 32, 50, 36);
 const RIGHT_ARM_OVER_CAP_TOP: ArmRegion = ArmRegion::new(44, 32, 47, 36);
 
@@ -263,6 +264,7 @@ const LEFT_ARM_BASE_UNUSED_CAP: ArmRegion = ArmRegion::new(42, 48, 44, 52);
 
 const LEFT_ARM_OVER_ACTIVE_SIDES: ArmRegion = ArmRegion::new(52, 52, 62, 64);
 const LEFT_ARM_OVER_UNUSED_SIDES: ArmRegion = ArmRegion::new(62, 52, 64, 64);
+const LEFT_ARM_OVER_UNUSED_INNER_COL: ArmRegion = ArmRegion::new(62, 52, 63, 64);
 const LEFT_ARM_OVER_CAP_BOTTOM: ArmRegion = ArmRegion::new(55, 48, 58, 52);
 const LEFT_ARM_OVER_CAP_TOP: ArmRegion = ArmRegion::new(52, 48, 55, 52);
 
@@ -372,24 +374,41 @@ fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<Ski
 
     let canvas_fill = get_uniform_canvas_fill_color(image, scale);
 
-    // If unused overlay columns are uniformly filled with the canvas background color,
+    // If unused overlay columns are uniformly filled with the canvas background color
+    // or share a monochromatic placeholder dummy fill with the base layer unused zone (e.g. #000000),
     // they represent background template canvas fill rather than intentional 4px arm texturing.
+    let (r_over_c_count, r_over_colors) =
+        collect_region_colors(image, scale, &RIGHT_ARM_OVER_UNUSED_SIDES);
+    let (r_base_c_count, r_base_colors) =
+        collect_region_colors(image, scale, &RIGHT_ARM_BASE_UNUSED_SIDES);
     let r_un_is_bg = match canvas_fill {
-        Some(bg) => {
-            let (count, colors) =
-                collect_region_colors(image, scale, &RIGHT_ARM_OVER_UNUSED_SIDES);
-            count == 1 && colors.first() == Some(&bg)
+        Some(bg) => r_over_c_count == 1 && r_over_colors.first() == Some(&bg),
+        None => {
+            r_over_c_count == 1
+                && r_base_c_count == 1
+                && r_over_colors.first() == r_base_colors.first()
         }
-        None => false,
     };
+
+    let (l_over_c_count, l_over_colors) =
+        collect_region_colors(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
+    let (l_base_c_count, l_base_colors) =
+        collect_region_colors(image, scale, &LEFT_ARM_BASE_UNUSED_SIDES);
     let l_un_is_bg = match canvas_fill {
-        Some(bg) => {
-            let (count, colors) =
-                collect_region_colors(image, scale, &LEFT_ARM_OVER_UNUSED_SIDES);
-            count == 1 && colors.first() == Some(&bg)
+        Some(bg) => l_over_c_count == 1 && l_over_colors.first() == Some(&bg),
+        None => {
+            l_over_c_count == 1
+                && l_base_c_count == 1
+                && l_over_colors.first() == l_base_colors.first()
         }
-        None => false,
     };
+
+    // Sample the inner unused column adjacent to the 3px sleeve (col 54 on right, col 62 on left).
+    // In Classic 4px sleeves, the 4th face covers [52..56] or [60..64], so col 54/62 must be textured.
+    let (r_inner_op, _) =
+        sample_region_opaque_count(image, scale, &RIGHT_ARM_OVER_UNUSED_INNER_COL);
+    let (l_inner_op, _) =
+        sample_region_opaque_count(image, scale, &LEFT_ARM_OVER_UNUSED_INNER_COL);
 
     // 2A: Check for 3px Alex overlay cap signatures (e.g. 3px epaulets/cuffs with 3px transparent complement).
     // In Alex UV, top cap is [44..47, 32..36] (3x4) and bottom cap is [47..50, 32..36] (3x4).
@@ -401,18 +420,19 @@ fn check_overlay_sleeve_evidence(image: &DynamicImage, scale: u32) -> Option<Ski
     }
 
     // 2B: Heavy drawing on the 4th column of overlay sleeves (>= 8 texels / 33% of 24)
+    // with continuous coverage on the inner adjacent column (r_inner_op >= 2 / l_inner_op >= 2)
     // demonstrates intentional 4px arm texturing -> Classic Steve.
-    // (Only applies when the column is not just canvas background flood-fill).
-    let r_heavy_classic = r_over_un >= 8 && !r_un_is_bg;
-    let l_heavy_classic = l_over_un >= 8 && !l_un_is_bg;
+    // (Only applies when the column is not just canvas background flood-fill or placeholder fill).
+    let r_heavy_classic = r_over_un >= 8 && r_inner_op >= 2 && !r_un_is_bg;
+    let l_heavy_classic = l_over_un >= 8 && l_inner_op >= 2 && !l_un_is_bg;
     if r_heavy_classic || l_heavy_classic {
         return Some(SkinType::Classic);
     }
 
     // 2C: Clean tailored 3px overlay sleeves: substantial sleeve texture present (>= 20 texels),
-    // but the 4th column strip is left untouched (transparent or background fill) -> Slim Alex.
-    let r_clean_slim = r_over_act >= 20 && (r_over_un <= 1 || r_un_is_bg);
-    let l_clean_slim = l_over_act >= 20 && (l_over_un <= 1 || l_un_is_bg);
+    // but the inner 4th column strip is left untouched (<= 1 texel or background/placeholder fill) -> Slim Alex.
+    let r_clean_slim = r_over_act >= 20 && (r_inner_op <= 1 || r_un_is_bg);
+    let l_clean_slim = l_over_act >= 20 && (l_inner_op <= 1 || l_un_is_bg);
     if r_clean_slim || l_clean_slim {
         return Some(SkinType::Slim);
     }
@@ -1025,6 +1045,16 @@ mod tests {
                 "identify/185977.png",
                 TextureKind::SkinDoubleLayer,
                 Some(SkinType::Classic),
+            ),
+            (
+                "identify/18904.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Slim),
+            ),
+            (
+                "identify/20207.png",
+                TextureKind::SkinDoubleLayer,
+                Some(SkinType::Slim),
             ),
         ];
 
