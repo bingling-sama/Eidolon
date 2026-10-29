@@ -140,20 +140,30 @@ pub fn run_identify(texture: PathBuf, json: bool) -> Result<(), Box<dyn std::err
         Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
     })?;
 
+    let skin_type_str = match report.skin_type {
+        Some(eidolon_core::body::SkinType::Classic) => "classic",
+        Some(eidolon_core::body::SkinType::Slim) => "slim",
+        None => "none",
+    };
+
     if json {
         println!(
-            "{{\n  \"kind\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"hd_scale\": {},\n  \"is_hd\": {},\n  \"can_auto_upgrade\": {},\n  \"description\": \"{}\"\n}}",
+            "{{\n  \"kind\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"hd_scale\": {},\n  \"is_hd\": {},\n  \"can_auto_upgrade\": {},\n  \"skin_type\": \"{}\",\n  \"description\": \"{}\"\n}}",
             report.kind.as_str(),
             report.width,
             report.height,
             report.hd_scale,
             report.is_hd,
             report.can_auto_upgrade,
+            skin_type_str,
             report.description
         );
     } else {
         println!("File: {}", texture.display());
         println!("Kind: {}", report.kind.as_str());
+        if report.skin_type.is_some() {
+            println!("Skin Type: {}", skin_type_str);
+        }
         println!("Dimensions: {}x{}", report.width, report.height);
         println!("HD: {} (scale {}x)", report.is_hd, report.hd_scale);
         println!("Auto-upgradeable: {}", report.can_auto_upgrade);
