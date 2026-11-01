@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "release": "bash scripts/release.sh",
     "build:wasm": "pnpm --filter @eidolonmc/wasm run build",
     "build:wasm:web": "pnpm --filter @eidolonmc/wasm run build:web",
     "dev": "pnpm --filter eidolon-wasm-example run dev",
