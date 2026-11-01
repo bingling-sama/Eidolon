@@ -9,7 +9,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1-alpha"
+version = "0.0.3-alpha"
 edition = "2021"
 license = "MIT"
 homepage = "https://github.com/bingling-sama/eidolon"
