@@ -153,6 +153,11 @@ pub struct RenderQuery {
     pub height: Option<u32>,
     pub format: Option<String>,
 
+    // SkinRenderMC options
+    pub definition: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_flexible_bool")]
+    pub transparent: Option<bool>,
+
     // Position / Rotation
     #[serde(alias = "posX", alias = "pos_x")]
     pub pos_x: Option<f32>,
@@ -203,9 +208,198 @@ impl RenderQuery {
         (w, h)
     }
 
+    pub fn merge_with(mut self, other: RenderQuery) -> Self {
+        if other.skin_url.is_some() {
+            self.skin_url = other.skin_url;
+        }
+        if other.cape_url.is_some() {
+            self.cape_url = other.cape_url;
+        }
+        if other.elytra_url.is_some() {
+            self.elytra_url = other.elytra_url;
+        }
+        if other.slim.is_some() {
+            self.slim = other.slim;
+        }
+        if other.nametag.is_some() {
+            self.nametag = other.nametag;
+        }
+        if other.disable_nametag_see_through.is_some() {
+            self.disable_nametag_see_through = other.disable_nametag_see_through;
+        }
+        if other.posture.is_some() {
+            self.posture = other.posture;
+        }
+        if other.cape_pitch.is_some() {
+            self.cape_pitch = other.cape_pitch;
+        }
+        if other.elytra_pitch.is_some() {
+            self.elytra_pitch = other.elytra_pitch;
+        }
+        if other.elytra_spread.is_some() {
+            self.elytra_spread = other.elytra_spread;
+        }
+        if other.head_yaw.is_some() {
+            self.head_yaw = other.head_yaw;
+        }
+        if other.head_pitch.is_some() {
+            self.head_pitch = other.head_pitch;
+        }
+        if other.left_arm_roll.is_some() {
+            self.left_arm_roll = other.left_arm_roll;
+        }
+        if other.left_arm_pitch.is_some() {
+            self.left_arm_pitch = other.left_arm_pitch;
+        }
+        if other.right_arm_roll.is_some() {
+            self.right_arm_roll = other.right_arm_roll;
+        }
+        if other.right_arm_pitch.is_some() {
+            self.right_arm_pitch = other.right_arm_pitch;
+        }
+        if other.left_leg_pitch.is_some() {
+            self.left_leg_pitch = other.left_leg_pitch;
+        }
+        if other.right_leg_pitch.is_some() {
+            self.right_leg_pitch = other.right_leg_pitch;
+        }
+        if other.cam_yaw.is_some() {
+            self.cam_yaw = other.cam_yaw;
+        }
+        if other.cam_pitch.is_some() {
+            self.cam_pitch = other.cam_pitch;
+        }
+        if other.cam_zoom.is_some() {
+            self.cam_zoom = other.cam_zoom;
+        }
+        if other.width.is_some() {
+            self.width = other.width;
+        }
+        if other.height.is_some() {
+            self.height = other.height;
+        }
+        if other.format.is_some() {
+            self.format = other.format;
+        }
+        if other.definition.is_some() {
+            self.definition = other.definition;
+        }
+        if other.transparent.is_some() {
+            self.transparent = other.transparent;
+        }
+        if other.pos_x.is_some() {
+            self.pos_x = other.pos_x;
+        }
+        if other.pos_y.is_some() {
+            self.pos_y = other.pos_y;
+        }
+        if other.pos_z.is_some() {
+            self.pos_z = other.pos_z;
+        }
+        if other.rot_x.is_some() {
+            self.rot_x = other.rot_x;
+        }
+        if other.rot_y.is_some() {
+            self.rot_y = other.rot_y;
+        }
+        if other.rot_z.is_some() {
+            self.rot_z = other.rot_z;
+        }
+        self
+    }
+
     pub fn is_webp(&self) -> bool {
         self.format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("webp"))
+    }
+
+    /// Resolution scaling factor from definition (default: 1.5, clamped 0.8..=3.5)
+    pub fn resolved_definition(&self) -> f32 {
+        self.definition.unwrap_or(1.5).clamp(0.8, 3.5)
+    }
+
+    /// Single view dimension derived strictly from definition (base 300x300 * definition)
+    pub fn skinrendermc_single_dimensions(&self) -> (u32, u32) {
+        let scale = self.resolved_definition();
+        let size = ((300.0 * scale).round() as u32).clamp(32, 4096);
+        (size, size)
+    }
+
+    /// Both views dimensions derived strictly from definition (base 600x300 * definition)
+    pub fn skinrendermc_both_dimensions(&self) -> (u32, u32) {
+        let scale = self.resolved_definition();
+        let h = ((300.0 * scale).round() as u32).clamp(32, 4096);
+        let w = h * 2;
+        (w, h)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_skinrendermc_dimensions_scaling() {
+        let mut query = RenderQuery::default();
+        assert_eq!(query.skinrendermc_single_dimensions(), (450, 450));
+        assert_eq!(query.skinrendermc_both_dimensions(), (900, 450));
+
+        query.definition = Some(1.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (300, 300));
+        assert_eq!(query.skinrendermc_both_dimensions(), (600, 300));
+
+        query.definition = Some(2.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (600, 600));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1200, 600));
+
+        // Clamping to bounds 0.8..=3.5
+        query.definition = Some(0.1);
+        assert_eq!(query.skinrendermc_single_dimensions(), (240, 240));
+
+        query.definition = Some(10.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (1050, 1050));
+    }
+
+    #[test]
+    fn test_deserialize_query_flexible_options() {
+        let json_data = r#"{
+            "skinUrl": "https://example.com/skin.png",
+            "nameTag": "TestUser",
+            "definition": 1.2,
+            "transparent": false,
+            "slim": "true"
+        }"#;
+
+        let parsed: RenderQuery = serde_json::from_str(json_data).unwrap();
+        assert_eq!(
+            parsed.skin_url.as_deref(),
+            Some("https://example.com/skin.png")
+        );
+        assert_eq!(parsed.resolved_nametag(), Some("TestUser"));
+        assert_eq!(parsed.transparent, Some(false));
+        assert_eq!(parsed.slim, Some(true));
+        assert_eq!(parsed.definition, Some(1.2));
+    }
+
+    #[test]
+    fn test_merge_with() {
+        let q1 = RenderQuery {
+            definition: Some(2.0),
+            transparent: Some(true),
+            ..Default::default()
+        };
+        let q2 = RenderQuery {
+            skin_url: Some("https://example.com/skin.png".to_string()),
+            transparent: Some(false),
+            ..Default::default()
+        };
+        let merged = q1.merge_with(q2);
+        assert_eq!(merged.definition, Some(2.0));
+        assert_eq!(merged.transparent, Some(false));
+        assert_eq!(
+            merged.skin_url.as_deref(),
+            Some("https://example.com/skin.png")
+        );
     }
 }

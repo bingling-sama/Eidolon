@@ -46,36 +46,95 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 ## API Endpoints
 
-### 1. `GET /url/image/both` (SkinRenderMC Specification)
+### SkinRenderMC Full Compatibility Endpoints
 
-Standard SkinRenderMC combined dual-perspective layout (front on the left, back on the right).
+The server provides 1:1 drop-in replacement endpoints matching the [SerinaNya/SkinRenderMC](https://github.com/SerinaNya/SkinRenderMC) API.
 
-- **Method**: `GET` (or `POST`)
-- **Path**: `/url/image/both`
-- **Output**: `image/png` raw bytes (600x600 canvas)
-- **Visuals**:
-  - **Left**: Character front view (slight 15° natural turn), nametag rendered if `nameTag` is supplied.
-  - **Right**: Character back view (195° turn to show cape/elytra/back texture), nametag rendered if `nameTag` is supplied.
-  - **Bottom margin**: Feet ground at Y ≈ 438px (in 600px height). After client's `crop((0, 0, width, height * 0.87))` (522px height), ~84px breathing room is preserved at the bottom, perfectly accommodating bottom shadow and watermark text at the bottom-right corner.
+![SkinRenderMC Preview](../../docs/skinrendermc-preview.png)
 
-#### Query Parameters
+*Figure: Dual-view (`both`) rendered output with `#F0F0F0` opaque background (`transparent=false`) and overhead `nametag`.*
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `skinUrl` | string | **Yes** | Direct URL to player skin PNG |
-| `capeUrl` | string | Optional | Direct URL to cape PNG (omitted when player has no cape) |
-| `nameTag` (or `nametag`) | string | Optional | Player name text plate rendered above model |
-| `slim` | bool | Optional | Auto-detected from skin arm transparency if omitted |
+#### 1. `GET /`
+Returns the SkinRenderMC status payload.
+```json
+{
+  "status": 200,
+  "msg": "SkinRenderMC"
+}
+```
 
-#### Example Request
+#### 2. `GET /url/image/{view}` and `POST /url/image/{view}`
+Renders character images by texture URL for a given view (`front`, `back`, or `both`). POST requests seamlessly accept `application/json`, `application/x-www-form-urlencoded`, or URL query parameters.
+
+- **Path Parameter**: `{view}` - `front`, `back`, or `both`.
+- **Dimensions**:
+  - `front` / `back`: Strictly derived from `definition`: `300 * definition` × `300 * definition` (e.g. 450x450 at default definition 1.5).
+  - `both`: Strictly derived from `definition`: `600 * definition` × `300 * definition` (e.g. 900x450), stitching front (left) and back (right).
+- **Query / JSON / Form Parameters**:
+  - `skinUrl` (string, required): Direct URL or path to player skin.
+  - `capeUrl` (string, optional): Direct URL or path to player cape.
+  - `nameTag` or `nametag` (string, optional): Text for player nameplate above head.
+  - `definition` (float, optional, default `1.5`): Resolution multiplier in range `0.8..=3.5`.
+  - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#F0F0F0` opaque background.
+  - `slim` (bool, optional): Overrides Alex 3px arm detection.
 
 ```bash
-curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://littleskin.cn/textures/...&capeUrl=https://littleskin.cn/textures/...&nameTag=BinglingTX" -o both.png
+# Render both front and back (GET)
+curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://textures.minecraft.net/texture/...&nameTag=Steve" -o both.png
+
+# Render both front and back (POST with JSON)
+curl -X POST "http://127.0.0.1:8080/url/image/both" \
+  -H "Content-Type: application/json" \
+  -d '{"skinUrl": "https://textures.minecraft.net/texture/...", "nameTag": "Steve", "definition": 2.0}' \
+  -o both.png
+```
+
+#### 3. `GET /url/json/all`
+Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload. Respects `transparent=false` by compositing on `#F0F0F0`.
+
+- **Output**:
+```json
+{
+  "front_b64": "...",
+  "back_b64": "...",
+  "both_b64": "...",
+  "backendInfo": {
+    "slim": false,
+    "serverTimeJs": "Mon Nov 02 2026 15:04:05 GMT+0000 (Coordinated Universal Time)"
+  }
+}
+```
+
+#### 4. `GET /mojang/image/{view}`
+Directly queries official Mojang session servers to resolve skin and cape textures and slim model metadata by player username, then renders the requested view (`front`, `back`, or `both`).
+
+- **Query Parameters**:
+  - `name` (string, required): Minecraft player username (e.g. `Steve`).
+  - Supports all SkinRenderMC options (`definition`, `transparent`, etc.).
+- **Default Skin Fallback**: If a player account exists but has never uploaded a custom skin, the service automatically falls back to Mojang's official Steve (classic 4px) or Alex (slim 3px) texture based on the player UUID hash parity.
+- **Upstream Error Handling**: Upstream rate limits (HTTP 429) or session server outages (HTTP 5xx) are mapped to HTTP 502 (Bad Gateway) with descriptive error messages instead of false 404 (Not Found).
+
+```bash
+curl "http://127.0.0.1:8080/mojang/image/both?name=Steve" -o steve.png
+```
+
+#### 5. `GET /littleskin/image/{view}`
+Queries LittleSkin Yggdrasil API to resolve player skin, cape textures, and slim model metadata by username, then renders the requested view.
+
+- **Query Parameters**:
+  - `name` (string, required): LittleSkin player username.
+  - Supports all SkinRenderMC options (`definition`, `transparent`, etc.).
+- **Default Skin Fallback & Error Handling**: Same fallback and error handling as Mojang endpoint.
+
+```bash
+curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.png
 ```
 
 ---
 
-### 2. `GET /render` / `POST /render` (Flexible Single View)
+### Custom Rendering & Utilities
+
+#### `GET /render` / `POST /render` (Flexible Single View)
 
 #### Parameters
 
@@ -110,6 +169,29 @@ Healthcheck endpoint. Returns JSON:
   "uptime_secs": 120
 }
 ```
+
+## Operational Considerations & Limitations
+
+- **Upstream Rate Limits**: Unauthenticated profile lookups against Mojang (`api.mojang.com` / `sessionserver.mojang.com`) are throttled by Mojang (~600 requests / 10 minutes per IP). LittleSkin endpoints also apply per-IP rate limits.
+- **Texture Caching**: Downloaded texture bytes are cached in an in-memory LRU cache (`--cache-entries`, `--cache-ttl`).
+- **Memory Footprint**: `/url/json/all` concurrently renders three separate views and encodes them to base64, which temporarily allocates multiple image buffers. Ensure worker concurrency (`--workers`) matches host memory capacity.
+
+## Testing
+
+Run the server microservice test suite (10 unit and HTTP integration tests):
+
+```bash
+cargo test -p eidolon-server
+```
+
+The test suite covers:
+- Route matching and HTTP status code mappings (`GET /`, `/health`, error handlers)
+- POST parameter decoding and Query/Body parameter merging
+- Definition resolution scaling calculations (`0.8..=3.5`)
+- Opaque `#F0F0F0` background alpha blending
+- Mojang/LittleSkin URL percent-encoding (`url_encode`)
+- Java-compliant UUID hash parity determination (`default_model_is_alex`) and default Steve/Alex fallback
+- Dual-view horizontal stitching and PNG encoding
 
 ## Python Integration (`skinrendermcapi.py`)
 

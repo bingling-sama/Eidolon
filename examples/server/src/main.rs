@@ -16,8 +16,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::fetcher::TextureFetcher;
 use crate::handlers::{
-    health_handler, render_both_get_handler, render_both_post_handler, render_get_handler,
-    render_post_handler, AppState,
+    health_handler, littleskin_image_handler, mojang_image_handler, render_get_handler,
+    render_post_handler, root_handler, url_image_get_handler, url_image_post_handler,
+    url_json_all_handler, AppState,
 };
 use crate::worker::RenderWorkerPool;
 
@@ -79,22 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         start_time: Instant::now(),
     });
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    let app = Router::new()
-        .route("/", get(health_handler))
-        .route("/health", get(health_handler))
-        .route("/render", get(render_get_handler).post(render_post_handler))
-        .route(
-            "/url/image/both",
-            get(render_both_get_handler).post(render_both_post_handler),
-        )
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = create_app(state);
 
     let bind_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
@@ -109,6 +95,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Eidolon HTTP server gracefully stopped");
     Ok(())
+}
+
+pub fn create_app(state: Arc<AppState>) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    Router::new()
+        .route("/", get(root_handler))
+        .route("/health", get(health_handler))
+        .route("/render", get(render_get_handler).post(render_post_handler))
+        .route(
+            "/url/image/{view}",
+            get(url_image_get_handler).post(url_image_post_handler),
+        )
+        .route("/url/json/all", get(url_json_all_handler))
+        .route("/mojang/image/{view}", get(mojang_image_handler))
+        .route("/littleskin/image/{view}", get(littleskin_image_handler))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 async fn shutdown_signal() {
@@ -132,5 +140,136 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_http_api_endpoints() {
+        let fetcher = TextureFetcher::new(100, 60);
+        let worker_pool = RenderWorkerPool::new(0, 10);
+        let state = Arc::new(AppState {
+            fetcher,
+            worker_pool,
+            start_time: Instant::now(),
+        });
+
+        let app = create_app(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind ephemeral test port");
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let client = reqwest::Client::new();
+
+        // 1. GET /
+        let res = client.get(format!("http://{addr}/")).send().await.unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::OK);
+        let body_bytes = res.bytes().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["status"], 200);
+        assert_eq!(body["msg"], "SkinRenderMC");
+
+        // 2. GET /health
+        let res = client
+            .get(format!("http://{addr}/health"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::OK);
+        let body_bytes = res.bytes().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["status"], "ok");
+
+        // 3. GET /url/image/invalid
+        let res = client
+            .get(format!("http://{addr}/url/image/unknown_view"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 4. GET /mojang/image/front without name parameter
+        let res = client
+            .get(format!("http://{addr}/mojang/image/front"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 5. GET /littleskin/image/both without name parameter
+        let res = client
+            .get(format!("http://{addr}/littleskin/image/both"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 6. POST /url/image/front with JSON body missing skinUrl
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 7. POST /url/image/both with form urlencoded body missing skinUrl
+        let res = client
+            .post(format!("http://{addr}/url/image/both"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body("definition=2.0")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 8. POST /url/image/front with mixed query and JSON body
+        let res = client
+            .post(format!("http://{addr}/url/image/front?definition=2.0"))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 9. POST /url/image/front with malformed JSON body returns 400
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/json")
+            .body("{invalid-json}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 10. POST /url/image/front with malformed form urlencoded body returns 400
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body("%ZZ%invalid")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 11. POST /url/image/front with leading whitespace JSON without header
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .body("   \n\t {\"definition\": 2.0}")
+            .send()
+            .await
+            .unwrap();
+        // Missing skinUrl still parsed from JSON body and correctly yields 400 (not form decode error)
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }
