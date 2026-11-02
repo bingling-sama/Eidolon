@@ -18,7 +18,8 @@
     }
   },
   "files": [
-    "pkg"
+    "pkg",
+    "README.md"
   ],
   "scripts": {
     "build": "wasm-pack build --target bundler --out-dir pkg && rm -f pkg/.gitignore",
