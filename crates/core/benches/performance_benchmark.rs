@@ -68,6 +68,7 @@ fn bench_render_resolutions(c: &mut Criterion) {
         yaw: 180.0,
         pitch: 80.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let resolutions = [(128, 128), (400, 300), (800, 600), (1920, 1080)];
@@ -107,6 +108,7 @@ fn bench_render_scenes(c: &mut Criterion) {
         yaw: 180.0,
         pitch: 80.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let char_classic = Character::from_body(classic_body.clone());
@@ -234,6 +236,7 @@ fn bench_encoding_static(c: &mut Criterion) {
         yaw: 180.0,
         pitch: 80.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     let frame = renderer
         .render(&character, &camera, 800, 600)
@@ -259,6 +262,7 @@ fn bench_animation_export(c: &mut Criterion) {
         yaw: 180.0,
         pitch: 80.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let temp_dir = TempDirGuard::new("eidolon_bench");

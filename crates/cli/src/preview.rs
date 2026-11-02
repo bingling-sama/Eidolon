@@ -166,6 +166,48 @@ impl PreviewInteraction {
         self.update_pan(position, camera);
     }
 
+    pub fn cursor_moved_camera(&mut self, x: f64, y: f64, camera: &mut Camera) {
+        let base_val = *self.base_position.get_or_insert_with(|| {
+            cgmath::Vector3::new(camera.target[0], camera.target[1], camera.target[2])
+        });
+        if let Some((last_x, last_y)) = self.last_cursor {
+            let dx = (x - last_x) as f32;
+            let dy = (y - last_y) as f32;
+            if self.left_pressed {
+                self.pan_x += dx;
+                self.pan_y -= dy;
+            }
+            if self.right_pressed {
+                camera.yaw -= dx * 0.4;
+                camera.pitch = (camera.pitch + dy * 0.4).clamp(1.0, 179.0);
+            }
+            self.update_camera_pan(base_val, camera);
+        }
+        self.last_cursor = Some((x, y));
+    }
+
+    pub fn scroll_camera(&mut self, delta: f32, camera: &mut Camera) {
+        let base_val = *self.base_position.get_or_insert_with(|| {
+            cgmath::Vector3::new(camera.target[0], camera.target[1], camera.target[2])
+        });
+        camera.scale = (camera.scale * 1.1_f32.powf(delta)).clamp(0.1, 10.0);
+        self.update_camera_pan(base_val, camera);
+    }
+
+    fn update_camera_pan(&self, base: cgmath::Vector3<f32>, camera: &mut Camera) {
+        let yaw = camera.yaw.to_radians();
+        let pitch = (camera.pitch - 90.0).to_radians();
+        let right = cgmath::Vector3::new(yaw.cos(), 0.0, -yaw.sin());
+        let up = cgmath::Vector3::new(
+            -yaw.sin() * pitch.sin(),
+            pitch.cos(),
+            -yaw.cos() * pitch.sin(),
+        );
+        let distance_per_pixel = 0.005 / camera.scale;
+        let new_target = base - (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
+        camera.target = [new_target.x, new_target.y, new_target.z];
+    }
+
     pub fn update_pan(&self, position: &mut cgmath::Vector3<f32>, camera: &Camera) {
         let Some(base) = self.base_position else {
             return;
@@ -335,26 +377,28 @@ impl ApplicationHandler for PreviewApp {
                     .mouse_input(button, state == ElementState::Pressed);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
-                let target_pos = if let Some(character) = &mut self.character {
-                    &mut character.position
-                } else if let Some(scene) = &mut self.scene {
-                    if let Some(first) = scene.characters.first_mut() {
-                        &mut first.position
-                    } else {
-                        &mut dummy_pos
-                    }
-                } else {
-                    &mut dummy_pos
-                };
-                self.interaction.cursor_moved(
-                    position.x,
-                    position.y,
-                    target_pos,
-                    &mut self.camera,
-                );
                 if let Some(scene) = &mut self.scene {
+                    self.interaction.cursor_moved_camera(
+                        position.x,
+                        position.y,
+                        &mut self.camera,
+                    );
                     scene.camera = self.camera;
+                } else if let Some(character) = &mut self.character {
+                    self.interaction.cursor_moved(
+                        position.x,
+                        position.y,
+                        &mut character.position,
+                        &mut self.camera,
+                    );
+                } else {
+                    let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                    self.interaction.cursor_moved(
+                        position.x,
+                        position.y,
+                        &mut dummy_pos,
+                        &mut self.camera,
+                    );
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -365,22 +409,16 @@ impl ApplicationHandler for PreviewApp {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(position) => position.y as f32 / 50.0,
                 };
-                let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
-                let target_pos = if let Some(character) = &mut self.character {
-                    &mut character.position
-                } else if let Some(scene) = &mut self.scene {
-                    if let Some(first) = scene.characters.first_mut() {
-                        &mut first.position
-                    } else {
-                        &mut dummy_pos
-                    }
-                } else {
-                    &mut dummy_pos
-                };
-                self.interaction
-                    .scroll(lines, target_pos, &mut self.camera);
                 if let Some(scene) = &mut self.scene {
+                    self.interaction.scroll_camera(lines, &mut self.camera);
                     scene.camera = self.camera;
+                } else if let Some(character) = &mut self.character {
+                    self.interaction
+                        .scroll(lines, &mut character.position, &mut self.camera);
+                } else {
+                    let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                    self.interaction
+                        .scroll(lines, &mut dummy_pos, &mut self.camera);
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -547,6 +585,21 @@ mod tests {
         interaction.scroll(1.0, &mut position, &mut camera);
 
         assert!(position.x.abs() < before);
+    }
+
+    #[test]
+    fn preview_camera_pan_shifts_target() {
+        let mut interaction = PreviewInteraction::default();
+        let mut camera = Camera::default();
+        let initial_target = camera.target;
+
+        interaction.mouse_input(MouseButton::Left, true);
+        interaction.cursor_moved_camera(100.0, 100.0, &mut camera);
+        interaction.cursor_moved_camera(120.0, 110.0, &mut camera);
+
+        assert_ne!(camera.target, initial_target);
+        assert_eq!(camera.yaw, 180.0);
+        assert_eq!(camera.pitch, 90.0);
     }
 
     #[test]

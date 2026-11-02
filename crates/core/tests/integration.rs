@@ -48,6 +48,7 @@ fn camera_default() -> Camera {
         yaw: 180.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     }
 }
 
@@ -249,6 +250,7 @@ fn nametag_see_through_only_reveals_occluded_pixels() {
         yaw: 0.0,
         pitch: 30.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     let without_nametag = renderer
         .render(&character, &back_camera, 400, 300)
@@ -289,6 +291,7 @@ fn different_camera_angle_produces_different_output() {
                 yaw: 90.0,
                 pitch: 90.0,
                 scale: 1.0,
+                target: [0.0, 1.0, 0.0],
             },
             200,
             150,
@@ -301,6 +304,7 @@ fn different_camera_angle_produces_different_output() {
                 yaw: 270.0,
                 pitch: 90.0,
                 scale: 1.0,
+                target: [0.0, 1.0, 0.0],
             },
             200,
             150,
@@ -320,6 +324,7 @@ fn enabling_elytra_changes_the_back_view() {
         yaw: 0.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let without_elytra = renderer
@@ -345,6 +350,7 @@ fn flying_posture_changes_the_elytra_back_view() {
         yaw: 0.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     let atlas = renderer
         .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
@@ -523,21 +529,25 @@ fn camera_extreme_values_produce_finite_matrices() {
             yaw: 0.0,
             pitch: 0.0,
             scale: 0.1,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: 720.0,
             pitch: -180.0,
             scale: 10.0,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: 360.0,
             pitch: 180.0,
             scale: 0.5,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: -90.0,
             pitch: 45.0,
             scale: 2.0,
+            target: [0.0, 1.0, 0.0],
         },
     ];
     for cam in &test_cases {
@@ -818,6 +828,7 @@ fn scene_model_hybrid_classic_and_slim() {
         yaw: 180.0,
         pitch: 90.0,
         scale: 0.8,
+        target: [0.0, 1.0, 0.0],
     };
     let scene = Scene::with_characters(vec![classic_char, slim_char], camera);
     let image = renderer
@@ -865,6 +876,7 @@ fn scene_equipment_diversity() {
             yaw: 180.0,
             pitch: 90.0,
             scale: 0.6,
+            target: [0.0, 1.0, 0.0],
         },
     );
     let image = renderer
@@ -893,6 +905,7 @@ fn scene_buffer_scaling_and_chunking() {
                 yaw: 180.0,
                 pitch: 90.0,
                 scale: 0.5,
+                target: [0.0, 1.0, 0.0],
             },
         );
         let image = renderer
@@ -905,32 +918,62 @@ fn scene_buffer_scaling_and_chunking() {
 #[test]
 fn scene_multi_nametag_rendering() {
     let renderer = make_renderer();
+    // Character in front (smaller z in this coordinate system)
     let b1 = renderer
         .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
         .unwrap();
     let mut c1 = Character::from_body(b1);
-    c1.position = cgmath::Vector3::new(-0.8, 0.0, 0.0);
-    c1.nametag = Some("Steve".to_owned());
+    c1.position = cgmath::Vector3::new(0.0, 0.0, -1.0);
+    c1.nametag = Some("Front".to_owned());
     c1.nametag_see_through = true;
 
+    // Character behind with nametag occluded by front character's body
     let b2 = renderer
         .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
         .unwrap();
     let mut c2 = Character::from_body(b2);
-    c2.position = cgmath::Vector3::new(0.8, 0.0, 0.0);
-    c2.nametag = Some("Alex".to_owned());
-    c2.nametag_see_through = false;
+    // Positioned behind c1 such that c2's nametag is occluded by c1's head/nametag
+    c2.position = cgmath::Vector3::new(0.0, -0.5, 0.5);
+    c2.nametag = Some("Behind".to_owned());
+    c2.nametag_see_through = true;
 
-    let scene = Scene::with_characters(
+    let scene_with_see_through = Scene::with_characters(
+        vec![c1.clone(), c2.clone()],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 1.0,
+            target: [0.0, 1.0, 0.0],
+        },
+    );
+    let img_see_through = renderer
+        .render_scene(&scene_with_see_through, 400, 300)
+        .expect("render see-through nametag scene failed");
+
+    // Now turn off see-through on the behind character
+    c2.nametag_see_through = false;
+    let scene_no_see_through = Scene::with_characters(
         vec![c1, c2],
         Camera {
             yaw: 180.0,
             pitch: 90.0,
-            scale: 0.8,
+            scale: 1.0,
+            target: [0.0, 1.0, 0.0],
         },
     );
-    let image = renderer
-        .render_scene(&scene, 400, 300)
-        .expect("render multi nametag scene failed");
-    assert!(image.pixels().any(|p| p[3] > 0));
+    let img_no_see_through = renderer
+        .render_scene(&scene_no_see_through, 400, 300)
+        .expect("render no see-through nametag scene failed");
+
+    // With see-through enabled, the occluded pixels should render at reduced alpha,
+    // producing different composite pixel values than when see-through is disabled.
+    let diff_count = img_see_through
+        .pixels()
+        .zip(img_no_see_through.pixels())
+        .filter(|(p1, p2)| p1 != p2)
+        .count();
+    assert!(
+        diff_count > 0,
+        "occluded nametag with see-through enabled must render differently than with see-through disabled"
+    );
 }

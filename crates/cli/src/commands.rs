@@ -24,7 +24,13 @@ pub fn run_render(
     scene: SceneArgs,
     animation: RenderAnimationArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let output = match resolve_render_output(output, &viewport, &animation) {
+    let effective_output = if scene_config.is_some() && output.is_none() && skin.is_some() {
+        skin.clone()
+    } else {
+        output
+    };
+
+    let output = match resolve_render_output(effective_output, &viewport, &animation) {
         Ok(resolved) => resolved,
         Err(message) => {
             error!("{message}");
@@ -68,6 +74,12 @@ pub fn run_render(
     info!("Renderer ready");
 
     if let Some(config_path) = scene_config {
+        if animation.animate {
+            return Err(Box::from(
+                "--animate is currently only supported for single-character skin rendering",
+            ));
+        }
+
         info!("Loading scene from config: {}", config_path.display());
         let loaded_scene = load_scene_from_config(&renderer, config_path)?;
         info!(

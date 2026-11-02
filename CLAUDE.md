@@ -83,6 +83,7 @@ crates/
 │       ├── error.rs          # EidolonError — typed errors for the public API
 │       ├── model.rs          # OBJ loader: parses named objects into BodyParts (main + layer meshes)
 │       ├── output.rs         # Output intent, format validation, timing, encoding (PNG/WebP/GIF/APNG/AVIF)
+│       ├── scene.rs          # Scene: multi-character management, AABB bounds, auto_frame_camera
 │       ├── texture.rs        # Private PNG upload and single→double conversion
 │       └── renderer/
 │           ├── mod.rs        # Renderer: headless + windowed, shared pipeline
@@ -95,17 +96,17 @@ crates/
 │   └── src/
 │       ├── main.rs           # Minimal 31-line entry point dispatching subcommands
 │       ├── args.rs           # Clap CLI arguments (Command::Render/Preview/Convert/Identify)
-│       ├── commands.rs       # Execution handlers for render, convert, identify
+│       ├── commands.rs       # Execution handlers for render, convert, identify (supports --scene-config)
 │       ├── dcomp.rs          # DirectComposition visual for a transparent preview window (Windows)
-│       ├── preview.rs        # Winit desktop preview window loop
-│       └── scene.rs          # Scene args and camera resolution
+│       ├── preview.rs        # Winit desktop preview window loop (single and multi-character)
+│       └── scene.rs          # Scene args, JSON/TOML scene config parsing, camera resolution
 └── wasm/
     ├── Cargo.toml
     ├── package.json
     └── src/
         ├── lib.rs            # WASM entry point, logger and panic hook
         ├── classifier.rs     # inspect_texture JS binding returning JsTextureReport
-        └── renderer.rs       # CanvasRenderer WebGPU presenter and offscreen capture
+        └── renderer.rs       # CanvasRenderer WebGPU presenter, multi-character scene entity APIs, offscreen capture
 ```
 
 ### Data flow

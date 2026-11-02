@@ -44,17 +44,7 @@ impl NametagPass {
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn nametag_passes(see_through: bool) -> &'static [NametagPass] {
-    const VANILLA_PASSES: &[NametagPass] = &[NametagPass::SeeThrough, NametagPass::Normal];
-    const OCCLUDED_PASSES: &[NametagPass] = &[NametagPass::Normal];
 
-    if see_through {
-        VANILLA_PASSES
-    } else {
-        OCCLUDED_PASSES
-    }
-}
 
 pub(crate) struct CachedNametag {
     #[allow(dead_code)]
@@ -426,14 +416,14 @@ mod tests {
     #[test]
     fn see_through_configuration_selects_vanilla_two_pass_rendering() {
         assert_eq!(
-            nametag_passes(true),
-            &[NametagPass::SeeThrough, NametagPass::Normal]
-        );
-        assert_eq!(nametag_passes(false), &[NametagPass::Normal]);
-        assert_eq!(
             NametagPass::SeeThrough.depth_compare(),
             wgpu::CompareFunction::Always
         );
         assert_eq!(NametagPass::SeeThrough.fragment_entry(), "fs_see_through");
+        assert_eq!(
+            NametagPass::Normal.depth_compare(),
+            wgpu::CompareFunction::LessEqual
+        );
+        assert_eq!(NametagPass::Normal.fragment_entry(), "fs_main");
     }
 }

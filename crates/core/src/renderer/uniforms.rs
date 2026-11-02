@@ -22,8 +22,7 @@ pub(crate) const RIGHT_ELYTRA_UNIFORM_INDEX: u32 = LEFT_ELYTRA_UNIFORM_INDEX + 1
 pub(crate) const NAMETAG_UNIFORM_INDEX: u32 = RIGHT_ELYTRA_UNIFORM_INDEX + 1;
 pub const UNIFORM_SLOTS_PER_CHARACTER: usize = 16;
 pub const MAX_SCENE_CHARACTERS: usize = 16;
-#[allow(dead_code)]
-pub const UNIFORM_COUNT: u32 = UNIFORM_SLOTS_PER_CHARACTER as u32;
+
 pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 pub(crate) const ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 const BODY_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);

@@ -14,6 +14,7 @@ cargo run -- render [选项] <皮肤 PNG> [输出]
 
 - `[输出]` 静态输出接受 `.png`/`.webp`；动画输出接受 `.gif`/`.webp`/`.apng`/`.avif`。静态默认
   `output.png`，`--animate` 时默认 `output.webp`
+- `--scene-config <PATH>` 场景配置文件路径（JSON 或 TOML）。提供时 `<皮肤 PNG>` 可选
 - `--width <PX>` 输出宽度（像素）。默认：`800`
 - `--height <PX>` 输出高度（像素）。默认：`600`
 - `--animate` 输出一个完整动画周期，而不是单帧
@@ -53,6 +54,7 @@ cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
 cargo run -- render resources/bingling_sama.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
 cargo run -- render resources/bingling_sama.png --nametag Steve
 cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nametag-see-through
+cargo run -- render --scene-config scene.json output.png
 ```
 
 输出格式由扩展名推断。输出路径不能包含 `..` 路径片段。
@@ -75,6 +77,8 @@ eidolon render skin.png dance.avif --animate --posture dance
 
 ```bash
 cargo run -- preview <皮肤 PNG> [选项]
+# 或通过场景配置文件启动：
+cargo run -- preview --scene-config scene.json
 ```
 
 `preview` 支持与 `render` 相同的场景、相机、姿势和视口选项，但不包含输出路径与格式。

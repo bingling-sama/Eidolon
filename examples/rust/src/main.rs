@@ -94,6 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         yaw: 200.0,
         pitch: 95.0,
         scale: 1.2,
+        target: [0.0, 1.0, 0.0],
     };
     save("slim-walking.png", &character, &cam, StaticFormat::Png)?;
 
@@ -104,6 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         yaw: 160.0,
         pitch: 85.0,
         scale: 0.8,
+        target: [0.0, 1.0, 0.0],
     };
     save("slim-running.png", &character, &cam, StaticFormat::Png)?;
 
@@ -117,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         yaw: 0.0,
         pitch: 90.0,
         scale: 0.9,
+        target: [0.0, 1.0, 0.0],
     };
     save("slim-running-cape.png", &character, &cam, StaticFormat::Png)?;
 
@@ -141,6 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         yaw: 180.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     save("custom-posture.png", &character, &cam, StaticFormat::Png)?;
 

@@ -97,6 +97,7 @@ mod tests {
             yaw: 195.0,
             pitch: 80.0,
             scale: 1.2,
+            target: [0.0, 1.0, 0.0],
         };
         let scene = Scene::new(cam);
         assert_eq!(scene.characters.len(), 0);

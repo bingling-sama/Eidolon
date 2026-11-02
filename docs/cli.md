@@ -14,13 +14,14 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 
 | Arg | Description | Default |
 |-----|-------------|---------|
-| `<SKIN>` | Path to the skin PNG file | *(required)* |
+| `<SKIN>` | Path to the skin PNG file. Required unless `--scene-config` is specified | *(required unless --scene-config)* |
 | `[OUTPUT]` | Output path. Static: `.png`/`.webp`; animated: `.gif`/`.webp`/`.apng`/`.avif` | `output.png`, or `output.webp` with `--animate` |
 
 **Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--scene-config <PATH>` | Path to scene configuration file (JSON or TOML) | *(none)* |
 | `--width <PX>` | Output width in pixels | `800` |
 | `--height <PX>` | Output height in pixels | `600` |
 | `--animate` | Render a complete animation cycle instead of one frame | *(disabled)* |
@@ -89,6 +90,9 @@ eidolon render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2
 # Override individual joints on top of a posture preset
 eidolon render skin.png --posture walk --head-pitch 15 --left-arm-roll 30
 
+# Render multi-character scene from configuration (JSON or TOML)
+eidolon render --scene-config scene.json output.png
+
 # Animated exports (GIF, Animated WebP, APNG, AVIF)
 eidolon render skin.png walk.gif --animate --posture walk
 eidolon render skin.png fly.webp --animate --posture fly --elytra cape.png --fps 60 --speed 1.5
@@ -131,6 +135,7 @@ one the transparent area shows black).
 ```bash
 eidolon preview skin.png
 eidolon preview skin.png --slim --cam-zoom 2.0
+eidolon preview --scene-config scene.json
 eidolon preview skin.png --nametag Steve
 eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png

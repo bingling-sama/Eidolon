@@ -9,36 +9,37 @@ model loading, frame rendering, and rendered-output policy.
 Eidolon is structured as a Cargo + pnpm monorepo:
 
 - `crates/core` (`eidolon-core`): Pure rendering engine library.
-  - `src/lib.rs` exposes core modules: `animation`, `assets`, `back_equipment`, `body`, `camera`, `character`, `classifier`, `constants`, `converter`, `error`, `model`, `output`, `renderer`.
+  - `src/lib.rs` exposes core modules: `animation`, `assets`, `back_equipment`, `body`, `camera`, `character`, `classifier`, `constants`, `converter`, `error`, `model`, `output`, `renderer`, `scene`.
   - `src/animation.rs` provides stateless `AnimationPreset` sampling, stateful `AnimationTimeline` playback, and deterministic `AnimationSchedule` frame times.
   - `src/classifier.rs` provides texture inspection, HD scale detection, and auto-classification (`inspect_texture`, `classify_texture`).
   - `src/output.rs` owns output intent, path resolution, format validation, timing, encoding, and file writing (PNG, WebP, GIF, APNG, AVIF).
   - `src/error.rs` defines `EidolonError` — the typed error enum returned by all public APIs.
   - `src/body.rs` defines `Body`, which owns a Skin and its classic/slim geometry selection.
   - `src/back_equipment.rs` defines the shared Back equipment atlas and Cape/Elytra presentation.
-  - `src/camera.rs` computes view and projection matrices for an orbit camera.
+  - `src/camera.rs` computes view and projection matrices for an orbit camera with custom target.
   - `src/character.rs` defines resource ownership, posture presets (0° = neutral for all joints), and character transforms. A Character always contains a Body or Back equipment.
+  - `src/scene.rs` defines `Scene` containing multiple `Character` entities, scene AABB calculation, and `auto_frame_camera`.
   - `src/model.rs` loads the classic and slim OBJ meshes from `resources/`. Supports loading from file path or in-memory bytes.
   - `src/converter.rs` implements single-layer to double-layer skin atlas conversion.
   - Private `src/cape.rs` and `src/elytra.rs` build Renderer-owned geometry using skinview3d atlas mappings.
   - Private `src/texture.rs` uploads PNG atlases and expands legacy single-layer Skins when required.
   - `src/renderer/` contains the shared `wgpu` renderer split into submodules:
-    - `mod.rs` — `Renderer` struct: headless + windowed creation, render pass encoding, public API.
+    - `mod.rs` — `Renderer` struct: headless + windowed creation, single-pass multi-character rendering with dynamic uniform chunking, public API.
     - `nametag.rs` — Minecraft / Unifont text rasterization, cached label geometry, and billboard transforms.
     - `pipeline.rs` — wgpu render pipeline creation from the embedded WGSL shader.
     - `readback.rs` — GPU → CPU buffer copy with row-padding, mapped readback to `ImageBuffer`.
-    - `uniforms.rs` — per-body-part uniform data, `PART_CONFIGS` with `PartId` enum for draw-order safety.
+    - `uniforms.rs` — per-body-part uniform data, dynamic uniform buffer chunking (up to 16 characters per chunk), `PART_CONFIGS` with `PartId` enum for draw-order safety.
   - `benches/performance_benchmark.rs` defines Criterion benchmark suites for resolution scaling, scene variations, asset loading, image processing, animation sampling, and static/animated exports.
 - `crates/cli` (`eidolon-cli`): Command line interface binary (`eidolon`).
   - `src/main.rs`: Lightweight 31-line entry point initializing logger and dispatching parsed CLI subcommands.
   - `src/args.rs`: Clap argument structs and enums (`Cli`, `Command`, `SceneArgs`, `ViewportArgs`, `RenderAnimationArgs`).
-  - `src/commands.rs`: Execution handlers for `render`, `convert`, and `identify` subcommands.
-  - `src/preview.rs`: Desktop interactive window loop with `winit` and `wgpu` surface presentation.
-  - `src/scene.rs`: Shared scene state resolution, posture overrides, and camera computation.
+  - `src/commands.rs`: Execution handlers for `render`, `convert`, and `identify` subcommands, including `--scene-config` support.
+  - `src/preview.rs`: Desktop interactive window loop with `winit` and `wgpu` surface presentation (supports single character and multi-character scenes).
+  - `src/scene.rs`: Shared scene state resolution, JSON/TOML scene config parsing, posture overrides, and camera computation.
 - `crates/wasm` (`eidolon-wasm`): WebAssembly bindings and `@eidolonmc/wasm` npm package.
   - `src/lib.rs`: WASM entry point, logger and panic hook initialization, public re-exports.
   - `src/classifier.rs`: `inspect_texture` JS binding returning `JsTextureReport`.
-  - `src/renderer.rs`: `CanvasRenderer` real-time WebGPU canvas presenter, animation controls, and offscreen frame capture.
+  - `src/renderer.rs`: `CanvasRenderer` real-time WebGPU canvas presenter, animation controls, multi-character scene entity management APIs, and offscreen frame capture.
 - `examples/rust`: Standalone Rust usage examples depending on `eidolon-core`.
 - `examples/wasm`: Web studio application consuming `@eidolonmc/wasm`.
 

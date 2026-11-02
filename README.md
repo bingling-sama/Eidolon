@@ -71,6 +71,17 @@ cargo run -- preview resources/bingling_sama.png
 cargo run -- preview resources/bingling_sama.png --slim --cam-zoom 2.0
 ```
 
+### Multi-Character Scene
+
+Render multiple characters with independent models (Classic/Slim), equipment (Cape/Elytra), postures, and nametags in a single scene:
+
+![Multi-Character Scene](docs/scene-preview.png)
+
+```bash
+cargo run -- render --scene-config scene.json output.png
+cargo run -- preview --scene-config scene.json
+```
+
 More CLI options are documented in `docs/cli.md`.
 
 ## Library Usage

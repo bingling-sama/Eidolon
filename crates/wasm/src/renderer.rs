@@ -20,6 +20,7 @@ pub struct CanvasRenderer {
     inner: Renderer,
     character: Option<Character>,
     scene_characters: Vec<Option<Character>>,
+    scene_mode: bool,
     pending_posture: Option<Posture>,
     skin_type: SkinType,
     camera: Camera,
@@ -42,6 +43,7 @@ impl CanvasRenderer {
             inner,
             character: None,
             scene_characters: Vec::new(),
+            scene_mode: false,
             pending_posture: Some(DefaultPostures::STAND),
             skin_type: SkinType::Classic,
             camera: Camera::default(),
@@ -354,13 +356,12 @@ impl CanvasRenderer {
         height: u32,
         format: Option<String>,
     ) -> Result<Vec<u8>, JsValue> {
-        let active_scene_chars: Vec<Character> = self
-            .scene_characters
-            .iter()
-            .filter_map(|c| c.clone())
-            .collect();
-
-        let image_buffer = if !active_scene_chars.is_empty() {
+        let image_buffer = if self.scene_mode || !self.scene_characters.is_empty() {
+            let active_scene_chars: Vec<Character> = self
+                .scene_characters
+                .iter()
+                .filter_map(|c| c.clone())
+                .collect();
             let scene = Scene {
                 characters: active_scene_chars,
                 camera: self.camera,
@@ -417,13 +418,12 @@ impl CanvasRenderer {
 
     /// Present one frame to the canvas. Call in a rAF loop at 60fps.
     pub fn render_frame(&self) -> Result<(), JsValue> {
-        let active_scene_chars: Vec<Character> = self
-            .scene_characters
-            .iter()
-            .filter_map(|c| c.clone())
-            .collect();
-
-        if !active_scene_chars.is_empty() {
+        if self.scene_mode || !self.scene_characters.is_empty() {
+            let active_scene_chars: Vec<Character> = self
+                .scene_characters
+                .iter()
+                .filter_map(|c| c.clone())
+                .collect();
             let scene = Scene {
                 characters: active_scene_chars,
                 camera: self.camera,
@@ -449,6 +449,7 @@ impl CanvasRenderer {
     /// Add a new character entity to the scene with given skin bytes and model type.
     /// Returns an integer entity ID.
     pub fn add_character(&mut self, skin_bytes: &[u8], skin_type: &str) -> Result<u32, JsValue> {
+        self.scene_mode = true;
         let st = parse_skin_type_str(skin_type)?;
         let body = self
             .inner
@@ -471,6 +472,12 @@ impl CanvasRenderer {
         } else {
             Err(JsValue::from_str(&format!("invalid character entity ID: {id}")))
         }
+    }
+
+    /// Remove all character entities from the scene.
+    pub fn clear_characters(&mut self) {
+        self.scene_characters.clear();
+        log::info!("Cleared all character entities");
     }
 
     /// Number of active character entities in the scene.

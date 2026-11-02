@@ -1206,6 +1206,7 @@ mod tests {
                         yaw: 180.0 + (i as f32) * 10.0,
                         pitch: 90.0,
                         scale: 1.0,
+                        target: [0.0, 1.0, 0.0],
                     };
                     let image = r.render(&c, &camera, 64, 64).expect("render failed");
                     assert_eq!(image.width(), 64);

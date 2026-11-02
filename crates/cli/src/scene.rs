@@ -77,7 +77,7 @@ impl CharacterConfig {
         match self.skin_type.to_lowercase().as_str() {
             "classic" => Ok(SkinType::Classic),
             "slim" => Ok(SkinType::Slim),
-            other => Err(EidolonError::model(format!("unknown skin_type: {other}"))),
+            other => Err(EidolonError::conversion(format!("unknown skin_type: {other}"))),
         }
     }
 
@@ -88,16 +88,16 @@ impl CharacterConfig {
             "run" => Ok(crate::args::PostureCli::Run.into()),
             "wave" => Ok(crate::args::PostureCli::Wave.into()),
             "fly" => Ok(crate::args::PostureCli::Fly.into()),
-            other => Err(EidolonError::model(format!("unknown posture: {other}"))),
+            other => Err(EidolonError::conversion(format!("unknown posture: {other}"))),
         }
     }
 }
 
 pub fn parse_scene_config_str(content: &str, is_toml: bool) -> Result<SceneConfigFile, EidolonError> {
     if is_toml {
-        toml::from_str(content).map_err(|e| EidolonError::model(format!("failed to parse TOML scene config: {e}")))
+        toml::from_str(content).map_err(|e| EidolonError::conversion(format!("failed to parse TOML scene config: {e}")))
     } else {
-        serde_json::from_str(content).map_err(|e| EidolonError::model(format!("failed to parse JSON scene config: {e}")))
+        serde_json::from_str(content).map_err(|e| EidolonError::conversion(format!("failed to parse JSON scene config: {e}")))
     }
 }
 
@@ -106,9 +106,8 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
     config_path: P,
 ) -> Result<Scene, EidolonError> {
     let path = config_path.as_ref();
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| EidolonError::model(format!("failed to read scene config {}: {e}", path.display())))?;
-    let is_toml = path.extension().and_then(|s| s.to_str()).map_or(false, |ext| ext.eq_ignore_ascii_case("toml"));
+    let content = std::fs::read_to_string(path)?;
+    let is_toml = path.extension().and_then(|s| s.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("toml"));
     let config = parse_scene_config_str(&content, is_toml)?;
     let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -117,6 +116,7 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
             yaw: cam.yaw,
             pitch: cam.pitch,
             scale: cam.scale,
+            target: cam.target.unwrap_or([0.0, 1.0, 0.0]),
         }
     } else {
         Camera::default()
@@ -128,7 +128,7 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         let skin_type = char_cfg.parse_skin_type()?;
         let skin_path = base_dir.join(&char_cfg.skin);
         let skin_path_str = skin_path.to_str().ok_or_else(|| {
-            EidolonError::model(format!("invalid unicode in skin path: {}", skin_path.display()))
+            EidolonError::invalid_path(format!("invalid unicode in skin path: {}", skin_path.display()))
         })?;
 
         let body = renderer.load_body(skin_path_str, skin_type)?;
@@ -150,14 +150,14 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         if let Some(cape_rel) = char_cfg.cape {
             let cape_path = base_dir.join(cape_rel);
             let cape_path_str = cape_path.to_str().ok_or_else(|| {
-                EidolonError::model(format!("invalid unicode in cape path: {}", cape_path.display()))
+                EidolonError::invalid_path(format!("invalid unicode in cape path: {}", cape_path.display()))
             })?;
             let atlas = renderer.load_back_equipment_atlas(cape_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
         } else if let Some(elytra_rel) = char_cfg.elytra {
             let elytra_path = base_dir.join(elytra_rel);
             let elytra_path_str = elytra_path.to_str().ok_or_else(|| {
-                EidolonError::model(format!("invalid unicode in elytra path: {}", elytra_path.display()))
+                EidolonError::invalid_path(format!("invalid unicode in elytra path: {}", elytra_path.display()))
             })?;
             let atlas = renderer.load_back_equipment_atlas(elytra_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
@@ -272,6 +272,7 @@ pub fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Came
         yaw: scene.cam_yaw,
         pitch: scene.cam_pitch,
         scale: scene.cam_zoom,
+        target: [0.0, 1.0, 0.0],
     };
     (state, camera)
 }

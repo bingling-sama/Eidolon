@@ -67,6 +67,7 @@ fn snapshot_classic_standing_front() {
         yaw: 180.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let image = renderer
