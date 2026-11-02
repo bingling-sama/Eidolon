@@ -50,7 +50,7 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 The server provides 1:1 drop-in replacement endpoints matching the [SerinaNya/SkinRenderMC](https://github.com/SerinaNya/SkinRenderMC) API.
 
-![SkinRenderMC Preview](skinrendermc-preview.png)
+![SkinRenderMC Preview](../../docs/skinrendermc-preview.png)
 
 *Figure: Dual-view (`both`) rendered output with `#F0F0F0` opaque background (`transparent=false`) and overhead `nametag`.*
 

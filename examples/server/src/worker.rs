@@ -358,7 +358,6 @@ fn execute_render_both(
     if query.transparent == Some(false) {
         apply_opaque_background(&mut front_frame);
         apply_opaque_background(&mut back_frame);
-        apply_opaque_background(&mut combined);
     }
 
     image::imageops::overlay(&mut combined, &front_frame, 0, 0);
@@ -422,7 +421,6 @@ fn execute_render_json_all(
     if query.transparent == Some(false) {
         apply_opaque_background(&mut front_frame);
         apply_opaque_background(&mut back_frame);
-        apply_opaque_background(&mut combined);
     }
 
     image::imageops::overlay(&mut combined, &front_frame, 0, 0);

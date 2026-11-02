@@ -14,11 +14,6 @@ This folder contains the full documentation for Eidolon. Start with the overview
 - `contributing.md` How to contribute
 - `credits.md` Project acknowledgements
 
-## Examples & Services
-
-- `../examples/server/README.md` High-performance HTTP rendering microservice & SkinRenderMC API
-- `../examples/wasm/README.md` WebAssembly & WebGPU browser example
-
 ## Languages
 
 - English (this file)

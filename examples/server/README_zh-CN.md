@@ -50,7 +50,7 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 本服务提供与 [SerinaNya/SkinRenderMC](https://github.com/SerinaNya/SkinRenderMC) 1:1 完全兼容的无缝替换端点。
 
-![SkinRenderMC 预览](skinrendermc-preview.png)
+![SkinRenderMC 预览](../../docs/skinrendermc-preview.png)
 
 *图：双视角（`both`）渲染输出效果，包含 `#F0F0F0` 不透明浅灰背景（`transparent=false`）与头顶 `nametag` 名牌。*
 
