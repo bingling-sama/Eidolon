@@ -211,5 +211,25 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 6. POST /url/image/front with JSON body missing skinUrl
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 7. POST /url/image/both with form urlencoded body missing skinUrl
+        let res = client
+            .post(format!("http://{addr}/url/image/both"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body("definition=2.0")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }

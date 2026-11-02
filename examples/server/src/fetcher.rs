@@ -276,48 +276,48 @@ fn extract_textures_from_profile(
     session_info: &serde_json::Value,
     uuid: &str,
 ) -> Result<(String, Option<String>, bool), AppError> {
-    let properties = session_info["properties"]
-        .as_array()
-        .ok_or_else(|| AppError::NotFound("Profile has no properties".to_string()))?;
+    if let Some(properties) = session_info["properties"].as_array() {
+        for prop in properties {
+            if prop["name"].as_str() == Some("textures") {
+                if let Some(val_b64) = prop["value"].as_str() {
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(val_b64)
+                        .map_err(|e| {
+                            AppError::FetchError(format!("Invalid texture base64: {e}"))
+                        })?;
+                    let text_val: serde_json::Value = serde_json::from_slice(&decoded)
+                        .map_err(|e| AppError::FetchError(format!("Invalid texture JSON: {e}")))?;
 
-    for prop in properties {
-        if prop["name"].as_str() == Some("textures") {
-            if let Some(val_b64) = prop["value"].as_str() {
-                let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(val_b64)
-                    .map_err(|e| AppError::FetchError(format!("Invalid texture base64: {e}")))?;
-                let text_val: serde_json::Value = serde_json::from_slice(&decoded)
-                    .map_err(|e| AppError::FetchError(format!("Invalid texture JSON: {e}")))?;
-
-                let (skin_url, is_slim) = if let Some(skin_url) =
-                    text_val["textures"]["SKIN"]["url"].as_str()
-                {
-                    let is_slim = text_val["textures"]["SKIN"]["metadata"]["model"]
-                        .as_str()
-                        .map(|m| m.eq_ignore_ascii_case("slim"))
-                        .unwrap_or(false);
-                    (skin_url.to_string(), is_slim)
-                } else {
-                    // Fallback to official default Steve/Alex texture based on player UUID
-                    let is_slim = default_model_is_alex(uuid);
-                    let fallback_url = if is_slim {
-                        "https://textures.minecraft.net/texture/88a95d732e79ced2b24b426e2e5055fa08f1b626d37fa10b93081e646fd1a46b".to_string()
+                    let (skin_url, is_slim) = if let Some(skin_url) =
+                        text_val["textures"]["SKIN"]["url"].as_str()
+                    {
+                        let is_slim = text_val["textures"]["SKIN"]["metadata"]["model"]
+                            .as_str()
+                            .map(|m| m.eq_ignore_ascii_case("slim"))
+                            .unwrap_or(false);
+                        (skin_url.to_string(), is_slim)
                     } else {
-                        "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dcb13f7df319a71824766".to_string()
+                        // Fallback to official default Steve/Alex texture based on player UUID
+                        let is_slim = default_model_is_alex(uuid);
+                        let fallback_url = if is_slim {
+                            "https://textures.minecraft.net/texture/88a95d732e79ced2b24b426e2e5055fa08f1b626d37fa10b93081e646fd1a46b".to_string()
+                        } else {
+                            "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dcb13f7df319a71824766".to_string()
+                        };
+                        (fallback_url, is_slim)
                     };
-                    (fallback_url, is_slim)
-                };
 
-                let cape_url = text_val["textures"]["CAPE"]["url"]
-                    .as_str()
-                    .map(|s| s.to_string());
+                    let cape_url = text_val["textures"]["CAPE"]["url"]
+                        .as_str()
+                        .map(|s| s.to_string());
 
-                return Ok((skin_url, cape_url, is_slim));
+                    return Ok((skin_url, cape_url, is_slim));
+                }
             }
         }
     }
 
-    // If profile has no textures property, fallback to default Steve/Alex based on UUID
+    // If profile has no properties or no textures property, fallback to default Steve/Alex based on UUID
     let is_slim = default_model_is_alex(uuid);
     let fallback_url = if is_slim {
         "https://textures.minecraft.net/texture/88a95d732e79ced2b24b426e2e5055fa08f1b626d37fa10b93081e646fd1a46b".to_string()
@@ -395,5 +395,16 @@ mod tests {
         assert!(skin_url.contains("textures.minecraft.net"));
         assert_eq!(cape_url, None);
         assert!(is_slim);
+
+        // Profile with missing properties field entirely
+        let no_prop_profile = serde_json::json!({
+            "id": alex_uuid,
+            "name": "TestAlex"
+        });
+        let (skin_url2, cape_url2, is_slim2) =
+            extract_textures_from_profile(&no_prop_profile, alex_uuid).unwrap();
+        assert!(skin_url2.contains("textures.minecraft.net"));
+        assert_eq!(cape_url2, None);
+        assert!(is_slim2);
     }
 }

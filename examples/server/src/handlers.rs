@@ -37,9 +37,39 @@ pub async fn render_get_handler(
 
 pub async fn render_post_handler(
     State(state): State<Arc<AppState>>,
-    Json(query): Json<RenderQuery>,
+    headers: HeaderMap,
+    Query(query): Query<RenderQuery>,
+    body: axum::body::Bytes,
 ) -> Result<Response, AppError> {
-    handle_render(state, query, RenderMode::Single).await
+    let resolved_query = parse_post_query(query, &headers, body)?;
+    handle_render(state, resolved_query, RenderMode::Single).await
+}
+
+fn parse_post_query(
+    query: RenderQuery,
+    headers: &HeaderMap,
+    bytes: axum::body::Bytes,
+) -> Result<RenderQuery, AppError> {
+    if bytes.is_empty() {
+        return Ok(query);
+    }
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    if content_type.contains("application/json") || bytes.first() == Some(&b'{') {
+        serde_json::from_slice(&bytes)
+            .map_err(|e| AppError::BadRequest(format!("Invalid JSON body: {e}")))
+    } else if let Ok(body_str) = std::str::from_utf8(&bytes) {
+        if let Ok(uri) = format!("/?{body_str}").parse() {
+            if let Ok(axum::extract::Query(form_q)) = axum::extract::Query::try_from_uri(&uri) {
+                return Ok(form_q);
+            }
+        }
+        Ok(query)
+    } else {
+        Ok(query)
+    }
 }
 
 fn parse_view_mode(view: &str) -> Result<RenderMode, AppError> {
@@ -68,11 +98,14 @@ pub async fn url_image_get_handler(
 pub async fn url_image_post_handler(
     State(state): State<Arc<AppState>>,
     Path(view): Path<String>,
-    Json(mut query): Json<RenderQuery>,
+    headers: HeaderMap,
+    Query(query): Query<RenderQuery>,
+    body: axum::body::Bytes,
 ) -> Result<Response, AppError> {
     let mode = parse_view_mode(&view)?;
-    query.format = Some("png".to_string());
-    handle_render(state, query, mode).await
+    let mut resolved_query = parse_post_query(query, &headers, body)?;
+    resolved_query.format = Some("png".to_string());
+    handle_render(state, resolved_query, mode).await
 }
 
 /// Handler for GET /url/json/all

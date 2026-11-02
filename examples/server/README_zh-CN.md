@@ -50,6 +50,10 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 本服务提供与 [SerinaNya/SkinRenderMC](https://github.com/SerinaNya/SkinRenderMC) 1:1 完全兼容的无缝替换端点。
 
+![SkinRenderMC 预览](../../docs/skinrendermc-preview.png)
+
+*图：双视角（`both`）渲染输出效果，包含 `#F0F0F0` 不透明浅灰背景（`transparent=false`）与头顶 `nametag` 名牌。*
+
 #### 1. `GET /`
 返回 SkinRenderMC 状态载荷：
 ```json
@@ -60,7 +64,7 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 ```
 
 #### 2. `GET /url/image/{view}` 与 `POST /url/image/{view}`
-根据皮肤/披风 URL 渲染指定视角（`front`、`back` 或 `both`）。
+根据皮肤/披风 URL 渲染指定视角（`front`、`back` 或 `both`）。POST 请求全面支持 `application/json`、`application/x-www-form-urlencoded` 表单或 URL 查询参数。
 
 - **路径参数**：`{view}` - `front`、`back` 或 `both`。
 - **输出尺寸**：
@@ -75,15 +79,18 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
   - `slim`（bool，可选）：显式覆盖 Alex 纤细手臂模型判定。
 
 ```bash
-# 渲染正反双视角
+# 渲染正反双视角（GET）
 curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://textures.minecraft.net/texture/...&nameTag=Steve" -o both.png
 
-# 仅渲染正视角
-curl "http://127.0.0.1:8080/url/image/front?skinUrl=https://textures.minecraft.net/texture/...&definition=2.0" -o front.png
+# 渲染正反双视角（POST with JSON）
+curl -X POST "http://127.0.0.1:8080/url/image/both" \
+  -H "Content-Type: application/json" \
+  -d '{"skinUrl": "https://textures.minecraft.net/texture/...", "nameTag": "Steve", "definition": 2.0}' \
+  -o both.png
 ```
 
 #### 3. `GET /url/json/all`
-同时渲染 `front`、`back` 和 `both` 三个视角，并以 Base64 编码字符串随 JSON 返回。当 `transparent=false` 时同样支持混合浅灰背景。
+同时渲染 `front`、`back` 和 `both` 三个视角，并以 Base64 编码字符串随 JSON 返回。当 `transparent=false` 时同样支持混合浅灰背景。接口响应头包含 `Cache-Control: no-store, no-cache, must-revalidate`，避免中间代理缓存动态时间戳。
 
 - **返回示例**：
 ```json
@@ -102,8 +109,10 @@ curl "http://127.0.0.1:8080/url/image/front?skinUrl=https://textures.minecraft.n
 直接查询 Mojang 官方 Session 服务器，根据玩家用户名解析皮肤、披风纹理及 slim 模型元数据，然后渲染指定视角（`front`、`back` 或 `both`）。
 
 - **查询参数**：
-  - `name`（string，必填）：Minecraft 玩家名（如 `Steve`）。
+  - `name`（string，必填）：Minecraft 玩家名（如 `Steve`，支持自动 URL 百分号编码）。
   - 支持所有 SkinRenderMC 选项（`definition`、`transparent` 等）。
+- **默认皮肤回退**：若玩家账号存在但从未上传过自定义皮肤（Profile 中无 `textures.SKIN` 字段），服务端基于 Java 版官方 UUID 奇偶哈希判定算法自动回退至 Mojang 官方 Steve（classic，4px）或 Alex（slim，3px）经典皮肤与骨骼模型。
+- **上游异常处理**：若上游 Mojang 会话服务器触发频率限制（HTTP 429）或服务暂时不可用（HTTP 5xx），统一映射为 HTTP 502 Bad Gateway 并携带具体错误原因，避免客户端误判为“玩家不存在”（404）。
 
 ```bash
 curl "http://127.0.0.1:8080/mojang/image/both?name=Steve" -o steve.png
@@ -115,6 +124,7 @@ curl "http://127.0.0.1:8080/mojang/image/both?name=Steve" -o steve.png
 - **查询参数**：
   - `name`（string，必填）：LittleSkin 玩家名。
   - 支持所有 SkinRenderMC 选项（`definition`、`transparent` 等）。
+- **默认皮肤回退与错误处理**：机制与 Mojang 端点一致。
 
 ```bash
 curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.png

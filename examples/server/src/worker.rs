@@ -572,4 +572,25 @@ mod tests {
         assert_eq!(p[3], 255);
         assert!(p[1] > 100);
     }
+
+    #[test]
+    fn test_render_both_preview() {
+        let renderer = match Renderer::new() {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let skin_bytes = std::fs::read("../../resources/bingling_sama.png")
+            .or_else(|_| std::fs::read("resources/bingling_sama.png"))
+            .expect("Skin file should exist");
+        let query = RenderQuery {
+            definition: Some(2.0),
+            transparent: Some(false),
+            nametag: Some("SkinRenderMC".to_string()),
+            ..Default::default()
+        };
+        let (bytes, content_type) =
+            execute_render_both(&renderer, skin_bytes, None, None, &query).unwrap();
+        assert_eq!(content_type, "image/png");
+        assert!(!bytes.is_empty());
+    }
 }
