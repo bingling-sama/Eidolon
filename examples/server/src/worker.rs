@@ -409,7 +409,7 @@ fn execute_render_json_all(
         target: [0.0, 1.0, 0.0],
     };
 
-    let front_frame = renderer
+    let mut front_frame = renderer
         .render(&character, &front_camera, half_width, total_height)
         .map_err(|e| AppError::RenderError(format!("Rendering front view failed: {e}")))?;
 
@@ -421,7 +421,7 @@ fn execute_render_json_all(
         target: [0.0, 1.0, 0.0],
     };
 
-    let back_frame = renderer
+    let mut back_frame = renderer
         .render(
             &character,
             &back_camera,
@@ -431,6 +431,12 @@ fn execute_render_json_all(
         .map_err(|e| AppError::RenderError(format!("Rendering back view failed: {e}")))?;
 
     let mut combined = image::RgbaImage::new(total_width, total_height);
+    if query.transparent == Some(false) {
+        apply_opaque_background(&mut front_frame);
+        apply_opaque_background(&mut back_frame);
+        apply_opaque_background(&mut combined);
+    }
+
     image::imageops::overlay(&mut combined, &front_frame, 0, 0);
     image::imageops::overlay(&mut combined, &back_frame, half_width as i64, 0);
 
@@ -442,7 +448,7 @@ fn execute_render_json_all(
         .map_err(|e| AppError::Internal(format!("Failed to encode both image: {e}")))?;
 
     let b64 = &base64::engine::general_purpose::STANDARD;
-    let now = chrono_or_fallback_time();
+    let now = js_date_string();
 
     let json_val = json!({
         "front_b64": b64.encode(&front_bytes),
@@ -460,12 +466,62 @@ fn execute_render_json_all(
     Ok((json_bytes, "application/json"))
 }
 
-fn chrono_or_fallback_time() -> String {
+fn js_date_string() -> String {
     use std::time::SystemTime;
     let dur = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default();
-    format!("UnixTimestamp: {}s", dur.as_secs())
+    let total_secs = dur.as_secs();
+    let days = (total_secs / 86400) as i64;
+    let rem_secs = total_secs % 86400;
+    let hour = rem_secs / 3600;
+    let min = (rem_secs % 3600) / 60;
+    let sec = rem_secs % 60;
+
+    let day_of_week = match (4 + days).rem_euclid(7) {
+        0 => "Sun",
+        1 => "Mon",
+        2 => "Tue",
+        3 => "Wed",
+        4 => "Thu",
+        5 => "Fri",
+        _ => "Sat",
+    };
+
+    let (year, month, day) = civil_from_days(days);
+    let month_name = match month {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        _ => "Dec",
+    };
+
+    format!(
+        "{} {} {:02} {} {:02}:{:02}:{:02} GMT+0000 (Coordinated Universal Time)",
+        day_of_week, month_name, day, year, hour, min, sec
+    )
+}
+
+fn civil_from_days(days: i64) -> (i32, u32, u32) {
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1020 + doe / 1461 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m, d)
 }
 
 fn apply_opaque_background(img: &mut image::RgbaImage) {
@@ -479,5 +535,43 @@ fn apply_opaque_background(img: &mut image::RgbaImage) {
             pixel[2] = (pixel[2] as f32 * alpha + bg * (1.0 - alpha)).round() as u8;
             pixel[3] = 255;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_civil_from_days_and_date_string() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        // 2026-11-02 is day 20759 since 1970-01-01
+        let (y, m, d) = civil_from_days(20759);
+        assert_eq!((y, m, d), (2026, 11, 2));
+
+        let formatted = js_date_string();
+        assert!(formatted.contains("GMT+0000 (Coordinated Universal Time)"));
+    }
+
+    #[test]
+    fn test_apply_opaque_background() {
+        let mut img = image::RgbaImage::new(2, 2);
+        // Fully transparent pixel
+        img.put_pixel(0, 0, image::Rgba([0, 0, 0, 0]));
+        // Fully opaque red pixel
+        img.put_pixel(1, 0, image::Rgba([255, 0, 0, 255]));
+        // Semi-transparent pixel
+        img.put_pixel(0, 1, image::Rgba([0, 255, 0, 128]));
+
+        apply_opaque_background(&mut img);
+
+        // Fully transparent becomes #F0F0F0 (240, 240, 240, 255)
+        assert_eq!(img.get_pixel(0, 0), &image::Rgba([240, 240, 240, 255]));
+        // Fully opaque unchanged
+        assert_eq!(img.get_pixel(1, 0), &image::Rgba([255, 0, 0, 255]));
+        // Semi-transparent blended onto 240
+        let p = img.get_pixel(0, 1);
+        assert_eq!(p[3], 255);
+        assert!(p[1] > 100);
     }
 }

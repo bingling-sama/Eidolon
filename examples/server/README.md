@@ -64,15 +64,14 @@ Renders character images by texture URL for a given view (`front`, `back`, or `b
 
 - **Path Parameter**: `{view}` - `front`, `back`, or `both`.
 - **Dimensions**:
-  - `front` / `back`: Defaults to `300 * definition` × `300 * definition` (e.g. 450x450 at default definition 1.5), or custom `width` / `height`.
-  - `both`: Defaults to `600 * definition` × `300 * definition` (e.g. 900x450), stitching front (left) and back (right).
+  - `front` / `back`: Strictly derived from `definition`: `300 * definition` × `300 * definition` (e.g. 450x450 at default definition 1.5).
+  - `both`: Strictly derived from `definition`: `600 * definition` × `300 * definition` (e.g. 900x450), stitching front (left) and back (right).
 - **Query / JSON Parameters**:
   - `skinUrl` (string, required): Direct URL or path to player skin.
   - `capeUrl` (string, optional): Direct URL or path to player cape.
   - `nameTag` or `nametag` (string, optional): Text for player nameplate above head.
   - `definition` (float, optional, default `1.5`): Resolution multiplier in range `0.8..=3.5`.
   - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#F0F0F0` opaque background.
-  - `format` (string, optional, default `png`): `png` or `webp`.
   - `slim` (bool, optional): Overrides Alex 3px arm detection.
 
 ```bash
@@ -84,7 +83,7 @@ curl "http://127.0.0.1:8080/url/image/front?skinUrl=https://textures.minecraft.n
 ```
 
 #### 3. `GET /url/json/all`
-Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload.
+Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload. Respects `transparent=false` by compositing on `#F0F0F0`.
 
 - **Output**:
 ```json
@@ -94,28 +93,28 @@ Renders `front`, `back`, and `both` views simultaneously and returns them as Bas
   "both_b64": "...",
   "backendInfo": {
     "slim": false,
-    "serverTimeJs": "UnixTimestamp: 1730592000s"
+    "serverTimeJs": "Mon Nov 02 2026 15:04:05 GMT+0000 (Coordinated Universal Time)"
   }
 }
 ```
 
 #### 4. `GET /mojang/image/{view}`
-Directly queries official Mojang session servers to resolve skin and cape textures by player username, then renders the requested view (`front`, `back`, or `both`).
+Directly queries official Mojang session servers to resolve skin and cape textures and slim model metadata by player username, then renders the requested view (`front`, `back`, or `both`).
 
 - **Query Parameters**:
   - `name` (string, required): Minecraft player username (e.g. `Steve`).
-  - Supports all SkinRenderMC options (`definition`, `transparent`, `format`, etc.).
+  - Supports all SkinRenderMC options (`definition`, `transparent`, etc.).
 
 ```bash
 curl "http://127.0.0.1:8080/mojang/image/both?name=Steve" -o steve.png
 ```
 
 #### 5. `GET /littleskin/image/{view}`
-Queries LittleSkin Yggdrasil API to resolve player skin and cape textures by username, then renders the requested view.
+Queries LittleSkin Yggdrasil API to resolve player skin, cape textures, and slim model metadata by username, then renders the requested view.
 
 - **Query Parameters**:
   - `name` (string, required): LittleSkin player username.
-  - Supports all SkinRenderMC options (`definition`, `transparent`, `format`, etc.).
+  - Supports all SkinRenderMC options (`definition`, `transparent`, etc.).
 
 ```bash
 curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.png
@@ -160,6 +159,12 @@ Healthcheck endpoint. Returns JSON:
   "uptime_secs": 120
 }
 ```
+
+## Operational Considerations & Limitations
+
+- **Upstream Rate Limits**: Unauthenticated profile lookups against Mojang (`api.mojang.com` / `sessionserver.mojang.com`) are throttled by Mojang (~600 requests / 10 minutes per IP). LittleSkin endpoints also apply per-IP rate limits.
+- **Texture Caching**: Downloaded texture bytes are cached in an in-memory LRU cache (`--cache-entries`, `--cache-ttl`).
+- **Memory Footprint**: `/url/json/all` concurrently renders three separate views and encodes them to base64, which temporarily allocates multiple image buffers. Ensure worker concurrency (`--workers`) matches host memory capacity.
 
 ## Python Integration (`skinrendermcapi.py`)
 

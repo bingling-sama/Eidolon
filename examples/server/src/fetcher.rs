@@ -95,11 +95,11 @@ impl TextureFetcher {
         )))
     }
 
-    /// Resolve player textures (skin, cape) from official Mojang sessionserver API.
+    /// Resolve player textures (skin, cape) and model type from official Mojang sessionserver API.
     pub async fn resolve_mojang_player(
         &self,
         name: &str,
-    ) -> Result<(String, Option<String>, String), AppError> {
+    ) -> Result<(String, Option<String>, String, bool), AppError> {
         let profile_url = format!("https://api.mojang.com/users/profiles/minecraft/{name}");
         let resp =
             self.client.get(&profile_url).send().await.map_err(|e| {
@@ -147,15 +147,15 @@ impl TextureFetcher {
         let session_info: serde_json::Value = serde_json::from_slice(&session_bytes)
             .map_err(|e| AppError::FetchError(format!("Failed to parse session JSON: {e}")))?;
 
-        let (skin_url, cape_url) = extract_textures_from_profile(&session_info)?;
-        Ok((skin_url, cape_url, official_name))
+        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info)?;
+        Ok((skin_url, cape_url, official_name, is_slim))
     }
 
-    /// Resolve player textures (skin, cape) from LittleSkin Yggdrasil API.
+    /// Resolve player textures (skin, cape) and model type from LittleSkin Yggdrasil API.
     pub async fn resolve_littleskin_player(
         &self,
         name: &str,
-    ) -> Result<(String, Option<String>, String), AppError> {
+    ) -> Result<(String, Option<String>, String, bool), AppError> {
         let profile_url =
             format!("https://littleskin.cn/api/yggdrasil/api/users/profiles/minecraft/{name}");
         let resp = self.client.get(&profile_url).send().await.map_err(|e| {
@@ -204,14 +204,14 @@ impl TextureFetcher {
                 AppError::FetchError(format!("Failed to parse LittleSkin session JSON: {e}"))
             })?;
 
-        let (skin_url, cape_url) = extract_textures_from_profile(&session_info)?;
-        Ok((skin_url, cape_url, official_name))
+        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info)?;
+        Ok((skin_url, cape_url, official_name, is_slim))
     }
 }
 
 fn extract_textures_from_profile(
     session_info: &serde_json::Value,
-) -> Result<(String, Option<String>), AppError> {
+) -> Result<(String, Option<String>, bool), AppError> {
     let properties = session_info["properties"]
         .as_array()
         .ok_or_else(|| AppError::NotFound("Profile has no properties".to_string()))?;
@@ -232,11 +232,16 @@ fn extract_textures_from_profile(
                     })?
                     .to_string();
 
+                let is_slim = text_val["textures"]["SKIN"]["metadata"]["model"]
+                    .as_str()
+                    .map(|m| m.eq_ignore_ascii_case("slim"))
+                    .unwrap_or(false);
+
                 let cape_url = text_val["textures"]["CAPE"]["url"]
                     .as_str()
                     .map(|s| s.to_string());
 
-                return Ok((skin_url, cape_url));
+                return Ok((skin_url, cape_url, is_slim));
             }
         }
     }

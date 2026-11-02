@@ -57,9 +57,10 @@ fn parse_view_mode(view: &str) -> Result<RenderMode, AppError> {
 pub async fn url_image_get_handler(
     State(state): State<Arc<AppState>>,
     Path(view): Path<String>,
-    Query(query): Query<RenderQuery>,
+    Query(mut query): Query<RenderQuery>,
 ) -> Result<Response, AppError> {
     let mode = parse_view_mode(&view)?;
+    query.format = Some("png".to_string());
     handle_render(state, query, mode).await
 }
 
@@ -67,9 +68,10 @@ pub async fn url_image_get_handler(
 pub async fn url_image_post_handler(
     State(state): State<Arc<AppState>>,
     Path(view): Path<String>,
-    Json(query): Json<RenderQuery>,
+    Json(mut query): Json<RenderQuery>,
 ) -> Result<Response, AppError> {
     let mode = parse_view_mode(&view)?;
+    query.format = Some("png".to_string());
     handle_render(state, query, mode).await
 }
 
@@ -101,7 +103,8 @@ pub async fn mojang_image_handler(
         .filter(|n| !n.trim().is_empty())
         .ok_or_else(|| AppError::BadRequest("Missing required 'name' parameter".to_string()))?;
 
-    let (skin_url, cape_url, official_name) = state.fetcher.resolve_mojang_player(name).await?;
+    let (skin_url, cape_url, official_name, is_slim) =
+        state.fetcher.resolve_mojang_player(name).await?;
     let mut rq = query.render_query;
     rq.skin_url = Some(skin_url);
     if rq.cape_url.is_none() {
@@ -110,6 +113,10 @@ pub async fn mojang_image_handler(
     if rq.nametag.is_none() {
         rq.nametag = Some(official_name);
     }
+    if rq.slim.is_none() {
+        rq.slim = Some(is_slim);
+    }
+    rq.format = Some("png".to_string());
     handle_render(state, rq, mode).await
 }
 
@@ -126,7 +133,8 @@ pub async fn littleskin_image_handler(
         .filter(|n| !n.trim().is_empty())
         .ok_or_else(|| AppError::BadRequest("Missing required 'name' parameter".to_string()))?;
 
-    let (skin_url, cape_url, official_name) = state.fetcher.resolve_littleskin_player(name).await?;
+    let (skin_url, cape_url, official_name, is_slim) =
+        state.fetcher.resolve_littleskin_player(name).await?;
     let mut rq = query.render_query;
     rq.skin_url = Some(skin_url);
     if rq.cape_url.is_none() {
@@ -135,23 +143,11 @@ pub async fn littleskin_image_handler(
     if rq.nametag.is_none() {
         rq.nametag = Some(official_name);
     }
+    if rq.slim.is_none() {
+        rq.slim = Some(is_slim);
+    }
+    rq.format = Some("png".to_string());
     handle_render(state, rq, mode).await
-}
-
-/// Legacy handler for GET /url/image/both (SkinRenderMC API specification)
-pub async fn render_both_get_handler(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<RenderQuery>,
-) -> Result<Response, AppError> {
-    handle_render(state, query, RenderMode::Both).await
-}
-
-/// Legacy handler for POST /url/image/both
-pub async fn render_both_post_handler(
-    State(state): State<Arc<AppState>>,
-    Json(query): Json<RenderQuery>,
-) -> Result<Response, AppError> {
-    handle_render(state, query, RenderMode::Both).await
 }
 
 async fn handle_render(

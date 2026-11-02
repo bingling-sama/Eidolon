@@ -219,21 +219,15 @@ impl RenderQuery {
         self.definition.unwrap_or(1.5).clamp(0.8, 3.5)
     }
 
-    /// Single view dimension derived from definition (base 300x300 * definition)
+    /// Single view dimension derived strictly from definition (base 300x300 * definition)
     pub fn skinrendermc_single_dimensions(&self) -> (u32, u32) {
-        if let (Some(w), Some(h)) = (self.width, self.height) {
-            return (w.clamp(16, 4096), h.clamp(16, 4096));
-        }
         let scale = self.resolved_definition();
         let size = ((300.0 * scale).round() as u32).clamp(32, 4096);
         (size, size)
     }
 
-    /// Both views dimensions derived from definition (base 600x300 * definition)
+    /// Both views dimensions derived strictly from definition (base 600x300 * definition)
     pub fn skinrendermc_both_dimensions(&self) -> (u32, u32) {
-        if let (Some(w), Some(h)) = (self.width, self.height) {
-            return (w.clamp(16, 4096), h.clamp(16, 4096));
-        }
         let scale = self.resolved_definition();
         let h = ((300.0 * scale).round() as u32).clamp(32, 4096);
         let w = h * 2;
