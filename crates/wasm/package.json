@@ -2,6 +2,11 @@
   "name": "@eidolonmc/wasm",
   "version": "0.0.3-alpha",
   "description": "WebAssembly bindings for Eidolon Minecraft skin renderer",
+  "homepage": "https://github.com/bingling-sama/eidolon",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bingling-sama/eidolon.git"
+  },
   "type": "module",
   "main": "./pkg/eidolon.js",
   "types": "./pkg/eidolon.d.ts",
@@ -13,16 +18,12 @@
     }
   },
   "files": [
-    "pkg/eidolon_bg.wasm",
-    "pkg/eidolon_bg.wasm.d.ts",
-    "pkg/eidolon.js",
-    "pkg/eidolon.d.ts",
-    "pkg/package.json"
+    "pkg"
   ],
   "scripts": {
-    "build": "wasm-pack build --target bundler --out-dir pkg",
-    "build:dev": "wasm-pack build --dev --target bundler --out-dir pkg",
-    "build:web": "wasm-pack build --target web --out-dir pkg/web"
+    "build": "wasm-pack build --target bundler --out-dir pkg && rm -f pkg/.gitignore",
+    "build:dev": "wasm-pack build --dev --target bundler --out-dir pkg && rm -f pkg/.gitignore",
+    "build:web": "wasm-pack build --target web --out-dir pkg/web && rm -f pkg/web/.gitignore"
   },
   "license": "MIT"
 }

@@ -71,11 +71,15 @@ node -e '
 const fs = require("fs");
 const version = process.argv[1];
 
-// Update root Cargo.toml [workspace.package] version
+// Update root Cargo.toml [workspace.package] version and eidolon-core dependency version
 const cargoPath = "Cargo.toml";
 let cargo = fs.readFileSync(cargoPath, "utf8");
-const updatedCargo = cargo.replace(
+let updatedCargo = cargo.replace(
   /(\[workspace\.package\][^]*?version\s*=\s*")[^"]+(")/m,
+  `$1${version}$2`
+);
+updatedCargo = updatedCargo.replace(
+  /(eidolon-core\s*=\s*\{[^}]*version\s*=\s*")[^"]+(")/m,
   `$1${version}$2`
 );
 if (cargo === updatedCargo) {

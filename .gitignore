@@ -12,3 +12,4 @@ skills-lock.json
 /examples/wasm/test-results/
 ._*
 .DS_Store
+/crates/wasm/pkg/

@@ -17,7 +17,7 @@ repository = "https://github.com/bingling-sama/eidolon"
 
 [workspace.dependencies]
 # Workspace crates
-eidolon-core = { path = "crates/core" }
+eidolon-core = { path = "crates/core", version = "0.0.3-alpha" }
 
 # Graphics and system
 windows = { version = "0.62", features = [
