@@ -8,6 +8,7 @@ use serde_json::json;
 #[derive(Debug)]
 pub enum AppError {
     BadRequest(String),
+    NotFound(String),
     FetchError(String),
     RenderError(String),
     QueueFull,
@@ -18,6 +19,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::FetchError(msg) => (StatusCode::BAD_GATEWAY, msg),
             AppError::RenderError(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
             AppError::QueueFull => (

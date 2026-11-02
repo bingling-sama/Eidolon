@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -21,6 +21,13 @@ pub struct AppState {
     pub start_time: Instant,
 }
 
+pub async fn root_handler() -> impl IntoResponse {
+    Json(json!({
+        "status": 200,
+        "msg": "SkinRenderMC"
+    }))
+}
+
 pub async fn render_get_handler(
     State(state): State<Arc<AppState>>,
     Query(query): Query<RenderQuery>,
@@ -35,7 +42,103 @@ pub async fn render_post_handler(
     handle_render(state, query, RenderMode::Single).await
 }
 
-/// Handler specifically for GET /url/image/both (SkinRenderMC API specification)
+fn parse_view_mode(view: &str) -> Result<RenderMode, AppError> {
+    match view.to_ascii_lowercase().as_str() {
+        "front" => Ok(RenderMode::Front),
+        "back" => Ok(RenderMode::Back),
+        "both" => Ok(RenderMode::Both),
+        other => Err(AppError::BadRequest(format!(
+            "Invalid view '{other}', expected 'front', 'back', or 'both'"
+        ))),
+    }
+}
+
+/// Handler for GET /url/image/:view (front, back, both)
+pub async fn url_image_get_handler(
+    State(state): State<Arc<AppState>>,
+    Path(view): Path<String>,
+    Query(query): Query<RenderQuery>,
+) -> Result<Response, AppError> {
+    let mode = parse_view_mode(&view)?;
+    handle_render(state, query, mode).await
+}
+
+/// Handler for POST /url/image/:view
+pub async fn url_image_post_handler(
+    State(state): State<Arc<AppState>>,
+    Path(view): Path<String>,
+    Json(query): Json<RenderQuery>,
+) -> Result<Response, AppError> {
+    let mode = parse_view_mode(&view)?;
+    handle_render(state, query, mode).await
+}
+
+/// Handler for GET /url/json/all
+pub async fn url_json_all_handler(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<RenderQuery>,
+) -> Result<Response, AppError> {
+    handle_render(state, query, RenderMode::JsonAll).await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct UsernameQuery {
+    pub name: Option<String>,
+    #[serde(flatten)]
+    pub render_query: RenderQuery,
+}
+
+/// Handler for GET /mojang/image/:view?name=...
+pub async fn mojang_image_handler(
+    State(state): State<Arc<AppState>>,
+    Path(view): Path<String>,
+    Query(query): Query<UsernameQuery>,
+) -> Result<Response, AppError> {
+    let mode = parse_view_mode(&view)?;
+    let name = query
+        .name
+        .as_deref()
+        .filter(|n| !n.trim().is_empty())
+        .ok_or_else(|| AppError::BadRequest("Missing required 'name' parameter".to_string()))?;
+
+    let (skin_url, cape_url, official_name) = state.fetcher.resolve_mojang_player(name).await?;
+    let mut rq = query.render_query;
+    rq.skin_url = Some(skin_url);
+    if rq.cape_url.is_none() {
+        rq.cape_url = cape_url;
+    }
+    if rq.nametag.is_none() {
+        rq.nametag = Some(official_name);
+    }
+    handle_render(state, rq, mode).await
+}
+
+/// Handler for GET /littleskin/image/:view?name=...
+pub async fn littleskin_image_handler(
+    State(state): State<Arc<AppState>>,
+    Path(view): Path<String>,
+    Query(query): Query<UsernameQuery>,
+) -> Result<Response, AppError> {
+    let mode = parse_view_mode(&view)?;
+    let name = query
+        .name
+        .as_deref()
+        .filter(|n| !n.trim().is_empty())
+        .ok_or_else(|| AppError::BadRequest("Missing required 'name' parameter".to_string()))?;
+
+    let (skin_url, cape_url, official_name) = state.fetcher.resolve_littleskin_player(name).await?;
+    let mut rq = query.render_query;
+    rq.skin_url = Some(skin_url);
+    if rq.cape_url.is_none() {
+        rq.cape_url = cape_url;
+    }
+    if rq.nametag.is_none() {
+        rq.nametag = Some(official_name);
+    }
+    handle_render(state, rq, mode).await
+}
+
+/// Legacy handler for GET /url/image/both (SkinRenderMC API specification)
 pub async fn render_both_get_handler(
     State(state): State<Arc<AppState>>,
     Query(query): Query<RenderQuery>,
@@ -43,7 +146,7 @@ pub async fn render_both_get_handler(
     handle_render(state, query, RenderMode::Both).await
 }
 
-/// Handler for POST /url/image/both
+/// Legacy handler for POST /url/image/both
 pub async fn render_both_post_handler(
     State(state): State<Arc<AppState>>,
     Json(query): Json<RenderQuery>,

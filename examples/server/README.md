@@ -46,36 +46,86 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 ## API Endpoints
 
-### 1. `GET /url/image/both` (SkinRenderMC Specification)
+### SkinRenderMC Full Compatibility Endpoints
 
-Standard SkinRenderMC combined dual-perspective layout (front on the left, back on the right).
+The server provides 1:1 drop-in replacement endpoints matching the [SerinaNya/SkinRenderMC](https://github.com/SerinaNya/SkinRenderMC) API.
 
-- **Method**: `GET` (or `POST`)
-- **Path**: `/url/image/both`
-- **Output**: `image/png` raw bytes (600x600 canvas)
-- **Visuals**:
-  - **Left**: Character front view (slight 15° natural turn), nametag rendered if `nameTag` is supplied.
-  - **Right**: Character back view (195° turn to show cape/elytra/back texture), nametag rendered if `nameTag` is supplied.
-  - **Bottom margin**: Feet ground at Y ≈ 438px (in 600px height). After client's `crop((0, 0, width, height * 0.87))` (522px height), ~84px breathing room is preserved at the bottom, perfectly accommodating bottom shadow and watermark text at the bottom-right corner.
+#### 1. `GET /`
+Returns the SkinRenderMC status payload.
+```json
+{
+  "status": 200,
+  "msg": "SkinRenderMC"
+}
+```
 
-#### Query Parameters
+#### 2. `GET /url/image/{view}` and `POST /url/image/{view}`
+Renders character images by texture URL for a given view (`front`, `back`, or `both`).
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `skinUrl` | string | **Yes** | Direct URL to player skin PNG |
-| `capeUrl` | string | Optional | Direct URL to cape PNG (omitted when player has no cape) |
-| `nameTag` (or `nametag`) | string | Optional | Player name text plate rendered above model |
-| `slim` | bool | Optional | Auto-detected from skin arm transparency if omitted |
-
-#### Example Request
+- **Path Parameter**: `{view}` - `front`, `back`, or `both`.
+- **Dimensions**:
+  - `front` / `back`: Defaults to `300 * definition` × `300 * definition` (e.g. 450x450 at default definition 1.5), or custom `width` / `height`.
+  - `both`: Defaults to `600 * definition` × `300 * definition` (e.g. 900x450), stitching front (left) and back (right).
+- **Query / JSON Parameters**:
+  - `skinUrl` (string, required): Direct URL or path to player skin.
+  - `capeUrl` (string, optional): Direct URL or path to player cape.
+  - `nameTag` or `nametag` (string, optional): Text for player nameplate above head.
+  - `definition` (float, optional, default `1.5`): Resolution multiplier in range `0.8..=3.5`.
+  - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#F0F0F0` opaque background.
+  - `format` (string, optional, default `png`): `png` or `webp`.
+  - `slim` (bool, optional): Overrides Alex 3px arm detection.
 
 ```bash
-curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://littleskin.cn/textures/...&capeUrl=https://littleskin.cn/textures/...&nameTag=BinglingTX" -o both.png
+# Render both front and back
+curl "http://127.0.0.1:8080/url/image/both?skinUrl=https://textures.minecraft.net/texture/...&nameTag=Steve" -o both.png
+
+# Render front view only
+curl "http://127.0.0.1:8080/url/image/front?skinUrl=https://textures.minecraft.net/texture/...&definition=2.0" -o front.png
+```
+
+#### 3. `GET /url/json/all`
+Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload.
+
+- **Output**:
+```json
+{
+  "front_b64": "...",
+  "back_b64": "...",
+  "both_b64": "...",
+  "backendInfo": {
+    "slim": false,
+    "serverTimeJs": "UnixTimestamp: 1730592000s"
+  }
+}
+```
+
+#### 4. `GET /mojang/image/{view}`
+Directly queries official Mojang session servers to resolve skin and cape textures by player username, then renders the requested view (`front`, `back`, or `both`).
+
+- **Query Parameters**:
+  - `name` (string, required): Minecraft player username (e.g. `Steve`).
+  - Supports all SkinRenderMC options (`definition`, `transparent`, `format`, etc.).
+
+```bash
+curl "http://127.0.0.1:8080/mojang/image/both?name=Steve" -o steve.png
+```
+
+#### 5. `GET /littleskin/image/{view}`
+Queries LittleSkin Yggdrasil API to resolve player skin and cape textures by username, then renders the requested view.
+
+- **Query Parameters**:
+  - `name` (string, required): LittleSkin player username.
+  - Supports all SkinRenderMC options (`definition`, `transparent`, `format`, etc.).
+
+```bash
+curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.png
 ```
 
 ---
 
-### 2. `GET /render` / `POST /render` (Flexible Single View)
+### Custom Rendering & Utilities
+
+#### `GET /render` / `POST /render` (Flexible Single View)
 
 #### Parameters
 

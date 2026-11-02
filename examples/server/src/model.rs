@@ -153,6 +153,11 @@ pub struct RenderQuery {
     pub height: Option<u32>,
     pub format: Option<String>,
 
+    // SkinRenderMC options
+    pub definition: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_flexible_bool")]
+    pub transparent: Option<bool>,
+
     // Position / Rotation
     #[serde(alias = "posX", alias = "pos_x")]
     pub pos_x: Option<f32>,
@@ -207,5 +212,79 @@ impl RenderQuery {
         self.format
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("webp"))
+    }
+
+    /// Resolution scaling factor from definition (default: 1.5, clamped 0.8..=3.5)
+    pub fn resolved_definition(&self) -> f32 {
+        self.definition.unwrap_or(1.5).clamp(0.8, 3.5)
+    }
+
+    /// Single view dimension derived from definition (base 300x300 * definition)
+    pub fn skinrendermc_single_dimensions(&self) -> (u32, u32) {
+        if let (Some(w), Some(h)) = (self.width, self.height) {
+            return (w.clamp(16, 4096), h.clamp(16, 4096));
+        }
+        let scale = self.resolved_definition();
+        let size = ((300.0 * scale).round() as u32).clamp(32, 4096);
+        (size, size)
+    }
+
+    /// Both views dimensions derived from definition (base 600x300 * definition)
+    pub fn skinrendermc_both_dimensions(&self) -> (u32, u32) {
+        if let (Some(w), Some(h)) = (self.width, self.height) {
+            return (w.clamp(16, 4096), h.clamp(16, 4096));
+        }
+        let scale = self.resolved_definition();
+        let h = ((300.0 * scale).round() as u32).clamp(32, 4096);
+        let w = h * 2;
+        (w, h)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_skinrendermc_dimensions_scaling() {
+        let mut query = RenderQuery::default();
+        assert_eq!(query.skinrendermc_single_dimensions(), (450, 450));
+        assert_eq!(query.skinrendermc_both_dimensions(), (900, 450));
+
+        query.definition = Some(1.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (300, 300));
+        assert_eq!(query.skinrendermc_both_dimensions(), (600, 300));
+
+        query.definition = Some(2.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (600, 600));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1200, 600));
+
+        // Clamping to bounds 0.8..=3.5
+        query.definition = Some(0.1);
+        assert_eq!(query.skinrendermc_single_dimensions(), (240, 240));
+
+        query.definition = Some(10.0);
+        assert_eq!(query.skinrendermc_single_dimensions(), (1050, 1050));
+    }
+
+    #[test]
+    fn test_deserialize_query_flexible_options() {
+        let json_data = r#"{
+            "skinUrl": "https://example.com/skin.png",
+            "nameTag": "TestUser",
+            "definition": 1.2,
+            "transparent": false,
+            "slim": "true"
+        }"#;
+
+        let parsed: RenderQuery = serde_json::from_str(json_data).unwrap();
+        assert_eq!(
+            parsed.skin_url.as_deref(),
+            Some("https://example.com/skin.png")
+        );
+        assert_eq!(parsed.resolved_nametag(), Some("TestUser"));
+        assert_eq!(parsed.transparent, Some(false));
+        assert_eq!(parsed.slim, Some(true));
+        assert_eq!(parsed.definition, Some(1.2));
     }
 }

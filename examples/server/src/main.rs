@@ -16,8 +16,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::fetcher::TextureFetcher;
 use crate::handlers::{
-    health_handler, render_both_get_handler, render_both_post_handler, render_get_handler,
-    render_post_handler, AppState,
+    health_handler, littleskin_image_handler, mojang_image_handler, render_both_get_handler,
+    render_both_post_handler, render_get_handler, render_post_handler, root_handler,
+    url_image_get_handler, url_image_post_handler, url_json_all_handler, AppState,
 };
 use crate::worker::RenderWorkerPool;
 
@@ -85,13 +86,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_headers(Any);
 
     let app = Router::new()
-        .route("/", get(health_handler))
+        .route("/", get(root_handler))
         .route("/health", get(health_handler))
         .route("/render", get(render_get_handler).post(render_post_handler))
         .route(
             "/url/image/both",
             get(render_both_get_handler).post(render_both_post_handler),
         )
+        .route(
+            "/url/image/{view}",
+            get(url_image_get_handler).post(url_image_post_handler),
+        )
+        .route("/url/json/all", get(url_json_all_handler))
+        .route("/mojang/image/{view}", get(mojang_image_handler))
+        .route("/littleskin/image/{view}", get(littleskin_image_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
