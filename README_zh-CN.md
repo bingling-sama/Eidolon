@@ -59,6 +59,17 @@ cargo run -- render resources/bingling_sama.png walk.gif --animate --posture wal
 cargo run -- preview resources/bingling_sama.png --nametag BinglingTX
 ```
 
+### 多角色场景渲染
+
+支持在单个场景中同时渲染多个角色，各自具有独立模型类型（Classic/Slim）、装备（披风/鞘翅）、姿态与头顶名牌：
+
+![多角色场景预览](docs/scene-preview.png)
+
+```bash
+cargo run -- render --scene-config scene.json output.png
+cargo run -- preview --scene-config scene.json
+```
+
 更多 CLI 选项见 `docs/cli_zh-CN.md`。
 
 ## 作为库使用

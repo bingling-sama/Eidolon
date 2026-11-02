@@ -195,6 +195,7 @@ fn execute_render(
         yaw: query.cam_yaw.unwrap_or(180.0),
         pitch: query.cam_pitch.unwrap_or(90.0),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
+        target: [0.0, 1.0, 0.0],
     };
 
     let (width, height) = query.dimensions();
@@ -272,6 +273,7 @@ fn execute_render_both(
         yaw: front_yaw,
         pitch: query.cam_pitch.unwrap_or(90.0),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
+        target: [0.0, 1.0, 0.0],
     };
 
     let front_frame = renderer
@@ -284,6 +286,7 @@ fn execute_render_both(
         yaw: back_yaw,
         pitch: query.cam_pitch.unwrap_or(90.0),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
+        target: [0.0, 1.0, 0.0],
     };
 
     let back_frame = renderer

@@ -14,6 +14,7 @@ cargo run -- render [选项] <皮肤 PNG> [输出]
 
 - `[输出]` 静态输出接受 `.png`/`.webp`；动画输出接受 `.gif`/`.webp`/`.apng`/`.avif`。静态默认
   `output.png`，`--animate` 时默认 `output.webp`
+- `--scene-config <PATH>` 场景配置文件路径（JSON 或 TOML）。提供时 `<皮肤 PNG>` 可选
 - `--width <PX>` 输出宽度（像素）。默认：`800`
 - `--height <PX>` 输出高度（像素）。默认：`600`
 - `--animate` 输出一个完整动画周期，而不是单帧
@@ -53,6 +54,7 @@ cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
 cargo run -- render resources/bingling_sama.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
 cargo run -- render resources/bingling_sama.png --nametag Steve
 cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nametag-see-through
+cargo run -- render --scene-config scene.json output.png
 ```
 
 输出格式由扩展名推断。输出路径不能包含 `..` 路径片段。
@@ -69,12 +71,49 @@ eidolon render skin.png run.apng --animate --posture run
 eidolon render skin.png dance.avif --animate --posture dance
 ```
 
+### 场景配置格式
+
+通过 `--scene-config <配置文件路径>` 进行多角色场景渲染或预览时，支持 JSON 或 TOML 格式。仓库根目录提供了规范的 JSON Schema 描述文件：`schemas/scene.json`。
+
+`scene.json` 示例：
+```json
+{
+  "$schema": "./schemas/scene.json",
+  "camera": {
+    "yaw": 200.0,
+    "pitch": 80.0,
+    "scale": 1.2,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "steve.png",
+      "skin_type": "classic",
+      "position": [-1.0, 0.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve",
+      "cape": "cape.png"
+    },
+    {
+      "skin": "alex.png",
+      "skin_type": "slim",
+      "position": [1.0, 0.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    }
+  ]
+}
+```
+如果配置文件中省略了 `camera` 块，渲染器会自动根据场景所有角色的合并包围盒进行自动取景构图（auto-frame）。
+
 ## Preview
 
 打开实时预览窗口。
 
 ```bash
 cargo run -- preview <皮肤 PNG> [选项]
+# 或通过场景配置文件启动：
+cargo run -- preview --scene-config scene.json
 ```
 
 `preview` 支持与 `render` 相同的场景、相机、姿势和视口选项，但不包含输出路径与格式。

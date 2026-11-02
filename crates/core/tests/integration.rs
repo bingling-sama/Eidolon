@@ -14,6 +14,7 @@ use eidolon_core::character::{Character, CharacterError, DefaultPostures, Postur
 use eidolon_core::model::Model;
 use eidolon_core::output::{write_output, OutputIntent, StaticFormat};
 use eidolon_core::renderer::Renderer;
+use eidolon_core::scene::Scene;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
@@ -47,6 +48,7 @@ fn camera_default() -> Camera {
         yaw: 180.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     }
 }
 
@@ -248,6 +250,7 @@ fn nametag_see_through_only_reveals_occluded_pixels() {
         yaw: 0.0,
         pitch: 30.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     let without_nametag = renderer
         .render(&character, &back_camera, 400, 300)
@@ -288,6 +291,7 @@ fn different_camera_angle_produces_different_output() {
                 yaw: 90.0,
                 pitch: 90.0,
                 scale: 1.0,
+                target: [0.0, 1.0, 0.0],
             },
             200,
             150,
@@ -300,6 +304,7 @@ fn different_camera_angle_produces_different_output() {
                 yaw: 270.0,
                 pitch: 90.0,
                 scale: 1.0,
+                target: [0.0, 1.0, 0.0],
             },
             200,
             150,
@@ -319,6 +324,7 @@ fn enabling_elytra_changes_the_back_view() {
         yaw: 0.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
 
     let without_elytra = renderer
@@ -344,6 +350,7 @@ fn flying_posture_changes_the_elytra_back_view() {
         yaw: 0.0,
         pitch: 90.0,
         scale: 1.0,
+        target: [0.0, 1.0, 0.0],
     };
     let atlas = renderer
         .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
@@ -522,21 +529,25 @@ fn camera_extreme_values_produce_finite_matrices() {
             yaw: 0.0,
             pitch: 0.0,
             scale: 0.1,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: 720.0,
             pitch: -180.0,
             scale: 10.0,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: 360.0,
             pitch: 180.0,
             scale: 0.5,
+            target: [0.0, 1.0, 0.0],
         },
         Camera {
             yaw: -90.0,
             pitch: 45.0,
             scale: 2.0,
+            target: [0.0, 1.0, 0.0],
         },
     ];
     for cam in &test_cases {
@@ -747,4 +758,222 @@ fn render_all_posture_presets_with_both_skin_types() {
             );
         }
     }
+}
+
+#[test]
+fn scene_multi_character_render_and_depth_occlusion() {
+    let renderer = make_renderer();
+    let steve_body = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .expect("load Steve failed");
+    let mut steve = Character::from_body(steve_body);
+    // Camera eye is at z = -4 looking toward z = 0.
+    // Smaller z is closer to the camera.
+    steve.position = cgmath::Vector3::new(0.0, 0.0, -0.5);
+
+    let alex_body = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .expect("load Alex failed");
+    let mut alex = Character::from_body(alex_body);
+    // Alex placed behind Steve (further along +Z axis from camera at -4)
+    alex.position = cgmath::Vector3::new(0.0, 0.0, 0.5);
+
+    let camera = camera_default();
+
+    // Render Steve alone
+    let steve_alone = renderer
+        .render(&steve, &camera, 200, 200)
+        .expect("render Steve alone failed");
+
+    // Render Scene with Steve in front and Alex behind
+    let scene = Scene::with_characters(vec![alex, steve.clone()], camera);
+    let scene_image = renderer
+        .render_scene(&scene, 200, 200)
+        .expect("render scene failed");
+
+    // Where Steve has opaque pixels in steve_alone, scene_image must match Steve's pixels exactly
+    // because Steve in front occludes Alex behind him.
+    let mut matching_steve_pixels = 0;
+    for (p_alone, p_scene) in steve_alone.pixels().zip(scene_image.pixels()) {
+        if p_alone[3] == 255 {
+            assert_eq!(
+                p_alone, p_scene,
+                "Steve's front pixels should not be altered by Alex behind him"
+            );
+            matching_steve_pixels += 1;
+        }
+    }
+    assert!(
+        matching_steve_pixels > 500,
+        "Expected hundreds of opaque Steve pixels to verify occlusion"
+    );
+}
+
+#[test]
+fn scene_model_hybrid_classic_and_slim() {
+    let renderer = make_renderer();
+    let classic_body = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .expect("load classic body failed");
+    let mut classic_char = Character::from_body(classic_body);
+    classic_char.position = cgmath::Vector3::new(-0.8, 0.0, 0.0);
+
+    let slim_body = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .expect("load slim body failed");
+    let mut slim_char = Character::from_body(slim_body);
+    slim_char.position = cgmath::Vector3::new(0.8, 0.0, 0.0);
+
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 90.0,
+        scale: 0.8,
+        target: [0.0, 1.0, 0.0],
+    };
+    let scene = Scene::with_characters(vec![classic_char, slim_char], camera);
+    let image = renderer
+        .render_scene(&scene, 400, 300)
+        .expect("render hybrid scene failed");
+
+    assert_eq!(image.width(), 400);
+    assert_eq!(image.height(), 300);
+    let non_blank = image.pixels().any(|p| p[3] > 0);
+    assert!(non_blank, "Render output should not be blank");
+}
+
+#[test]
+fn scene_equipment_diversity() {
+    let renderer = make_renderer();
+    let b1 = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .unwrap();
+    let mut c1 = Character::from_body(b1);
+    c1.position = cgmath::Vector3::new(-1.2, 0.0, 0.0);
+    let cape_atlas = renderer
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
+        .unwrap();
+    c1.equip(BackEquipment::new(cape_atlas, BackEquipmentKind::Cape));
+
+    let b2 = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .unwrap();
+    let mut c2 = Character::from_body(b2);
+    c2.position = cgmath::Vector3::new(0.0, 0.0, 0.0);
+    let elytra_atlas = renderer
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
+        .unwrap();
+    c2.equip(BackEquipment::new(elytra_atlas, BackEquipmentKind::Elytra));
+
+    let b3 = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .unwrap();
+    let mut c3 = Character::from_body(b3);
+    c3.position = cgmath::Vector3::new(1.2, 0.0, 0.0);
+
+    let scene = Scene::with_characters(
+        vec![c1, c2, c3],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 0.6,
+            target: [0.0, 1.0, 0.0],
+        },
+    );
+    let image = renderer
+        .render_scene(&scene, 400, 300)
+        .expect("render diverse equipment scene failed");
+    assert!(image.pixels().any(|p| p[3] > 0));
+}
+
+#[test]
+fn scene_buffer_scaling_and_chunking() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .unwrap();
+
+    for count in [1, 2, 8, 16, 17] {
+        let mut characters = Vec::with_capacity(count);
+        for i in 0..count {
+            let mut c = Character::from_body(body.clone());
+            c.position = cgmath::Vector3::new((i as f32) * 0.2, 0.0, 0.0);
+            characters.push(c);
+        }
+        let scene = Scene::with_characters(
+            characters,
+            Camera {
+                yaw: 180.0,
+                pitch: 90.0,
+                scale: 0.5,
+                target: [0.0, 1.0, 0.0],
+            },
+        );
+        let image = renderer
+            .render_scene(&scene, 200, 150)
+            .unwrap_or_else(|e| panic!("failed to render scene with {count} characters: {e}"));
+        assert!(image.pixels().any(|p| p[3] > 0));
+    }
+}
+
+#[test]
+fn scene_multi_nametag_rendering() {
+    let renderer = make_renderer();
+    // Character in front (smaller z in this coordinate system)
+    let b1 = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .unwrap();
+    let mut c1 = Character::from_body(b1);
+    c1.position = cgmath::Vector3::new(0.0, 0.0, -1.0);
+    c1.nametag = Some("Front".to_owned());
+    c1.nametag_see_through = true;
+
+    // Character behind with nametag occluded by front character's body
+    let b2 = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .unwrap();
+    let mut c2 = Character::from_body(b2);
+    // Positioned behind c1 such that c2's nametag is occluded by c1's head/nametag
+    c2.position = cgmath::Vector3::new(0.0, -0.5, 0.5);
+    c2.nametag = Some("Behind".to_owned());
+    c2.nametag_see_through = true;
+
+    let scene_with_see_through = Scene::with_characters(
+        vec![c1.clone(), c2.clone()],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 1.0,
+            target: [0.0, 1.0, 0.0],
+        },
+    );
+    let img_see_through = renderer
+        .render_scene(&scene_with_see_through, 400, 300)
+        .expect("render see-through nametag scene failed");
+
+    // Now turn off see-through on the behind character
+    c2.nametag_see_through = false;
+    let scene_no_see_through = Scene::with_characters(
+        vec![c1, c2],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 1.0,
+            target: [0.0, 1.0, 0.0],
+        },
+    );
+    let img_no_see_through = renderer
+        .render_scene(&scene_no_see_through, 400, 300)
+        .expect("render no see-through nametag scene failed");
+
+    // With see-through enabled, the occluded pixels should render at reduced alpha,
+    // producing different composite pixel values than when see-through is disabled.
+    let diff_count = img_see_through
+        .pixels()
+        .zip(img_no_see_through.pixels())
+        .filter(|(p1, p2)| p1 != p2)
+        .count();
+    assert!(
+        diff_count > 0,
+        "occluded nametag with see-through enabled must render differently than with see-through disabled"
+    );
 }

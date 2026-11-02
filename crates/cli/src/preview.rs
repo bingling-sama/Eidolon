@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use eidolon_core::{
@@ -7,6 +8,7 @@ use eidolon_core::{
     character::{Character, Posture},
     error::EidolonError,
     renderer::Renderer,
+    scene::Scene,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -16,15 +18,17 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::args::PostureCli;
-use crate::scene::{PostureOverrides, SceneState};
+use crate::scene::{load_scene_from_config, PostureOverrides, SceneState};
 
 pub struct PreviewApp {
     pub renderer: Option<Renderer>,
     pub window: Option<Arc<Window>>,
     pub character: Option<Character>,
+    pub scene: Option<Scene>,
+    pub scene_config_path: Option<PathBuf>,
     pub scene_state: SceneState,
     pub camera: Camera,
-    pub texture_path: String,
+    pub texture_path: Option<String>,
     pub cape_atlas_path: Option<String>,
     pub elytra_atlas_path: Option<String>,
     pub initial_size: PhysicalSize<u32>,
@@ -162,6 +166,48 @@ impl PreviewInteraction {
         self.update_pan(position, camera);
     }
 
+    pub fn cursor_moved_camera(&mut self, x: f64, y: f64, camera: &mut Camera) {
+        let base_val = *self.base_position.get_or_insert_with(|| {
+            cgmath::Vector3::new(camera.target[0], camera.target[1], camera.target[2])
+        });
+        if let Some((last_x, last_y)) = self.last_cursor {
+            let dx = (x - last_x) as f32;
+            let dy = (y - last_y) as f32;
+            if self.left_pressed {
+                self.pan_x += dx;
+                self.pan_y -= dy;
+            }
+            if self.right_pressed {
+                camera.yaw -= dx * 0.4;
+                camera.pitch = (camera.pitch + dy * 0.4).clamp(1.0, 179.0);
+            }
+            self.update_camera_pan(base_val, camera);
+        }
+        self.last_cursor = Some((x, y));
+    }
+
+    pub fn scroll_camera(&mut self, delta: f32, camera: &mut Camera) {
+        let base_val = *self.base_position.get_or_insert_with(|| {
+            cgmath::Vector3::new(camera.target[0], camera.target[1], camera.target[2])
+        });
+        camera.scale = (camera.scale * 1.1_f32.powf(delta)).clamp(0.1, 10.0);
+        self.update_camera_pan(base_val, camera);
+    }
+
+    fn update_camera_pan(&self, base: cgmath::Vector3<f32>, camera: &mut Camera) {
+        let yaw = camera.yaw.to_radians();
+        let pitch = (camera.pitch - 90.0).to_radians();
+        let right = cgmath::Vector3::new(yaw.cos(), 0.0, -yaw.sin());
+        let up = cgmath::Vector3::new(
+            -yaw.sin() * pitch.sin(),
+            pitch.cos(),
+            -yaw.cos() * pitch.sin(),
+        );
+        let distance_per_pixel = 0.005 / camera.scale;
+        let new_target = base - (right * self.pan_x + up * self.pan_y) * distance_per_pixel;
+        camera.target = [new_target.x, new_target.y, new_target.z];
+    }
+
     pub fn update_pan(&self, position: &mut cgmath::Vector3<f32>, camera: &Camera) {
         let Some(base) = self.base_position else {
             return;
@@ -264,21 +310,6 @@ impl ApplicationHandler for PreviewApp {
             }
             renderer
         };
-        let body = renderer
-            .load_body(&self.texture_path, self.scene_state.skin_type)
-            .expect("Failed to load body");
-        let mut character = Character::from_body(body);
-        self.scene_state.apply_to(&mut character);
-        let atlas_path = self
-            .cape_atlas_path
-            .as_deref()
-            .or(self.elytra_atlas_path.as_deref());
-        if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
-            let atlas = renderer
-                .load_back_equipment_atlas(path)
-                .expect("Failed to load back equipment atlas");
-            character.equip(BackEquipment::new(atlas, kind));
-        }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
         #[cfg(windows)]
@@ -286,8 +317,31 @@ impl ApplicationHandler for PreviewApp {
             composition.commit();
         }
 
+        if let Some(config_path) = &self.scene_config_path {
+            let loaded_scene = load_scene_from_config(&renderer, config_path)
+                .expect("Failed to load scene from config");
+            self.camera = loaded_scene.camera;
+            self.scene = Some(loaded_scene);
+        } else if let Some(texture_path) = &self.texture_path {
+            let body = renderer
+                .load_body(texture_path, self.scene_state.skin_type)
+                .expect("Failed to load body");
+            let mut character = Character::from_body(body);
+            self.scene_state.apply_to(&mut character);
+            let atlas_path = self
+                .cape_atlas_path
+                .as_deref()
+                .or(self.elytra_atlas_path.as_deref());
+            if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
+                let atlas = renderer
+                    .load_back_equipment_atlas(path)
+                    .expect("Failed to load back equipment atlas");
+                character.equip(BackEquipment::new(atlas, kind));
+            }
+            self.character = Some(character);
+        }
+
         self.renderer = Some(renderer);
-        self.character = Some(character);
         #[cfg(windows)]
         {
             self.composition = composition;
@@ -323,11 +377,23 @@ impl ApplicationHandler for PreviewApp {
                     .mouse_input(button, state == ElementState::Pressed);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if let Some(character) = &mut self.character {
+                if let Some(scene) = &mut self.scene {
+                    self.interaction
+                        .cursor_moved_camera(position.x, position.y, &mut self.camera);
+                    scene.camera = self.camera;
+                } else if let Some(character) = &mut self.character {
                     self.interaction.cursor_moved(
                         position.x,
                         position.y,
                         &mut character.position,
+                        &mut self.camera,
+                    );
+                } else {
+                    let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                    self.interaction.cursor_moved(
+                        position.x,
+                        position.y,
+                        &mut dummy_pos,
                         &mut self.camera,
                     );
                 }
@@ -340,9 +406,16 @@ impl ApplicationHandler for PreviewApp {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(position) => position.y as f32 / 50.0,
                 };
-                if let Some(character) = &mut self.character {
+                if let Some(scene) = &mut self.scene {
+                    self.interaction.scroll_camera(lines, &mut self.camera);
+                    scene.camera = self.camera;
+                } else if let Some(character) = &mut self.character {
                     self.interaction
                         .scroll(lines, &mut character.position, &mut self.camera);
+                } else {
+                    let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                    self.interaction
+                        .scroll(lines, &mut dummy_pos, &mut self.camera);
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -378,8 +451,19 @@ impl ApplicationHandler for PreviewApp {
                 if let Some(character) = &mut self.character {
                     character.posture = self.posture_overrides.apply(self.playback.sample());
                 }
-                if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
-                    match renderer.render_frame(character, &self.camera) {
+                if let Some(scene) = &mut self.scene {
+                    scene.camera = self.camera;
+                }
+                if let Some(renderer) = &self.renderer {
+                    let render_result = if let Some(scene) = &self.scene {
+                        renderer.render_scene_frame(scene)
+                    } else if let Some(character) = &self.character {
+                        renderer.render_frame(character, &self.camera)
+                    } else {
+                        Ok(())
+                    };
+
+                    match render_result {
                         Ok(()) => {}
                         Err(EidolonError::Surface(
                             eidolon_core::error::SurfaceError::Lost
@@ -498,6 +582,21 @@ mod tests {
         interaction.scroll(1.0, &mut position, &mut camera);
 
         assert!(position.x.abs() < before);
+    }
+
+    #[test]
+    fn preview_camera_pan_shifts_target() {
+        let mut interaction = PreviewInteraction::default();
+        let mut camera = Camera::default();
+        let initial_target = camera.target;
+
+        interaction.mouse_input(MouseButton::Left, true);
+        interaction.cursor_moved_camera(100.0, 100.0, &mut camera);
+        interaction.cursor_moved_camera(120.0, 110.0, &mut camera);
+
+        assert_ne!(camera.target, initial_target);
+        assert_eq!(camera.yaw, 180.0);
+        assert_eq!(camera.pitch, 90.0);
     }
 
     #[test]

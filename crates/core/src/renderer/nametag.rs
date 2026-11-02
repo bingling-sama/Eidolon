@@ -31,8 +31,15 @@ pub(crate) enum NametagPass {
 impl NametagPass {
     pub fn depth_compare(self) -> wgpu::CompareFunction {
         match self {
-            Self::SeeThrough => wgpu::CompareFunction::Always,
+            Self::SeeThrough => wgpu::CompareFunction::GreaterEqual,
             Self::Normal => wgpu::CompareFunction::LessEqual,
+        }
+    }
+
+    pub fn depth_write_enabled(self) -> bool {
+        match self {
+            Self::SeeThrough => false,
+            Self::Normal => true,
         }
     }
 
@@ -41,17 +48,6 @@ impl NametagPass {
             Self::SeeThrough => "fs_see_through",
             Self::Normal => "fs_main",
         }
-    }
-}
-
-pub(crate) fn nametag_passes(see_through: bool) -> &'static [NametagPass] {
-    const VANILLA_PASSES: &[NametagPass] = &[NametagPass::SeeThrough, NametagPass::Normal];
-    const OCCLUDED_PASSES: &[NametagPass] = &[NametagPass::Normal];
-
-    if see_through {
-        VANILLA_PASSES
-    } else {
-        OCCLUDED_PASSES
     }
 }
 
@@ -425,14 +421,16 @@ mod tests {
     #[test]
     fn see_through_configuration_selects_vanilla_two_pass_rendering() {
         assert_eq!(
-            nametag_passes(true),
-            &[NametagPass::SeeThrough, NametagPass::Normal]
-        );
-        assert_eq!(nametag_passes(false), &[NametagPass::Normal]);
-        assert_eq!(
             NametagPass::SeeThrough.depth_compare(),
-            wgpu::CompareFunction::Always
+            wgpu::CompareFunction::GreaterEqual
         );
+        assert!(!NametagPass::SeeThrough.depth_write_enabled());
         assert_eq!(NametagPass::SeeThrough.fragment_entry(), "fs_see_through");
+        assert_eq!(
+            NametagPass::Normal.depth_compare(),
+            wgpu::CompareFunction::LessEqual
+        );
+        assert!(NametagPass::Normal.depth_write_enabled());
+        assert_eq!(NametagPass::Normal.fragment_entry(), "fs_main");
     }
 }

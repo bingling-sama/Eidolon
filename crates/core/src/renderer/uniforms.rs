@@ -20,7 +20,9 @@ pub(crate) const CAPE_UNIFORM_INDEX: u32 = BODY_PART_COUNT as u32;
 pub(crate) const LEFT_ELYTRA_UNIFORM_INDEX: u32 = CAPE_UNIFORM_INDEX + 1;
 pub(crate) const RIGHT_ELYTRA_UNIFORM_INDEX: u32 = LEFT_ELYTRA_UNIFORM_INDEX + 1;
 pub(crate) const NAMETAG_UNIFORM_INDEX: u32 = RIGHT_ELYTRA_UNIFORM_INDEX + 1;
-pub(crate) const UNIFORM_COUNT: u32 = NAMETAG_UNIFORM_INDEX + 1;
+pub(crate) const UNIFORM_SLOTS_PER_CHARACTER: usize = 16;
+pub(crate) const MAX_SCENE_CHARACTERS: usize = 16;
+
 pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 pub(crate) const ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 const BODY_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -357,5 +359,51 @@ mod tests {
         assert!((bottom.y - 1.0).abs() < 1e-6);
         assert!(top.z < -0.9);
         assert!(bottom.z > 0.9);
+    }
+
+    #[test]
+    fn dynamic_uniform_offset_calculation_and_alignment() {
+        // Spec 8: Buffer scaling & dynamic uniform offset calculations
+        let aligned_size: u32 = 256;
+        for char_idx in 0..MAX_SCENE_CHARACTERS {
+            let slot_base = char_idx * UNIFORM_SLOTS_PER_CHARACTER;
+            for part_idx in 0..BODY_PART_COUNT {
+                let offset = ((slot_base + part_idx) as u32) * aligned_size;
+                assert_eq!(
+                    offset % aligned_size,
+                    0,
+                    "offset must align to aligned_size"
+                );
+                assert_eq!(offset, ((char_idx * 16 + part_idx) as u32) * 256);
+            }
+
+            let cape_offset = ((slot_base + CAPE_UNIFORM_INDEX as usize) as u32) * aligned_size;
+            assert_eq!(cape_offset % aligned_size, 0);
+            assert_eq!(cape_offset, ((char_idx * 16 + 6) as u32) * 256);
+
+            let left_elytra_offset =
+                ((slot_base + LEFT_ELYTRA_UNIFORM_INDEX as usize) as u32) * aligned_size;
+            assert_eq!(left_elytra_offset % aligned_size, 0);
+            assert_eq!(left_elytra_offset, ((char_idx * 16 + 7) as u32) * 256);
+
+            let right_elytra_offset =
+                ((slot_base + RIGHT_ELYTRA_UNIFORM_INDEX as usize) as u32) * aligned_size;
+            assert_eq!(right_elytra_offset % aligned_size, 0);
+            assert_eq!(right_elytra_offset, ((char_idx * 16 + 8) as u32) * 256);
+
+            let nametag_offset =
+                ((slot_base + NAMETAG_UNIFORM_INDEX as usize) as u32) * aligned_size;
+            assert_eq!(nametag_offset % aligned_size, 0);
+            assert_eq!(nametag_offset, ((char_idx * 16 + 9) as u32) * 256);
+        }
+
+        // Total chunk buffer footprint for 16 characters must remain within 64 KiB
+        let total_chunk_bytes =
+            MAX_SCENE_CHARACTERS * UNIFORM_SLOTS_PER_CHARACTER * (aligned_size as usize);
+        assert_eq!(total_chunk_bytes, 16 * 16 * 256);
+        assert!(
+            total_chunk_bytes <= 65536,
+            "chunk size must not exceed maxUniformBufferBindingSize (64 KiB)"
+        );
     }
 }

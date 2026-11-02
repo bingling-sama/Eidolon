@@ -1,12 +1,256 @@
+use std::path::Path;
+
 use eidolon_core::{
     back_equipment::{BackEquipment, BackEquipmentKind},
     camera::Camera,
     character::{Character, Posture, SkinType},
     error::EidolonError,
     renderer::Renderer,
+    scene::Scene,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::args::SceneArgs;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneConfigFile {
+    #[serde(default)]
+    pub camera: Option<CameraConfig>,
+    pub characters: Vec<CharacterConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraConfig {
+    #[serde(default = "default_cam_yaw")]
+    pub yaw: f32,
+    #[serde(default = "default_cam_pitch")]
+    pub pitch: f32,
+    #[serde(default = "default_cam_scale")]
+    pub scale: f32,
+    #[serde(default)]
+    pub target: Option<[f32; 3]>,
+}
+
+fn default_cam_yaw() -> f32 {
+    180.0
+}
+fn default_cam_pitch() -> f32 {
+    90.0
+}
+fn default_cam_scale() -> f32 {
+    1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterConfig {
+    pub skin: String,
+    #[serde(default = "default_skin_type")]
+    pub skin_type: String,
+    #[serde(default)]
+    pub position: [f32; 3],
+    #[serde(default)]
+    pub rotation: [f32; 3],
+    #[serde(default = "default_posture")]
+    pub posture: String,
+    #[serde(default)]
+    pub nametag: Option<String>,
+    #[serde(default = "default_true")]
+    pub nametag_see_through: bool,
+    #[serde(default)]
+    pub cape: Option<String>,
+    #[serde(default)]
+    pub elytra: Option<String>,
+}
+
+fn default_skin_type() -> String {
+    "classic".to_string()
+}
+fn default_posture() -> String {
+    "idle".to_string()
+}
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug)]
+pub enum SceneConfigError {
+    Io(std::io::Error),
+    Json(serde_json::Error),
+    Toml(toml::de::Error),
+    InvalidSkinType(String),
+    InvalidPosture(String),
+    InvalidPath(String),
+    Core(EidolonError),
+}
+
+impl std::fmt::Display for SceneConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "scene config I/O error: {e}"),
+            Self::Json(e) => write!(f, "scene config JSON parse error: {e}"),
+            Self::Toml(e) => write!(f, "scene config TOML parse error: {e}"),
+            Self::InvalidSkinType(s) => write!(f, "invalid skin_type: {s}"),
+            Self::InvalidPosture(s) => write!(f, "invalid posture: {s}"),
+            Self::InvalidPath(s) => write!(f, "invalid path in scene config: {s}"),
+            Self::Core(e) => write!(f, "core renderer error in scene config: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SceneConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Json(e) => Some(e),
+            Self::Toml(e) => Some(e),
+            Self::Core(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for SceneConfigError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for SceneConfigError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Json(e)
+    }
+}
+
+impl From<toml::de::Error> for SceneConfigError {
+    fn from(e: toml::de::Error) -> Self {
+        Self::Toml(e)
+    }
+}
+
+impl From<EidolonError> for SceneConfigError {
+    fn from(e: EidolonError) -> Self {
+        Self::Core(e)
+    }
+}
+
+impl CharacterConfig {
+    pub fn parse_skin_type(&self) -> Result<SkinType, SceneConfigError> {
+        match self.skin_type.to_lowercase().as_str() {
+            "classic" => Ok(SkinType::Classic),
+            "slim" => Ok(SkinType::Slim),
+            other => Err(SceneConfigError::InvalidSkinType(other.to_string())),
+        }
+    }
+
+    pub fn parse_posture(&self) -> Result<Posture, SceneConfigError> {
+        match self.posture.to_lowercase().as_str() {
+            "idle" => Ok(crate::args::PostureCli::Idle.into()),
+            "walk" => Ok(crate::args::PostureCli::Walk.into()),
+            "run" => Ok(crate::args::PostureCli::Run.into()),
+            "wave" => Ok(crate::args::PostureCli::Wave.into()),
+            "fly" => Ok(crate::args::PostureCli::Fly.into()),
+            other => Err(SceneConfigError::InvalidPosture(other.to_string())),
+        }
+    }
+}
+
+pub fn parse_scene_config_str(
+    content: &str,
+    is_toml: bool,
+) -> Result<SceneConfigFile, SceneConfigError> {
+    if is_toml {
+        toml::from_str(content).map_err(SceneConfigError::Toml)
+    } else {
+        serde_json::from_str(content).map_err(SceneConfigError::Json)
+    }
+}
+
+pub fn load_scene_from_config<P: AsRef<Path>>(
+    renderer: &Renderer,
+    config_path: P,
+) -> Result<Scene, SceneConfigError> {
+    let path = config_path.as_ref();
+    let content = std::fs::read_to_string(path)?;
+    let is_toml = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"));
+    let config = parse_scene_config_str(&content, is_toml)?;
+    let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+    let (camera, auto_frame) = if let Some(cam) = config.camera {
+        (
+            Camera {
+                yaw: cam.yaw,
+                pitch: cam.pitch,
+                scale: cam.scale,
+                target: cam.target.unwrap_or([0.0, 1.0, 0.0]),
+            },
+            false,
+        )
+    } else {
+        (Camera::default(), true)
+    };
+
+    let mut scene = Scene::new(camera);
+
+    for char_cfg in config.characters {
+        let skin_type = char_cfg.parse_skin_type()?;
+        let skin_path = base_dir.join(&char_cfg.skin);
+        let skin_path_str = skin_path.to_str().ok_or_else(|| {
+            SceneConfigError::InvalidPath(format!(
+                "invalid unicode in skin path: {}",
+                skin_path.display()
+            ))
+        })?;
+
+        let body = renderer.load_body(skin_path_str, skin_type)?;
+        let mut character = Character::from_body(body);
+        character.position = cgmath::Vector3::new(
+            char_cfg.position[0],
+            char_cfg.position[1],
+            char_cfg.position[2],
+        );
+        character.rotation = cgmath::Vector3::new(
+            char_cfg.rotation[0],
+            char_cfg.rotation[1],
+            char_cfg.rotation[2],
+        );
+        character.posture = char_cfg.parse_posture()?;
+        character.nametag = char_cfg.nametag;
+        character.nametag_see_through = char_cfg.nametag_see_through;
+
+        if let Some(cape_rel) = char_cfg.cape {
+            let cape_path = base_dir.join(cape_rel);
+            let cape_path_str = cape_path.to_str().ok_or_else(|| {
+                SceneConfigError::InvalidPath(format!(
+                    "invalid unicode in cape path: {}",
+                    cape_path.display()
+                ))
+            })?;
+            let atlas = renderer.load_back_equipment_atlas(cape_path_str)?;
+            character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+        } else if let Some(elytra_rel) = char_cfg.elytra {
+            let elytra_path = base_dir.join(elytra_rel);
+            let elytra_path_str = elytra_path.to_str().ok_or_else(|| {
+                SceneConfigError::InvalidPath(format!(
+                    "invalid unicode in elytra path: {}",
+                    elytra_path.display()
+                ))
+            })?;
+            let atlas = renderer.load_back_equipment_atlas(elytra_path_str)?;
+            character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
+        }
+
+        scene.add_character(character);
+    }
+
+    if auto_frame && !scene.characters.is_empty() {
+        scene.auto_frame_camera(60.0, 16.0 / 9.0);
+    }
+
+    Ok(scene)
+}
 
 #[derive(Debug)]
 pub struct SceneState {
@@ -111,6 +355,7 @@ pub fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Came
         yaw: scene.cam_yaw,
         pitch: scene.cam_pitch,
         scale: scene.cam_zoom,
+        target: [0.0, 1.0, 0.0],
     };
     (state, camera)
 }
@@ -314,5 +559,59 @@ mod tests {
         assert_eq!(state.rotation.x, 10.0);
         assert_eq!(state.rotation.y, 20.0);
         assert_eq!(state.rotation.z, 30.0);
+    }
+
+    #[test]
+    fn parse_scene_config_json_and_toml() {
+        let json_data = r#"{
+            "camera": {
+                "yaw": 195.0,
+                "pitch": 80.0,
+                "scale": 1.5
+            },
+            "characters": [
+                {
+                    "skin": "steve.png",
+                    "skin_type": "classic",
+                    "position": [-1.0, 0.0, 0.5],
+                    "posture": "walk",
+                    "nametag": "Steve"
+                },
+                {
+                    "skin": "alex.png",
+                    "skin_type": "slim",
+                    "posture": "wave"
+                }
+            ]
+        }"#;
+
+        let parsed_json = parse_scene_config_str(json_data, false).unwrap();
+        assert_eq!(parsed_json.characters.len(), 2);
+        let cam = parsed_json.camera.unwrap();
+        assert_eq!(cam.yaw, 195.0);
+        assert_eq!(cam.scale, 1.5);
+        assert_eq!(parsed_json.characters[0].skin, "steve.png");
+        assert_eq!(
+            parsed_json.characters[0].parse_skin_type().unwrap(),
+            SkinType::Classic
+        );
+        assert_eq!(
+            parsed_json.characters[1].parse_skin_type().unwrap(),
+            SkinType::Slim
+        );
+
+        let toml_data = r#"
+            [camera]
+            yaw = 200.0
+            pitch = 85.0
+            scale = 2.0
+
+            [[characters]]
+            skin = "steve.png"
+            posture = "idle"
+        "#;
+        let parsed_toml = parse_scene_config_str(toml_data, true).unwrap();
+        assert_eq!(parsed_toml.characters.len(), 1);
+        assert_eq!(parsed_toml.camera.unwrap().yaw, 200.0);
     }
 }

@@ -30,8 +30,8 @@ pnpm --dir examples/wasm run test:e2e
 
 ## Testing Notes
 
-- **Core Engine Unit Tests** (`crates/core`): 111 unit tests covering camera matrix computation, skin conversion, texture inspection/classification, animation presets and timelines, nametag rasterization, model loading, and output encoding. Run with `cargo test -p eidolon-core --lib -- --test-threads=1`.
-- **CLI Tests** (`crates/cli`): 55 integration tests verifying argument parsing, default options, and subcommand flags. Run with `cargo test -p eidolon-cli`.
+- **Core Engine Unit Tests** (`crates/core`): 116 unit tests covering camera matrix computation, skin conversion, texture inspection/classification, animation presets and timelines, nametag rasterization, model loading, and output encoding. Run with `cargo test -p eidolon-core --lib -- --test-threads=1`.
+- **CLI Tests** (`crates/cli`): 59 integration tests verifying argument parsing, default options, and subcommand flags. Run with `cargo test -p eidolon-cli`.
 - **WASM Browser E2E Tests** (`examples/wasm`): 13 Playwright tests verifying WebGPU canvas rendering, playback, responsive controls, and format export in a browser environment. Run with `pnpm --dir examples/wasm run test:e2e`.
 
 Smoke-test rendering manually:

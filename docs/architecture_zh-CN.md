@@ -8,36 +8,37 @@ Eidolon 由一个命令行程序和一个可复用渲染库组成。命令行负
 Eidolon 采用 Cargo + pnpm Monorepo 架构：
 
 - `crates/core` (`eidolon-core`)：纯渲染引擎核心库。
-  - `src/lib.rs` 暴露核心模块：`animation`、`assets`、`back_equipment`、`body`、`camera`、`character`、`classifier`、`constants`、`converter`、`error`、`model`、`output`、`renderer`。
+  - `src/lib.rs` 暴露核心模块：`animation`、`assets`、`back_equipment`、`body`、`camera`、`character`、`classifier`、`constants`、`converter`、`error`、`model`、`output`、`renderer`、`scene`。
   - `src/animation.rs` 提供无状态 `AnimationPreset` 采样、有状态 `AnimationTimeline` 播放，以及确定性的 `AnimationSchedule` 帧时刻。
   - `src/classifier.rs` 提供纹理检测、高清倍率推导与自动分类（`inspect_texture`、`classify_texture`）。
   - `src/output.rs` 负责输出意图、路径、格式校验、动画 timing、编码和文件写入（PNG、WebP、GIF、APNG、AVIF）。
   - `src/error.rs` 定义公共 API 统一返回的类型化错误枚举 `EidolonError`。
   - `src/body.rs` 定义持有 Skin 与 classic/slim 几何选择的 `Body`。
   - `src/back_equipment.rs` 定义披风与鞘翅共享的后背装备图集及呈现形式。
-  - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵。
+  - `src/camera.rs` 为轨道相机计算 view 与 projection 矩阵，支持自定义 target。
   - `src/character.rs` 定义资源所有权、姿势预设和角色变换；Character 始终至少包含 Body 或后背装备。
+  - `src/scene.rs` 定义包含多个 `Character` 实体的 `Scene`、场景 AABB 包围盒计算及 `auto_frame_camera` 自动构图。
   - `src/model.rs` 从 `resources/` 加载 classic 与 slim OBJ 模型，支持从文件路径或内存字节加载。
   - `src/converter.rs` 实现单层皮肤图集到双层图集的转换。
   - 私有的 `src/cape.rs` 和 `src/elytra.rs` 使用 skinview3d 图集映射构建 Renderer 持有的网格。
   - 私有的 `src/texture.rs` 上传 PNG 图集，并在需要时自动展开旧版单层 Skin。
   - `src/renderer/` 包含共享的 `wgpu` 渲染器拆分子模块：
-    - `mod.rs` — `Renderer` 结构体：无头及窗口化创建、render pass 编码、公共渲染 API。
+    - `mod.rs` — `Renderer` 结构体：无头及窗口化创建、单 Pass 多角色渲染与动态 uniform 分块、公共渲染 API。
     - `nametag.rs` — Minecraft / Unifont 文本光栅化、标签缓存几何与 billboard 变换。
     - `pipeline.rs` — 基于嵌入式 WGSL 着色器构建 wgpu 渲染管线。
     - `readback.rs` — GPU → CPU 缓冲区复制（处理行对齐 padding）、映射读取为 `ImageBuffer`。
-    - `uniforms.rs` — 各身体部件 uniform 数据及绘制顺序控制（`PartId`、`PART_CONFIGS`）。
+    - `uniforms.rs` — 各身体部件 uniform 数据及动态 uniform 缓冲区切分（每 chunk 最多 16 个角色）、绘制顺序控制（`PartId`、`PART_CONFIGS`）。
   - `benches/performance_benchmark.rs` 定义覆盖分辨率缩放、场景变化、资源加载、图像处理、动画采样以及静态/动画导出的 Criterion 基准测试套件。
 - `crates/cli` (`eidolon-cli`)：命令行程序二进制（`eidolon`）。
   - `src/main.rs`：31 行精简入口，初始化日志并分发子命令。
   - `src/args.rs`：使用 Clap 定义参数结构体与枚举（`Cli`、`Command`、`SceneArgs`、`ViewportArgs`、`RenderAnimationArgs`）。
-  - `src/commands.rs`：处理 `render`、`convert` 和 `identify` 子命令的执行逻辑。
-  - `src/preview.rs`：基于 `winit` 和 `wgpu` surface 实现桌面端交互式预览窗口循环。
-  - `src/scene.rs`：解析场景通用状态、关节/装备姿态覆盖和相机参数。
+  - `src/commands.rs`：处理 `render`、`convert` 和 `identify` 子命令的执行逻辑，支持 `--scene-config`。
+  - `src/preview.rs`：基于 `winit` 和 `wgpu` surface 实现桌面端交互式预览窗口循环（支持单角色与多角色场景）。
+  - `src/scene.rs`：解析场景通用状态、JSON/TOML 场景配置解析、关节/装备姿态覆盖和相机参数。
 - `crates/wasm` (`eidolon-wasm`)：WebAssembly 绑定与 `@eidolonmc/wasm` npm 包。
   - `src/lib.rs`：WASM 模块入口、日志与 panic hook 初始化、重导出。
   - `src/classifier.rs`：`inspect_texture` JS 绑定，返回 `JsTextureReport`。
-  - `src/renderer.rs`：`CanvasRenderer` 实时 WebGPU 画布呈现、动画时间轴控制与离屏截图。
+  - `src/renderer.rs`：`CanvasRenderer` 实时 WebGPU 画布呈现、动画时间轴控制、多角色实体管理 API 与离屏截图。
 - `examples/rust`：依赖 `eidolon-core` 的 Rust 调用示例。
 - `examples/wasm`：基于 Vite 的 Web 端交互演示与自动化评测套件。
 

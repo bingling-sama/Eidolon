@@ -229,8 +229,13 @@ pub enum Command {
     /// Static output accepts PNG or WebP. With --animate, output accepts
     /// GIF or Animated WebP.
     Render {
-        /// Path to the skin PNG file.
-        skin: String,
+        /// Path to the skin PNG file. Required unless --scene-config is specified.
+        #[arg(required_unless_present = "scene_config")]
+        skin: Option<String>,
+
+        /// Path to scene configuration file (JSON or TOML).
+        #[arg(long)]
+        scene_config: Option<PathBuf>,
 
         /// Output path. Defaults to output.png, or output.webp with --animate.
         output: Option<String>,
@@ -246,8 +251,13 @@ pub enum Command {
     },
     /// Open a live preview window.
     Preview {
-        /// Path to the skin PNG file.
-        skin: String,
+        /// Path to the skin PNG file. Required unless --scene-config is specified.
+        #[arg(required_unless_present = "scene_config")]
+        skin: Option<String>,
+
+        /// Path to scene configuration file (JSON or TOML).
+        #[arg(long)]
+        scene_config: Option<PathBuf>,
 
         /// Use a transparent window background instead of the opaque backdrop.
         #[arg(long)]
@@ -360,18 +370,48 @@ mod tests {
     // ── CLI arg parsing ──
 
     #[test]
+    fn cli_render_scene_config_parses() {
+        let args = Args::try_parse_from(["eidolon", "render", "--scene-config", "scene.json"])
+            .expect("scene config render parse");
+        match args.command {
+            Command::Render {
+                skin, scene_config, ..
+            } => {
+                assert_eq!(skin, None);
+                assert_eq!(scene_config, Some(PathBuf::from("scene.json")));
+            }
+            _ => panic!("Expected Render"),
+        }
+
+        let preview_args =
+            Args::try_parse_from(["eidolon", "preview", "--scene-config", "scene.toml"])
+                .expect("scene config preview parse");
+        match preview_args.command {
+            Command::Preview {
+                skin, scene_config, ..
+            } => {
+                assert_eq!(skin, None);
+                assert_eq!(scene_config, Some(PathBuf::from("scene.toml")));
+            }
+            _ => panic!("Expected Preview"),
+        }
+    }
+
+    #[test]
     fn cli_render_minimal() {
         let args =
             Args::try_parse_from(["eidolon", "render", "skin.png"]).expect("minimal render parse");
         match args.command {
             Command::Render {
                 skin,
+                scene_config,
                 output,
                 viewport,
                 scene,
                 animation,
             } => {
-                assert_eq!(skin, "skin.png");
+                assert_eq!(skin, Some("skin.png".to_owned()));
+                assert_eq!(scene_config, None);
                 assert_eq!(output, None);
                 assert_eq!(viewport.width, 800);
                 assert_eq!(viewport.height, 600);
@@ -393,12 +433,14 @@ mod tests {
         match args.command {
             Command::Render {
                 skin,
+                scene_config,
                 output,
                 viewport,
                 scene,
                 animation,
             } => {
-                assert_eq!(skin, "skin.png");
+                assert_eq!(skin, Some("skin.png".to_owned()));
+                assert_eq!(scene_config, None);
                 assert_eq!(output, None);
                 assert_eq!(scene.posture, PostureCli::Idle);
                 assert!(animation.animate);
@@ -733,8 +775,9 @@ mod tests {
                 viewport,
                 scene,
                 animation,
+                ..
             } => {
-                assert_eq!(skin, "skin.png");
+                assert_eq!(skin.as_deref(), Some("skin.png"));
                 assert_eq!(output.as_deref(), Some("out.webp"));
                 assert!(!animation.animate);
                 assert_eq!(viewport.width, 400);
@@ -824,7 +867,7 @@ mod tests {
                 scene,
                 ..
             } => {
-                assert_eq!(skin, "skin.png");
+                assert_eq!(skin.as_deref(), Some("skin.png"));
                 assert_eq!(viewport.width, 800);
                 assert_eq!(viewport.height, 600);
                 assert!(!scene.slim);
@@ -857,7 +900,7 @@ mod tests {
                 scene,
                 ..
             } => {
-                assert_eq!(skin, "skin.png");
+                assert_eq!(skin.as_deref(), Some("skin.png"));
                 assert_eq!(viewport.width, 1024);
                 assert_eq!(viewport.height, 768);
                 assert!(scene.slim);

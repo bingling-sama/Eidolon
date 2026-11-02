@@ -17,17 +17,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match args.command {
         Command::Render {
             skin,
+            scene_config,
             output,
             viewport,
             scene,
             animation,
-        } => run_render(skin, output, viewport, scene, animation),
+        } => run_render(skin, scene_config, output, viewport, scene, animation),
         Command::Preview {
             skin,
+            scene_config,
             transparent,
             viewport,
             scene,
-        } => run_preview(skin, viewport, scene, transparent),
+        } => run_preview(skin, scene_config, viewport, scene, transparent),
         Command::Convert { input, output } => run_convert(input, output),
         Command::Identify { texture, json } => run_identify(texture, json),
     }

@@ -14,13 +14,14 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 
 | Arg | Description | Default |
 |-----|-------------|---------|
-| `<SKIN>` | Path to the skin PNG file | *(required)* |
+| `<SKIN>` | Path to the skin PNG file. Required unless `--scene-config` is specified | *(required unless --scene-config)* |
 | `[OUTPUT]` | Output path. Static: `.png`/`.webp`; animated: `.gif`/`.webp`/`.apng`/`.avif` | `output.png`, or `output.webp` with `--animate` |
 
 **Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--scene-config <PATH>` | Path to scene configuration file (JSON or TOML) | *(none)* |
 | `--width <PX>` | Output width in pixels | `800` |
 | `--height <PX>` | Output height in pixels | `600` |
 | `--animate` | Render a complete animation cycle instead of one frame | *(disabled)* |
@@ -89,6 +90,9 @@ eidolon render skin.png --cam-yaw 210 --cam-pitch 80 --cam-zoom 1.2
 # Override individual joints on top of a posture preset
 eidolon render skin.png --posture walk --head-pitch 15 --left-arm-roll 30
 
+# Render multi-character scene from configuration (JSON or TOML)
+eidolon render --scene-config scene.json output.png
+
 # Animated exports (GIF, Animated WebP, APNG, AVIF)
 eidolon render skin.png walk.gif --animate --posture walk
 eidolon render skin.png fly.webp --animate --posture fly --elytra cape.png --fps 60 --speed 1.5
@@ -96,6 +100,41 @@ eidolon render skin.png wave.gif --animate --posture wave --loop-count 3 --width
 eidolon render skin.png run.apng --animate --posture run
 eidolon render skin.png dance.avif --animate --posture dance
 ```
+
+### Scene Configuration Format
+
+When rendering or previewing multi-character scenes via `--scene-config <PATH>`, configuration can be provided as JSON or TOML. A formal JSON Schema definition is provided at `schemas/scene.json`.
+
+Example `scene.json`:
+```json
+{
+  "$schema": "./schemas/scene.json",
+  "camera": {
+    "yaw": 200.0,
+    "pitch": 80.0,
+    "scale": 1.2,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "steve.png",
+      "skin_type": "classic",
+      "position": [-1.0, 0.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve",
+      "cape": "cape.png"
+    },
+    {
+      "skin": "alex.png",
+      "skin_type": "slim",
+      "position": [1.0, 0.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    }
+  ]
+}
+```
+If the `camera` block is omitted, the camera automatically auto-frames to encompass all characters in the scene.
 
 Format is inferred from the output filename extension. Static output supports PNG (`.png`) and WebP (`.webp`). Animated output supports GIF (`.gif`), WebP (`.webp`), APNG (`.apng`), and AVIF (`.avif`).
 The output path must not contain `..` components (directory traversal is rejected).
@@ -131,6 +170,7 @@ one the transparent area shows black).
 ```bash
 eidolon preview skin.png
 eidolon preview skin.png --slim --cam-zoom 2.0
+eidolon preview --scene-config scene.json
 eidolon preview skin.png --nametag Steve
 eidolon preview skin.png --cape cape.png
 eidolon preview skin.png --elytra cape.png

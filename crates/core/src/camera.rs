@@ -1,6 +1,6 @@
 use cgmath::{perspective, Deg, Matrix4, Point3, Vector3};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
     /// Orbit yaw around the look-at target (degrees). Used in [`Camera::get_view_matrix`].
     pub yaw: f32,
@@ -9,6 +9,8 @@ pub struct Camera {
     /// Magnification. Implemented as a lens zoom: the orbit radius stays fixed and the field
     /// of view narrows, so a closer look does not exaggerate perspective.
     pub scale: f32,
+    /// Look-at target center in world coordinates. Defaults to (0.0, 1.0, 0.0).
+    pub target: [f32; 3],
 }
 
 impl Default for Camera {
@@ -17,6 +19,7 @@ impl Default for Camera {
             yaw: 180.0,
             pitch: 90.0,
             scale: 1.0,
+            target: [0.0, 1.0, 0.0],
         }
     }
 }
@@ -41,12 +44,12 @@ impl Camera {
         let yaw_rad = self.yaw.to_radians();
         let pitch_rad = (self.pitch - 90.0).to_radians();
 
-        let eye_x = distance * yaw_rad.sin() * pitch_rad.cos();
-        let eye_y = 1.0 + distance * pitch_rad.sin();
-        let eye_z = distance * yaw_rad.cos() * pitch_rad.cos();
+        let eye_x = self.target[0] + distance * yaw_rad.sin() * pitch_rad.cos();
+        let eye_y = self.target[1] + distance * pitch_rad.sin();
+        let eye_z = self.target[2] + distance * yaw_rad.cos() * pitch_rad.cos();
 
         let eye = Point3::new(eye_x, eye_y, eye_z);
-        let center = Point3::new(0.0, 1.0, 0.0);
+        let center = Point3::new(self.target[0], self.target[1], self.target[2]);
         let up = Vector3::new(0.0, 1.0, 0.0);
 
         Matrix4::look_at_rh(eye, center, up).into()
@@ -79,6 +82,7 @@ mod tests {
             yaw: 180.0,
             pitch: 90.0,
             scale: 1.0,
+            target: [0.0, 1.0, 0.0],
         };
         let view = camera.get_view_matrix();
         // view matrix should be non-identity and finite
@@ -96,6 +100,7 @@ mod tests {
                 yaw: 0.0,
                 pitch: 90.0,
                 scale,
+                target: [0.0, 1.0, 0.0],
             }
             .get_projection_matrix(800, 600);
             2.0 * (1.0 / proj[1][1]).atan().to_degrees()
@@ -125,11 +130,13 @@ mod tests {
             yaw: 0.0,
             pitch: 90.0,
             scale: 2.0,
+            target: [0.0, 1.0, 0.0],
         };
         let wide = Camera {
             yaw: 0.0,
             pitch: 90.0,
             scale: 1.0,
+            target: [0.0, 1.0, 0.0],
         };
         // A lens zoom keeps the orbit radius fixed, so the view matrix is unchanged...
         assert_eq!(zoomed.get_view_matrix(), wide.get_view_matrix());

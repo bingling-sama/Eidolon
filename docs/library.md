@@ -55,7 +55,7 @@ Key points:
 - `Character` owns its per-character visual resources. It must contain a `Body` or Back equipment.
 - `Body` combines a Skin with `SkinType`; single-layer Skins are expanded automatically when loaded.
 - Cloning a `Character`, `Body`, or `BackEquipmentAtlas` shares immutable GPU resources. Resources can only be rendered by the `Renderer` that loaded them; load them again for another Renderer.
-- `Camera::new()` defaults: yaw 180° (front view), pitch 90° (level), scale 1.0.
+- `Camera::new()` defaults: yaw 180° (front view), pitch 90° (level), scale 1.0, target `[0.0, 1.0, 0.0]`.
 - `StaticFormat` supports `Png` and `WebP`. `OutputIntent` makes the requested format explicit; the output module normalizes the filename extension and returns the final path.
 - `AnimationFormat` supports `Gif`, animated `WebP`, `Apng`, and `Avif`. `OutputIntent::Animation` accepts an `AnimationPreset`, FPS, speed multiplier, loop count, and frame producer, then returns the final path.
 
@@ -104,6 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         yaw: 210.0,
         pitch: 90.0,
         scale: 1.2,
+        target: [0.0, 1.0, 0.0],
     };
 
     write_output(
@@ -118,6 +119,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Multi-Character Scene
+
+Manage and render multiple characters in a shared 3D scene using `Scene`:
+
+```rust
+use cgmath::Vector3;
+use eidolon::{
+    camera::Camera,
+    character::{Character, DefaultPostures, SkinType},
+    output::{write_output, OutputIntent, StaticFormat},
+    renderer::Renderer,
+    scene::Scene,
+};
+use std::time::Duration;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = Renderer::new()?;
+
+    let mut scene = Scene::new(Camera {
+        yaw: 200.0,
+        pitch: 80.0,
+        scale: 1.2,
+        target: [0.0, 1.0, 0.0],
+    });
+
+    let steve_body = renderer.load_body("steve.png", SkinType::Classic)?;
+    let mut steve = Character::from_body(steve_body);
+    steve.position = Vector3::new(-1.2, 0.0, 0.0);
+    steve.nametag = Some("Steve".to_owned());
+    scene.add_character(steve);
+
+    let alex_body = renderer.load_body("alex.png", SkinType::Slim)?;
+    let mut alex = Character::from_body(alex_body);
+    alex.position = Vector3::new(1.2, 0.0, 0.0);
+    alex.posture = DefaultPostures::WAVE;
+    alex.nametag = Some("Alex".to_owned());
+    scene.add_character(alex);
+
+    write_output(
+        "scene.png",
+        OutputIntent::Static {
+            format: StaticFormat::Png,
+            size: (1280, 720),
+        },
+        |_: Duration| renderer.render_scene(&scene, 1280, 720),
+    )?;
+
+    Ok(())
+}
+```
+
+Multi-character features:
+- `Scene::new(camera)` creates a multi-character container with its own camera.
+- `scene.add_character(character)` appends character entities. Characters are positioned and rotated in world space via `character.position` and `character.rotation` (`cgmath::Vector3<f32>`).
+- `scene.compute_bounding_box()` calculates the combined scene-space AABB bounding box `(Point3<f32>, Point3<f32>)` across all characters.
+- `scene.auto_frame_camera(fov_deg, aspect_ratio)` automatically adjusts the camera target position and zoom scale to frame all characters.
+- `renderer.render_scene(&scene, width, height)` renders all characters in a single render pass with 3 phases (Phase 1: character bodies/layers, Phase 2: occluded translucent nametags, Phase 3: front nametags) and dynamic uniform chunking.
 
 ## Custom Posture
 
@@ -244,6 +303,7 @@ composition visual.
 - `Model::load_from_obj_bytes()` is available for loading OBJ data from memory.
 - `Camera::scale` (renamed `cam_zoom` in the CLI) magnifies with a lens zoom: the orbit radius is
   fixed and the field of view narrows as `scale` grows.
+- `Camera::target` sets the look-at point in world space (default `[0.0, 1.0, 0.0]` centers on the character torso). In interactive preview, panning shifts `target` parallel to the camera view plane.
 - Character rotation is Euler: X first, then Y, then Z.
 - Set `Character::nametag` to `Some(name)` to draw an unlit, camera-facing label above the player.
   The label uses the bundled Minecraft pixel font (with Unifont fallback for Unicode), a white glyph shadow, a translucent black
