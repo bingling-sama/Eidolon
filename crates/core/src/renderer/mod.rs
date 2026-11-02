@@ -22,7 +22,7 @@ use crate::model::ModelCatalog;
 use crate::scene::Scene;
 use crate::texture::Texture;
 
-pub use uniforms::{MAX_SCENE_CHARACTERS, UNIFORM_SLOTS_PER_CHARACTER};
+pub(crate) use uniforms::{MAX_SCENE_CHARACTERS, UNIFORM_SLOTS_PER_CHARACTER};
 
 use nametag::{compute_nametag_uniform, CachedNametag, NametagPass};
 use pipeline::{create_nametag_pipeline, create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};

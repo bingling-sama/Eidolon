@@ -27,5 +27,3 @@ pub mod scene;
 #[cfg(test)]
 mod test_support;
 mod texture;
-
-pub use scene::Scene;

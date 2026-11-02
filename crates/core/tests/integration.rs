@@ -14,7 +14,7 @@ use eidolon_core::character::{Character, CharacterError, DefaultPostures, Postur
 use eidolon_core::model::Model;
 use eidolon_core::output::{write_output, OutputIntent, StaticFormat};
 use eidolon_core::renderer::Renderer;
-use eidolon_core::Scene;
+use eidolon_core::scene::Scene;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
