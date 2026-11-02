@@ -163,6 +163,12 @@ impl TextureFetcher {
             )));
         }
 
+        if session_resp.status() == reqwest::StatusCode::BAD_REQUEST {
+            return Err(AppError::BadRequest(format!(
+                "Invalid UUID or parameters for Mojang session server for player '{name}'."
+            )));
+        }
+
         if session_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(AppError::FetchError(
                 "Mojang session API rate limit exceeded (HTTP 429)".to_string(),
