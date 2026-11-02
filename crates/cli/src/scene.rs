@@ -72,39 +72,100 @@ fn default_true() -> bool {
     true
 }
 
+#[derive(Debug)]
+pub enum SceneConfigError {
+    Io(std::io::Error),
+    Json(serde_json::Error),
+    Toml(toml::de::Error),
+    InvalidSkinType(String),
+    InvalidPosture(String),
+    InvalidPath(String),
+    Core(EidolonError),
+}
+
+impl std::fmt::Display for SceneConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "scene config I/O error: {e}"),
+            Self::Json(e) => write!(f, "scene config JSON parse error: {e}"),
+            Self::Toml(e) => write!(f, "scene config TOML parse error: {e}"),
+            Self::InvalidSkinType(s) => write!(f, "invalid skin_type: {s}"),
+            Self::InvalidPosture(s) => write!(f, "invalid posture: {s}"),
+            Self::InvalidPath(s) => write!(f, "invalid path in scene config: {s}"),
+            Self::Core(e) => write!(f, "core renderer error in scene config: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SceneConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Json(e) => Some(e),
+            Self::Toml(e) => Some(e),
+            Self::Core(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for SceneConfigError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for SceneConfigError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Json(e)
+    }
+}
+
+impl From<toml::de::Error> for SceneConfigError {
+    fn from(e: toml::de::Error) -> Self {
+        Self::Toml(e)
+    }
+}
+
+impl From<EidolonError> for SceneConfigError {
+    fn from(e: EidolonError) -> Self {
+        Self::Core(e)
+    }
+}
+
 impl CharacterConfig {
-    pub fn parse_skin_type(&self) -> Result<SkinType, EidolonError> {
+    pub fn parse_skin_type(&self) -> Result<SkinType, SceneConfigError> {
         match self.skin_type.to_lowercase().as_str() {
             "classic" => Ok(SkinType::Classic),
             "slim" => Ok(SkinType::Slim),
-            other => Err(EidolonError::conversion(format!("unknown skin_type: {other}"))),
+            other => Err(SceneConfigError::InvalidSkinType(other.to_string())),
         }
     }
 
-    pub fn parse_posture(&self) -> Result<Posture, EidolonError> {
+    pub fn parse_posture(&self) -> Result<Posture, SceneConfigError> {
         match self.posture.to_lowercase().as_str() {
             "idle" => Ok(crate::args::PostureCli::Idle.into()),
             "walk" => Ok(crate::args::PostureCli::Walk.into()),
             "run" => Ok(crate::args::PostureCli::Run.into()),
             "wave" => Ok(crate::args::PostureCli::Wave.into()),
             "fly" => Ok(crate::args::PostureCli::Fly.into()),
-            other => Err(EidolonError::conversion(format!("unknown posture: {other}"))),
+            other => Err(SceneConfigError::InvalidPosture(other.to_string())),
         }
     }
 }
 
-pub fn parse_scene_config_str(content: &str, is_toml: bool) -> Result<SceneConfigFile, EidolonError> {
+pub fn parse_scene_config_str(content: &str, is_toml: bool) -> Result<SceneConfigFile, SceneConfigError> {
     if is_toml {
-        toml::from_str(content).map_err(|e| EidolonError::conversion(format!("failed to parse TOML scene config: {e}")))
+        toml::from_str(content).map_err(SceneConfigError::Toml)
     } else {
-        serde_json::from_str(content).map_err(|e| EidolonError::conversion(format!("failed to parse JSON scene config: {e}")))
+        serde_json::from_str(content).map_err(SceneConfigError::Json)
     }
 }
 
 pub fn load_scene_from_config<P: AsRef<Path>>(
     renderer: &Renderer,
     config_path: P,
-) -> Result<Scene, EidolonError> {
+) -> Result<Scene, SceneConfigError> {
     let path = config_path.as_ref();
     let content = std::fs::read_to_string(path)?;
     let is_toml = path.extension().and_then(|s| s.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("toml"));
@@ -128,7 +189,7 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         let skin_type = char_cfg.parse_skin_type()?;
         let skin_path = base_dir.join(&char_cfg.skin);
         let skin_path_str = skin_path.to_str().ok_or_else(|| {
-            EidolonError::invalid_path(format!("invalid unicode in skin path: {}", skin_path.display()))
+            SceneConfigError::InvalidPath(format!("invalid unicode in skin path: {}", skin_path.display()))
         })?;
 
         let body = renderer.load_body(skin_path_str, skin_type)?;
@@ -150,14 +211,14 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         if let Some(cape_rel) = char_cfg.cape {
             let cape_path = base_dir.join(cape_rel);
             let cape_path_str = cape_path.to_str().ok_or_else(|| {
-                EidolonError::invalid_path(format!("invalid unicode in cape path: {}", cape_path.display()))
+                SceneConfigError::InvalidPath(format!("invalid unicode in cape path: {}", cape_path.display()))
             })?;
             let atlas = renderer.load_back_equipment_atlas(cape_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
         } else if let Some(elytra_rel) = char_cfg.elytra {
             let elytra_path = base_dir.join(elytra_rel);
             let elytra_path_str = elytra_path.to_str().ok_or_else(|| {
-                EidolonError::invalid_path(format!("invalid unicode in elytra path: {}", elytra_path.display()))
+                SceneConfigError::InvalidPath(format!("invalid unicode in elytra path: {}", elytra_path.display()))
             })?;
             let atlas = renderer.load_back_equipment_atlas(elytra_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));

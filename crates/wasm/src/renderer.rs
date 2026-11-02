@@ -521,6 +521,23 @@ impl CanvasRenderer {
         Ok(())
     }
 
+    /// Set elytra for an existing character entity.
+    pub fn set_character_elytra(&mut self, id: u32, elytra_bytes: &[u8]) -> Result<(), JsValue> {
+        let atlas = self
+            .inner
+            .load_back_equipment_atlas_from_memory(elytra_bytes)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let equipment = BackEquipment::new(atlas, BackEquipmentKind::Elytra);
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.equip(equipment);
+        Ok(())
+    }
+
+    /// Clear elytra/back equipment for an existing character entity.
+    pub fn clear_character_elytra(&mut self, id: u32) -> Result<(), JsValue> {
+        self.clear_character_cape(id)
+    }
+
     /// Set posture for an existing character entity by name.
     pub fn set_character_posture(&mut self, id: u32, posture_name: &str) -> Result<(), JsValue> {
         let posture = parse_posture_str(posture_name)?;

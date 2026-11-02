@@ -91,7 +91,7 @@ pub(crate) fn create_nametag_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: Some(false),
+            depth_write_enabled: Some(pass.depth_write_enabled()),
             depth_compare: Some(pass.depth_compare()),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),

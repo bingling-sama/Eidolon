@@ -31,8 +31,15 @@ pub(crate) enum NametagPass {
 impl NametagPass {
     pub fn depth_compare(self) -> wgpu::CompareFunction {
         match self {
-            Self::SeeThrough => wgpu::CompareFunction::Always,
+            Self::SeeThrough => wgpu::CompareFunction::GreaterEqual,
             Self::Normal => wgpu::CompareFunction::LessEqual,
+        }
+    }
+
+    pub fn depth_write_enabled(self) -> bool {
+        match self {
+            Self::SeeThrough => false,
+            Self::Normal => true,
         }
     }
 
@@ -417,13 +424,15 @@ mod tests {
     fn see_through_configuration_selects_vanilla_two_pass_rendering() {
         assert_eq!(
             NametagPass::SeeThrough.depth_compare(),
-            wgpu::CompareFunction::Always
+            wgpu::CompareFunction::GreaterEqual
         );
+        assert!(!NametagPass::SeeThrough.depth_write_enabled());
         assert_eq!(NametagPass::SeeThrough.fragment_entry(), "fs_see_through");
         assert_eq!(
             NametagPass::Normal.depth_compare(),
             wgpu::CompareFunction::LessEqual
         );
+        assert!(NametagPass::Normal.depth_write_enabled());
         assert_eq!(NametagPass::Normal.fragment_entry(), "fs_main");
     }
 }
