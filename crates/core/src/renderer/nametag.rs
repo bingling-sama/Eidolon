@@ -44,6 +44,7 @@ impl NametagPass {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn nametag_passes(see_through: bool) -> &'static [NametagPass] {
     const VANILLA_PASSES: &[NametagPass] = &[NametagPass::SeeThrough, NametagPass::Normal];
     const OCCLUDED_PASSES: &[NametagPass] = &[NametagPass::Normal];

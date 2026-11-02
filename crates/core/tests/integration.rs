@@ -14,6 +14,7 @@ use eidolon_core::character::{Character, CharacterError, DefaultPostures, Postur
 use eidolon_core::model::Model;
 use eidolon_core::output::{write_output, OutputIntent, StaticFormat};
 use eidolon_core::renderer::Renderer;
+use eidolon_core::Scene;
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
@@ -747,4 +748,189 @@ fn render_all_posture_presets_with_both_skin_types() {
             );
         }
     }
+}
+
+#[test]
+fn scene_multi_character_render_and_depth_occlusion() {
+    let renderer = make_renderer();
+    let steve_body = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .expect("load Steve failed");
+    let mut steve = Character::from_body(steve_body);
+    // Camera eye is at z = -4 looking toward z = 0.
+    // Smaller z is closer to the camera.
+    steve.position = cgmath::Vector3::new(0.0, 0.0, -0.5);
+
+    let alex_body = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .expect("load Alex failed");
+    let mut alex = Character::from_body(alex_body);
+    // Alex placed behind Steve (further along +Z axis from camera at -4)
+    alex.position = cgmath::Vector3::new(0.0, 0.0, 0.5);
+
+    let camera = camera_default();
+
+    // Render Steve alone
+    let steve_alone = renderer
+        .render(&steve, &camera, 200, 200)
+        .expect("render Steve alone failed");
+
+    // Render Scene with Steve in front and Alex behind
+    let scene = Scene::with_characters(vec![alex, steve.clone()], camera);
+    let scene_image = renderer
+        .render_scene(&scene, 200, 200)
+        .expect("render scene failed");
+
+    // Where Steve has opaque pixels in steve_alone, scene_image must match Steve's pixels exactly
+    // because Steve in front occludes Alex behind him.
+    let mut matching_steve_pixels = 0;
+    for (p_alone, p_scene) in steve_alone.pixels().zip(scene_image.pixels()) {
+        if p_alone[3] == 255 {
+            assert_eq!(
+                p_alone, p_scene,
+                "Steve's front pixels should not be altered by Alex behind him"
+            );
+            matching_steve_pixels += 1;
+        }
+    }
+    assert!(
+        matching_steve_pixels > 500,
+        "Expected hundreds of opaque Steve pixels to verify occlusion"
+    );
+}
+
+#[test]
+fn scene_model_hybrid_classic_and_slim() {
+    let renderer = make_renderer();
+    let classic_body = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .expect("load classic body failed");
+    let mut classic_char = Character::from_body(classic_body);
+    classic_char.position = cgmath::Vector3::new(-0.8, 0.0, 0.0);
+
+    let slim_body = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .expect("load slim body failed");
+    let mut slim_char = Character::from_body(slim_body);
+    slim_char.position = cgmath::Vector3::new(0.8, 0.0, 0.0);
+
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 90.0,
+        scale: 0.8,
+    };
+    let scene = Scene::with_characters(vec![classic_char, slim_char], camera);
+    let image = renderer
+        .render_scene(&scene, 400, 300)
+        .expect("render hybrid scene failed");
+
+    assert_eq!(image.width(), 400);
+    assert_eq!(image.height(), 300);
+    let non_blank = image.pixels().any(|p| p[3] > 0);
+    assert!(non_blank, "Render output should not be blank");
+}
+
+#[test]
+fn scene_equipment_diversity() {
+    let renderer = make_renderer();
+    let b1 = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .unwrap();
+    let mut c1 = Character::from_body(b1);
+    c1.position = cgmath::Vector3::new(-1.2, 0.0, 0.0);
+    let cape_atlas = renderer
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
+        .unwrap();
+    c1.equip(BackEquipment::new(cape_atlas, BackEquipmentKind::Cape));
+
+    let b2 = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .unwrap();
+    let mut c2 = Character::from_body(b2);
+    c2.position = cgmath::Vector3::new(0.0, 0.0, 0.0);
+    let elytra_atlas = renderer
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
+        .unwrap();
+    c2.equip(BackEquipment::new(elytra_atlas, BackEquipmentKind::Elytra));
+
+    let b3 = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .unwrap();
+    let mut c3 = Character::from_body(b3);
+    c3.position = cgmath::Vector3::new(1.2, 0.0, 0.0);
+
+    let scene = Scene::with_characters(
+        vec![c1, c2, c3],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 0.6,
+        },
+    );
+    let image = renderer
+        .render_scene(&scene, 400, 300)
+        .expect("render diverse equipment scene failed");
+    assert!(image.pixels().any(|p| p[3] > 0));
+}
+
+#[test]
+fn scene_buffer_scaling_and_chunking() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .unwrap();
+
+    for count in [1, 2, 8, 16, 17] {
+        let mut characters = Vec::with_capacity(count);
+        for i in 0..count {
+            let mut c = Character::from_body(body.clone());
+            c.position = cgmath::Vector3::new((i as f32) * 0.2, 0.0, 0.0);
+            characters.push(c);
+        }
+        let scene = Scene::with_characters(
+            characters,
+            Camera {
+                yaw: 180.0,
+                pitch: 90.0,
+                scale: 0.5,
+            },
+        );
+        let image = renderer
+            .render_scene(&scene, 200, 150)
+            .unwrap_or_else(|e| panic!("failed to render scene with {count} characters: {e}"));
+        assert!(image.pixels().any(|p| p[3] > 0));
+    }
+}
+
+#[test]
+fn scene_multi_nametag_rendering() {
+    let renderer = make_renderer();
+    let b1 = renderer
+        .load_body(&resource_str("SSSSSteven.png"), SkinType::Classic)
+        .unwrap();
+    let mut c1 = Character::from_body(b1);
+    c1.position = cgmath::Vector3::new(-0.8, 0.0, 0.0);
+    c1.nametag = Some("Steve".to_owned());
+    c1.nametag_see_through = true;
+
+    let b2 = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .unwrap();
+    let mut c2 = Character::from_body(b2);
+    c2.position = cgmath::Vector3::new(0.8, 0.0, 0.0);
+    c2.nametag = Some("Alex".to_owned());
+    c2.nametag_see_through = false;
+
+    let scene = Scene::with_characters(
+        vec![c1, c2],
+        Camera {
+            yaw: 180.0,
+            pitch: 90.0,
+            scale: 0.8,
+        },
+    );
+    let image = renderer
+        .render_scene(&scene, 400, 300)
+        .expect("render multi nametag scene failed");
+    assert!(image.pixels().any(|p| p[3] > 0));
 }

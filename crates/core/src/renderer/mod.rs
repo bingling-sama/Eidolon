@@ -19,14 +19,17 @@ use crate::camera::Camera;
 use crate::character::{Character, SkinType};
 use crate::error::EidolonError;
 use crate::model::ModelCatalog;
+use crate::scene::Scene;
 use crate::texture::Texture;
 
-use nametag::{compute_nametag_uniform, nametag_passes, CachedNametag, NametagPass};
+pub use uniforms::{MAX_SCENE_CHARACTERS, UNIFORM_SLOTS_PER_CHARACTER};
+
+use nametag::{compute_nametag_uniform, CachedNametag, NametagPass};
 use pipeline::{create_nametag_pipeline, create_pipeline, DEPTH_FORMAT, RENDER_TARGET_FORMAT};
 use uniforms::{
     body_part_ref, compute_body_part_uniforms, compute_cape_uniform, compute_elytra_uniforms,
     CAPE_UNIFORM_INDEX, LEFT_ELYTRA_UNIFORM_INDEX, NAMETAG_UNIFORM_INDEX, PART_CONFIGS,
-    RIGHT_ELYTRA_UNIFORM_INDEX, UNIFORM_COUNT,
+    RIGHT_ELYTRA_UNIFORM_INDEX,
 };
 
 static NEXT_RENDERER_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -641,103 +644,124 @@ impl Renderer {
         pipeline: &wgpu::RenderPipeline,
         nametag_pipeline: &wgpu::RenderPipeline,
         nametag_see_through_pipeline: &wgpu::RenderPipeline,
-        character: &Character,
-        camera: &Camera,
+        scene: &Scene,
         width: u32,
         height: u32,
     ) {
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
-        let mut uniform_bytes = vec![0u8; (UNIFORM_COUNT * self.uniform_aligned_size) as usize];
 
-        let body = character.body();
-        let model = body.map(|body| self.models.body_model(body.skin_type()));
+        // Resolve / cache nametags for all characters
+        let cached_nametags: Vec<Option<Arc<CachedNametag>>> = scene
+            .characters
+            .iter()
+            .map(|character| {
+                character
+                    .nametag
+                    .as_deref()
+                    .filter(|text| !text.trim().is_empty())
+                    .and_then(|text| {
+                        let mut cache = self.cached_nametags.lock().unwrap();
+                        if let Some(cached) = cache.get(text) {
+                            Some(Arc::clone(cached))
+                        } else if let Some(new_cached) = CachedNametag::new(
+                            &self.device,
+                            &self.queue,
+                            &self.texture_bind_group_layout,
+                            &self.sampler,
+                            text,
+                            self.context_id,
+                        ) {
+                            cache.insert(text.to_owned(), Arc::clone(&new_cached));
+                            Some(new_cached)
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect();
 
-        if body.is_some() {
-            let uniforms = compute_body_part_uniforms(character, camera, width, height);
-            for (i, uniform) in uniforms.iter().enumerate() {
-                let offset = i * (self.uniform_aligned_size as usize);
-                let bytes = bytemuck::bytes_of(uniform);
-                uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
-            }
-        }
+        // Build dynamic uniform buffers and bind groups per chunk of characters
+        let mut chunk_bind_groups = Vec::new();
+        let mut _chunk_buffers = Vec::new();
 
-        let equipment = character.back_equipment();
-        let cape_atlas = equipment
-            .filter(|equipment| equipment.kind() == BackEquipmentKind::Cape)
-            .map(|equipment| equipment.atlas().texture.as_ref());
-        let elytra_atlas = equipment
-            .filter(|equipment| equipment.kind() == BackEquipmentKind::Elytra)
-            .map(|equipment| equipment.atlas().texture.as_ref());
+        for (chunk_idx, chunk) in scene.characters.chunks(MAX_SCENE_CHARACTERS).enumerate() {
+            let chunk_bytes_len =
+                chunk.len() * UNIFORM_SLOTS_PER_CHARACTER * (self.uniform_aligned_size as usize);
+            let mut uniform_bytes = vec![0u8; chunk_bytes_len];
 
-        if cape_atlas.is_some() {
-            let cape_uniform = compute_cape_uniform(character, camera, width, height);
-            let offset = (CAPE_UNIFORM_INDEX as usize) * (self.uniform_aligned_size as usize);
-            let bytes = bytemuck::bytes_of(&cape_uniform);
-            uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
-        }
+            for (k, character) in chunk.iter().enumerate() {
+                let slot_base = k * UNIFORM_SLOTS_PER_CHARACTER;
 
-        if elytra_atlas.is_some() {
-            let elytra_uniforms = compute_elytra_uniforms(character, camera, width, height);
-            for (index, uniform) in [LEFT_ELYTRA_UNIFORM_INDEX, RIGHT_ELYTRA_UNIFORM_INDEX]
-                .into_iter()
-                .zip(elytra_uniforms)
-            {
-                let offset = (index as usize) * (self.uniform_aligned_size as usize);
-                let bytes = bytemuck::bytes_of(&uniform);
-                uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
-            }
-        }
-
-        let nametag_cached = character
-            .nametag
-            .as_deref()
-            .filter(|text| !text.trim().is_empty())
-            .and_then(|text| {
-                let mut cache = self.cached_nametags.lock().unwrap();
-                if let Some(cached) = cache.get(text) {
-                    Some(Arc::clone(cached))
-                } else if let Some(new_cached) = CachedNametag::new(
-                    &self.device,
-                    &self.queue,
-                    &self.texture_bind_group_layout,
-                    &self.sampler,
-                    text,
-                    self.context_id,
-                ) {
-                    cache.insert(text.to_owned(), Arc::clone(&new_cached));
-                    Some(new_cached)
-                } else {
-                    None
+                if character.body().is_some() {
+                    let uniforms =
+                        compute_body_part_uniforms(character, &scene.camera, width, height);
+                    for (i, uniform) in uniforms.iter().enumerate() {
+                        let offset = (slot_base + i) * (self.uniform_aligned_size as usize);
+                        let bytes = bytemuck::bytes_of(uniform);
+                        uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
+                    }
                 }
+
+                let equipment = character.back_equipment();
+                let has_cape = equipment.is_some_and(|eq| eq.kind() == BackEquipmentKind::Cape);
+                let has_elytra = equipment.is_some_and(|eq| eq.kind() == BackEquipmentKind::Elytra);
+
+                if has_cape {
+                    let cape_uniform = compute_cape_uniform(character, &scene.camera, width, height);
+                    let offset = (slot_base + CAPE_UNIFORM_INDEX as usize)
+                        * (self.uniform_aligned_size as usize);
+                    let bytes = bytemuck::bytes_of(&cape_uniform);
+                    uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
+                }
+
+                if has_elytra {
+                    let elytra_uniforms =
+                        compute_elytra_uniforms(character, &scene.camera, width, height);
+                    for (index, uniform) in [LEFT_ELYTRA_UNIFORM_INDEX, RIGHT_ELYTRA_UNIFORM_INDEX]
+                        .into_iter()
+                        .zip(elytra_uniforms)
+                    {
+                        let offset = (slot_base + index as usize)
+                            * (self.uniform_aligned_size as usize);
+                        let bytes = bytemuck::bytes_of(&uniform);
+                        uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
+                    }
+                }
+
+                let char_global_idx = chunk_idx * MAX_SCENE_CHARACTERS + k;
+                if cached_nametags[char_global_idx].is_some() {
+                    let uniform = compute_nametag_uniform(character, &scene.camera, width, height);
+                    let offset = (slot_base + NAMETAG_UNIFORM_INDEX as usize)
+                        * (self.uniform_aligned_size as usize);
+                    let bytes = bytemuck::bytes_of(&uniform);
+                    uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
+                }
+            }
+
+            let uniform_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Frame Dynamic Uniform Buffer Chunk"),
+                    contents: &uniform_bytes,
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+
+            let uniform_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Frame Uniform Bind Group Chunk"),
+                layout: &self.uniform_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &uniform_buffer,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(uniform_size as u64),
+                    }),
+                }],
             });
 
-        if nametag_cached.is_some() {
-            let uniform = compute_nametag_uniform(character, camera, width, height);
-            let offset = (NAMETAG_UNIFORM_INDEX as usize) * (self.uniform_aligned_size as usize);
-            let bytes = bytemuck::bytes_of(&uniform);
-            uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
+            _chunk_buffers.push(uniform_buffer);
+            chunk_bind_groups.push(uniform_bind_group);
         }
-
-        let uniform_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Frame Dynamic Uniform Buffer"),
-                contents: &uniform_bytes,
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let uniform_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Frame Uniform Bind Group"),
-            layout: &self.uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_buffer,
-                    offset: 0,
-                    size: wgpu::BufferSize::new(uniform_size as u64),
-                }),
-            }],
-        });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -769,71 +793,115 @@ impl Renderer {
                 multiview_mask: None,
             });
 
+            // Phase 1: Opaque & Masked Geometry
             render_pass.set_pipeline(pipeline);
 
-            if let (Some(body), Some(model)) = (body, model) {
-                render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
-                for i in 0..PART_CONFIGS.len() {
-                    let body_part = body_part_ref(i, model);
-                    let dynamic_offset = (i as u32) * self.uniform_aligned_size;
-                    render_pass.set_bind_group(0, &uniform_bind_group, &[dynamic_offset]);
+            for (chunk_idx, chunk) in scene.characters.chunks(MAX_SCENE_CHARACTERS).enumerate() {
+                let chunk_bind_group = &chunk_bind_groups[chunk_idx];
 
-                    render_pass.set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
-                    render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                for (k, character) in chunk.iter().enumerate() {
+                    let slot_base = k * UNIFORM_SLOTS_PER_CHARACTER;
+                    let body = character.body();
+                    let model = body.map(|body| self.models.body_model(body.skin_type()));
 
-                    render_pass.set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
-                    render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                    if let (Some(body), Some(model)) = (body, model) {
+                        render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
+                        for i in 0..PART_CONFIGS.len() {
+                            let body_part = body_part_ref(i, model);
+                            let dynamic_offset =
+                                ((slot_base + i) as u32) * self.uniform_aligned_size;
+                            render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
+
+                            render_pass
+                                .set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
+                            render_pass.draw(0..body_part.main.vertex_count, 0..1);
+
+                            render_pass
+                                .set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
+                            render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                        }
+                    }
+
+                    let equipment = character.back_equipment();
+                    let cape_atlas = equipment
+                        .filter(|equipment| equipment.kind() == BackEquipmentKind::Cape)
+                        .map(|equipment| equipment.atlas().texture.as_ref());
+                    let elytra_atlas = equipment
+                        .filter(|equipment| equipment.kind() == BackEquipmentKind::Elytra)
+                        .map(|equipment| equipment.atlas().texture.as_ref());
+
+                    if let Some(cape_atlas) = cape_atlas {
+                        let dynamic_offset = ((slot_base + CAPE_UNIFORM_INDEX as usize) as u32)
+                            * self.uniform_aligned_size;
+                        render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
+                        render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
+                        render_pass.set_vertex_buffer(
+                            0,
+                            self.models.cape_model().main.vertex_buffer.slice(..),
+                        );
+                        render_pass.draw(0..self.models.cape_model().main.vertex_count, 0..1);
+                    }
+
+                    if let Some(elytra_atlas) = elytra_atlas {
+                        render_pass.set_bind_group(1, &elytra_atlas.bind_group, &[]);
+                        for (index, wing) in [
+                            (
+                                LEFT_ELYTRA_UNIFORM_INDEX,
+                                &self.models.elytra_model().left_wing,
+                            ),
+                            (
+                                RIGHT_ELYTRA_UNIFORM_INDEX,
+                                &self.models.elytra_model().right_wing,
+                            ),
+                        ] {
+                            let dynamic_offset = ((slot_base + index as usize) as u32)
+                                * self.uniform_aligned_size;
+                            render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
+                            render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
+                            render_pass.draw(0..wing.vertex_count, 0..1);
+                        }
+                    }
                 }
             }
 
-            if let Some(cape_atlas) = cape_atlas {
-                render_pass.set_bind_group(
-                    0,
-                    &uniform_bind_group,
-                    &[CAPE_UNIFORM_INDEX * self.uniform_aligned_size],
-                );
-                render_pass.set_bind_group(1, &cape_atlas.bind_group, &[]);
-                render_pass
-                    .set_vertex_buffer(0, self.models.cape_model().main.vertex_buffer.slice(..));
-                render_pass.draw(0..self.models.cape_model().main.vertex_count, 0..1);
-            }
+            // Phase 2: Nametag See-Through Pass
+            render_pass.set_pipeline(nametag_see_through_pipeline);
+            for (chunk_idx, chunk) in scene.characters.chunks(MAX_SCENE_CHARACTERS).enumerate() {
+                let chunk_bind_group = &chunk_bind_groups[chunk_idx];
 
-            if let Some(elytra_atlas) = elytra_atlas {
-                render_pass.set_bind_group(1, &elytra_atlas.bind_group, &[]);
-                for (index, wing) in [
-                    (
-                        LEFT_ELYTRA_UNIFORM_INDEX,
-                        &self.models.elytra_model().left_wing,
-                    ),
-                    (
-                        RIGHT_ELYTRA_UNIFORM_INDEX,
-                        &self.models.elytra_model().right_wing,
-                    ),
-                ] {
-                    render_pass.set_bind_group(
-                        0,
-                        &uniform_bind_group,
-                        &[index * self.uniform_aligned_size],
-                    );
-                    render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
-                    render_pass.draw(0..wing.vertex_count, 0..1);
+                for (k, character) in chunk.iter().enumerate() {
+                    if !character.nametag_see_through {
+                        continue;
+                    }
+                    let char_global_idx = chunk_idx * MAX_SCENE_CHARACTERS + k;
+                    if let Some(cached) = &cached_nametags[char_global_idx] {
+                        let slot_base = k * UNIFORM_SLOTS_PER_CHARACTER;
+                        let dynamic_offset = ((slot_base + NAMETAG_UNIFORM_INDEX as usize) as u32)
+                            * self.uniform_aligned_size;
+                        render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
+                        render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
+                        render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
+                        render_pass.draw(0..cached.vertex_count, 0..1);
+                    }
                 }
             }
 
-            if let Some(cached) = nametag_cached {
-                render_pass.set_bind_group(
-                    0,
-                    &uniform_bind_group,
-                    &[NAMETAG_UNIFORM_INDEX * self.uniform_aligned_size],
-                );
-                render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
-                render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
-                for pass in nametag_passes(character.nametag_see_through) {
-                    render_pass.set_pipeline(match pass {
-                        NametagPass::SeeThrough => nametag_see_through_pipeline,
-                        NametagPass::Normal => nametag_pipeline,
-                    });
-                    render_pass.draw(0..cached.vertex_count, 0..1);
+            // Phase 3: Nametag Normal Pass
+            render_pass.set_pipeline(nametag_pipeline);
+            for (chunk_idx, chunk) in scene.characters.chunks(MAX_SCENE_CHARACTERS).enumerate() {
+                let chunk_bind_group = &chunk_bind_groups[chunk_idx];
+
+                for (k, _character) in chunk.iter().enumerate() {
+                    let char_global_idx = chunk_idx * MAX_SCENE_CHARACTERS + k;
+                    if let Some(cached) = &cached_nametags[char_global_idx] {
+                        let slot_base = k * UNIFORM_SLOTS_PER_CHARACTER;
+                        let dynamic_offset = ((slot_base + NAMETAG_UNIFORM_INDEX as usize) as u32)
+                            * self.uniform_aligned_size;
+                        render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
+                        render_pass.set_bind_group(1, &cached.texture.bind_group, &[]);
+                        render_pass.set_vertex_buffer(0, cached.vertex_buffer.slice(..));
+                        render_pass.draw(0..cached.vertex_count, 0..1);
+                    }
                 }
             }
         }
@@ -855,24 +923,30 @@ impl Renderer {
         }
     }
 
-    /// Render a character to an offscreen RGBA image.
+    fn validate_scene_context(&self, scene: &Scene) -> Result<(), EidolonError> {
+        for (i, character) in scene.characters.iter().enumerate() {
+            self.validate_character_context(character)
+                .map_err(|e| EidolonError::gpu(format!("character[{i}]: {e}")))?;
+        }
+        Ok(())
+    }
+
+    /// Render a multi-character scene to an offscreen RGBA image.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn render(
+    pub fn render_scene(
         &self,
-        character: &Character,
-        camera: &Camera,
+        scene: &Scene,
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
-        self.validate_character_context(character)?;
-        self.render_offscreen(character, camera, width, height)
+        self.validate_scene_context(scene)?;
+        self.render_scene_offscreen(scene, width, height)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn render_offscreen(
+    fn render_scene_offscreen(
         &self,
-        character: &Character,
-        camera: &Camera,
+        scene: &Scene,
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
@@ -881,7 +955,7 @@ impl Renderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
+                label: Some("Render Scene Encoder"),
             });
 
         self.encode_render_pass(
@@ -891,8 +965,7 @@ impl Renderer {
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
-            character,
-            camera,
+            scene,
             width,
             height,
         );
@@ -921,25 +994,40 @@ impl Renderer {
         image
     }
 
-    /// Render to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
-    ///
-    /// Available on WASM where blocking buffer-map is not possible.
-    /// Uses [`wasm_bindgen_futures`] under the hood; callers must execute within a WASM async runtime.
-    #[cfg(target_arch = "wasm32")]
-    pub async fn render_async(
+    /// Render a single character to an offscreen RGBA image.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn render(
         &self,
         character: &Character,
         camera: &Camera,
         width: u32,
         height: u32,
     ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
-        self.validate_character_context(character)?;
+        let scene = Scene {
+            characters: vec![character.clone()],
+            camera: *camera,
+        };
+        self.render_scene(&scene, width, height)
+    }
+
+    /// Render a multi-character scene to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
+    ///
+    /// Available on WASM where blocking buffer-map is not possible.
+    /// Uses [`wasm_bindgen_futures`] under the hood; callers must execute within a WASM async runtime.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn render_scene_async(
+        &self,
+        scene: &Scene,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        self.validate_scene_context(scene)?;
         let target = self.acquire_offscreen_target(width, height)?;
 
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
+                label: Some("Render Scene Encoder"),
             });
 
         self.encode_render_pass(
@@ -949,8 +1037,7 @@ impl Renderer {
             &self.pipeline,
             &self.nametag_pipeline,
             &self.nametag_see_through_pipeline,
-            character,
-            camera,
+            scene,
             width,
             height,
         );
@@ -980,9 +1067,25 @@ impl Renderer {
         image
     }
 
-    /// Present one frame to the window surface (expects `new_windowed`).
-    pub fn render_frame(&self, character: &Character, camera: &Camera) -> Result<(), EidolonError> {
-        self.validate_character_context(character)?;
+    /// Render a single character to an offscreen texture and return an RGBA [`image::ImageBuffer`] (async readback).
+    #[cfg(target_arch = "wasm32")]
+    pub async fn render_async(
+        &self,
+        character: &Character,
+        camera: &Camera,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, EidolonError> {
+        let scene = Scene {
+            characters: vec![character.clone()],
+            camera: *camera,
+        };
+        self.render_scene_async(&scene, width, height).await
+    }
+
+    /// Present a multi-character scene to the window surface.
+    pub fn render_scene_frame(&self, scene: &Scene) -> Result<(), EidolonError> {
+        self.validate_scene_context(scene)?;
         let surface = self.surface.as_ref().expect("Not in windowed mode");
         let config = self.surface_config.as_ref().unwrap();
 
@@ -1035,8 +1138,7 @@ impl Renderer {
             pipeline,
             nametag_pipeline,
             nametag_see_through_pipeline,
-            character,
-            camera,
+            scene,
             config.width,
             config.height,
         );
@@ -1045,6 +1147,15 @@ impl Renderer {
         self.queue.present(output);
 
         Ok(())
+    }
+
+    /// Present one frame to the window surface (expects `new_windowed`).
+    pub fn render_frame(&self, character: &Character, camera: &Camera) -> Result<(), EidolonError> {
+        let scene = Scene {
+            characters: vec![character.clone()],
+            camera: *camera,
+        };
+        self.render_scene_frame(&scene)
     }
 
     /// Set the render pass clear color (RGBA, 0.0–1.0). Default is transparent black.
