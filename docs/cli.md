@@ -101,6 +101,41 @@ eidolon render skin.png run.apng --animate --posture run
 eidolon render skin.png dance.avif --animate --posture dance
 ```
 
+### Scene Configuration Format
+
+When rendering or previewing multi-character scenes via `--scene-config <PATH>`, configuration can be provided as JSON or TOML. A formal JSON Schema definition is provided at `schemas/scene.json`.
+
+Example `scene.json`:
+```json
+{
+  "$schema": "./schemas/scene.json",
+  "camera": {
+    "yaw": 200.0,
+    "pitch": 80.0,
+    "scale": 1.2,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "steve.png",
+      "skin_type": "classic",
+      "position": [-1.0, 0.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve",
+      "cape": "cape.png"
+    },
+    {
+      "skin": "alex.png",
+      "skin_type": "slim",
+      "position": [1.0, 0.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    }
+  ]
+}
+```
+If the `camera` block is omitted, the camera automatically auto-frames to encompass all characters in the scene.
+
 Format is inferred from the output filename extension. Static output supports PNG (`.png`) and WebP (`.webp`). Animated output supports GIF (`.gif`), WebP (`.webp`), APNG (`.apng`), and AVIF (`.avif`).
 The output path must not contain `..` components (directory traversal is rejected).
 

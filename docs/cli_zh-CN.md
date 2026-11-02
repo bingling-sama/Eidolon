@@ -71,6 +71,41 @@ eidolon render skin.png run.apng --animate --posture run
 eidolon render skin.png dance.avif --animate --posture dance
 ```
 
+### 场景配置格式
+
+通过 `--scene-config <配置文件路径>` 进行多角色场景渲染或预览时，支持 JSON 或 TOML 格式。仓库根目录提供了规范的 JSON Schema 描述文件：`schemas/scene.json`。
+
+`scene.json` 示例：
+```json
+{
+  "$schema": "./schemas/scene.json",
+  "camera": {
+    "yaw": 200.0,
+    "pitch": 80.0,
+    "scale": 1.2,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "steve.png",
+      "skin_type": "classic",
+      "position": [-1.0, 0.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve",
+      "cape": "cape.png"
+    },
+    {
+      "skin": "alex.png",
+      "skin_type": "slim",
+      "position": [1.0, 0.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    }
+  ]
+}
+```
+如果配置文件中省略了 `camera` 块，渲染器会自动根据场景所有角色的合并包围盒进行自动取景构图（auto-frame）。
+
 ## Preview
 
 打开实时预览窗口。

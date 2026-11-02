@@ -174,8 +174,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 多角色功能特性：
 - `Scene::new(camera)` 创建带独立相机的多角色容器。
 - `scene.add_character(character)` 添加角色实体。角色通过 `character.position` 和 `character.rotation`（`cgmath::Vector3<f32>`）在世界空间中定位与旋转。
-- `scene.compute_bounds()` 计算所有角色在场景空间的合并 AABB 包围盒。
-- `scene.auto_frame_camera()` 自动调整相机位置与缩放比例，使所有角色完整容纳在视口中。
+- `scene.compute_bounding_box()` 计算所有角色在场景空间的合并 AABB 包围盒 `(Point3<f32>, Point3<f32>)`。
+- `scene.auto_frame_camera(fov_deg, aspect_ratio)` 自动调整相机目标注视点与缩放比例，使所有角色完整容纳在视口中。
 - `renderer.render_scene(&scene, width, height)` 在单个渲染 pass 中分 3 个阶段渲染所有角色（阶段 1：角色身体与分层；阶段 2：被遮挡的半透明名字标签；阶段 3：正面名字标签），并使用动态 uniform chunking 批量高效渲染。
 
 ## 自定义姿势构造

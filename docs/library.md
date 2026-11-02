@@ -174,8 +174,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Multi-character features:
 - `Scene::new(camera)` creates a multi-character container with its own camera.
 - `scene.add_character(character)` appends character entities. Characters are positioned and rotated in world space via `character.position` and `character.rotation` (`cgmath::Vector3<f32>`).
-- `scene.compute_bounds()` calculates the combined scene-space AABB bounding box across all characters.
-- `scene.auto_frame_camera()` automatically adjusts the camera position and zoom scale to fit all characters in view.
+- `scene.compute_bounding_box()` calculates the combined scene-space AABB bounding box `(Point3<f32>, Point3<f32>)` across all characters.
+- `scene.auto_frame_camera(fov_deg, aspect_ratio)` automatically adjusts the camera target position and zoom scale to frame all characters.
 - `renderer.render_scene(&scene, width, height)` renders all characters in a single render pass with 3 phases (Phase 1: character bodies/layers, Phase 2: occluded translucent nametags, Phase 3: front nametags) and dynamic uniform chunking.
 
 ## Custom Posture

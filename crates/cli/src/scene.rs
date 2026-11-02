@@ -178,15 +178,18 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
     let config = parse_scene_config_str(&content, is_toml)?;
     let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
-    let camera = if let Some(cam) = config.camera {
-        Camera {
-            yaw: cam.yaw,
-            pitch: cam.pitch,
-            scale: cam.scale,
-            target: cam.target.unwrap_or([0.0, 1.0, 0.0]),
-        }
+    let (camera, auto_frame) = if let Some(cam) = config.camera {
+        (
+            Camera {
+                yaw: cam.yaw,
+                pitch: cam.pitch,
+                scale: cam.scale,
+                target: cam.target.unwrap_or([0.0, 1.0, 0.0]),
+            },
+            false,
+        )
     } else {
-        Camera::default()
+        (Camera::default(), true)
     };
 
     let mut scene = Scene::new(camera);
@@ -240,6 +243,10 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         }
 
         scene.add_character(character);
+    }
+
+    if auto_frame && !scene.characters.is_empty() {
+        scene.auto_frame_camera(60.0, 16.0 / 9.0);
     }
 
     Ok(scene)

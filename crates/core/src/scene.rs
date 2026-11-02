@@ -71,9 +71,14 @@ impl Scene {
         )
     }
 
-    /// Automatically adjust camera zoom/scale to frame all characters.
+    /// Automatically adjust camera zoom/scale and center target to frame all characters.
     pub fn auto_frame_camera(&mut self, fov_deg: f32, aspect_ratio: f32) {
         let (min, max) = self.compute_bounding_box();
+        let center_x = (min.x + max.x) * 0.5;
+        let center_y = (min.y + max.y) * 0.5;
+        let center_z = (min.z + max.z) * 0.5;
+        self.camera.target = [center_x, center_y, center_z];
+
         let extent_x = (max.x - min.x) * 0.5;
         let extent_y = (max.y - min.y) * 0.5;
         let extent_z = (max.z - min.z) * 0.5;
@@ -156,5 +161,17 @@ mod tests {
         let initial_scale = scene.camera.scale;
         scene.auto_frame_camera(60.0, 16.0 / 9.0);
         assert!(scene.camera.scale < initial_scale);
+        assert_eq!(scene.camera.target[0], 0.0);
+        assert!(scene.camera.target[1] > 0.5);
+
+        // Test offset center framing
+        let mut offset_scene = Scene::default();
+        let mut c3 = Character::empty_for_test();
+        c3.position = Vector3::new(10.0, 5.0, 10.0);
+        offset_scene.add_character(c3);
+        offset_scene.auto_frame_camera(60.0, 16.0 / 9.0);
+        assert!((offset_scene.camera.target[0] - 10.0).abs() < 1e-4);
+        assert!((offset_scene.camera.target[1] - 5.9).abs() < 1e-4);
+        assert!((offset_scene.camera.target[2] - 10.0).abs() < 1e-4);
     }
 }
