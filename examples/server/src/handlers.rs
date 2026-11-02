@@ -57,7 +57,8 @@ fn parse_post_query(
         .get(header::CONTENT_TYPE)
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    if content_type.contains("application/json") || bytes.first() == Some(&b'{') {
+    let trimmed = bytes.iter().find(|&&b| !b.is_ascii_whitespace());
+    if content_type.contains("application/json") || trimmed == Some(&b'{') {
         let body_q: RenderQuery = serde_json::from_slice(&bytes)
             .map_err(|e| AppError::BadRequest(format!("Invalid JSON body: {e}")))?;
         Ok(query.merge_with(body_q))

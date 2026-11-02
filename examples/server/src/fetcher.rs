@@ -115,6 +115,12 @@ impl TextureFetcher {
             )));
         }
 
+        if resp.status() == reqwest::StatusCode::BAD_REQUEST {
+            return Err(AppError::BadRequest(format!(
+                "Invalid player name '{name}' for Minecraft official server."
+            )));
+        }
+
         if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(AppError::FetchError(
                 "Mojang profile API rate limit exceeded (HTTP 429)".to_string(),
@@ -200,6 +206,12 @@ impl TextureFetcher {
         {
             return Err(AppError::NotFound(format!(
                 "Player {name} does not exist in LittleSkin."
+            )));
+        }
+
+        if resp.status() == reqwest::StatusCode::BAD_REQUEST {
+            return Err(AppError::BadRequest(format!(
+                "Invalid player name '{name}' for LittleSkin."
             )));
         }
 

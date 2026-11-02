@@ -261,5 +261,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 11. POST /url/image/front with leading whitespace JSON without header
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .body("   \n\t {\"definition\": 2.0}")
+            .send()
+            .await
+            .unwrap();
+        // Missing skinUrl still parsed from JSON body and correctly yields 400 (not form decode error)
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }

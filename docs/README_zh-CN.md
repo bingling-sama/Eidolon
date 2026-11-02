@@ -17,7 +17,7 @@
 ## 示例与服务
 
 - `../examples/server/README_zh-CN.md` 高性能 HTTP 渲染微服务与 SkinRenderMC API 兼容
-- `../examples/wasm/README.md` WebAssembly 与 WebGPU 浏览器集成示例
+- `../examples/wasm/README_zh-CN.md` WebAssembly 与 WebGPU 浏览器集成示例
 
 ## 语言
 
