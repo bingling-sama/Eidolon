@@ -154,7 +154,10 @@ impl CharacterConfig {
     }
 }
 
-pub fn parse_scene_config_str(content: &str, is_toml: bool) -> Result<SceneConfigFile, SceneConfigError> {
+pub fn parse_scene_config_str(
+    content: &str,
+    is_toml: bool,
+) -> Result<SceneConfigFile, SceneConfigError> {
     if is_toml {
         toml::from_str(content).map_err(SceneConfigError::Toml)
     } else {
@@ -168,7 +171,10 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
 ) -> Result<Scene, SceneConfigError> {
     let path = config_path.as_ref();
     let content = std::fs::read_to_string(path)?;
-    let is_toml = path.extension().and_then(|s| s.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("toml"));
+    let is_toml = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"));
     let config = parse_scene_config_str(&content, is_toml)?;
     let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -189,7 +195,10 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         let skin_type = char_cfg.parse_skin_type()?;
         let skin_path = base_dir.join(&char_cfg.skin);
         let skin_path_str = skin_path.to_str().ok_or_else(|| {
-            SceneConfigError::InvalidPath(format!("invalid unicode in skin path: {}", skin_path.display()))
+            SceneConfigError::InvalidPath(format!(
+                "invalid unicode in skin path: {}",
+                skin_path.display()
+            ))
         })?;
 
         let body = renderer.load_body(skin_path_str, skin_type)?;
@@ -211,14 +220,20 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         if let Some(cape_rel) = char_cfg.cape {
             let cape_path = base_dir.join(cape_rel);
             let cape_path_str = cape_path.to_str().ok_or_else(|| {
-                SceneConfigError::InvalidPath(format!("invalid unicode in cape path: {}", cape_path.display()))
+                SceneConfigError::InvalidPath(format!(
+                    "invalid unicode in cape path: {}",
+                    cape_path.display()
+                ))
             })?;
             let atlas = renderer.load_back_equipment_atlas(cape_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
         } else if let Some(elytra_rel) = char_cfg.elytra {
             let elytra_path = base_dir.join(elytra_rel);
             let elytra_path_str = elytra_path.to_str().ok_or_else(|| {
-                SceneConfigError::InvalidPath(format!("invalid unicode in elytra path: {}", elytra_path.display()))
+                SceneConfigError::InvalidPath(format!(
+                    "invalid unicode in elytra path: {}",
+                    elytra_path.display()
+                ))
             })?;
             let atlas = renderer.load_back_equipment_atlas(elytra_path_str)?;
             character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
@@ -569,8 +584,14 @@ mod tests {
         assert_eq!(cam.yaw, 195.0);
         assert_eq!(cam.scale, 1.5);
         assert_eq!(parsed_json.characters[0].skin, "steve.png");
-        assert_eq!(parsed_json.characters[0].parse_skin_type().unwrap(), SkinType::Classic);
-        assert_eq!(parsed_json.characters[1].parse_skin_type().unwrap(), SkinType::Slim);
+        assert_eq!(
+            parsed_json.characters[0].parse_skin_type().unwrap(),
+            SkinType::Classic
+        );
+        assert_eq!(
+            parsed_json.characters[1].parse_skin_type().unwrap(),
+            SkinType::Slim
+        );
 
         let toml_data = r#"
             [camera]

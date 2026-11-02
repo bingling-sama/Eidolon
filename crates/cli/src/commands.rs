@@ -88,9 +88,8 @@ pub fn run_render(
         );
 
         info!("Rendering scene...");
-        let mut frame_producer = |_time| {
-            renderer.render_scene(&loaded_scene, viewport.width, viewport.height)
-        };
+        let mut frame_producer =
+            |_time| renderer.render_scene(&loaded_scene, viewport.width, viewport.height);
         let written = write_output(&output_path, output_intent, &mut frame_producer)?;
         info!("Done. Saved: {}", written.display());
         return Ok(());

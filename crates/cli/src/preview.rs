@@ -378,11 +378,8 @@ impl ApplicationHandler for PreviewApp {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if let Some(scene) = &mut self.scene {
-                    self.interaction.cursor_moved_camera(
-                        position.x,
-                        position.y,
-                        &mut self.camera,
-                    );
+                    self.interaction
+                        .cursor_moved_camera(position.x, position.y, &mut self.camera);
                     scene.camera = self.camera;
                 } else if let Some(character) = &mut self.character {
                     self.interaction.cursor_moved(

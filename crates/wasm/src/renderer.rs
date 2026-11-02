@@ -470,7 +470,9 @@ impl CanvasRenderer {
             log::info!("Removed character entity {}", id);
             Ok(())
         } else {
-            Err(JsValue::from_str(&format!("invalid character entity ID: {id}")))
+            Err(JsValue::from_str(&format!(
+                "invalid character entity ID: {id}"
+            )))
         }
     }
 
@@ -547,14 +549,26 @@ impl CanvasRenderer {
     }
 
     /// Set world position for an existing character entity.
-    pub fn set_character_position(&mut self, id: u32, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    pub fn set_character_position(
+        &mut self,
+        id: u32,
+        x: f32,
+        y: f32,
+        z: f32,
+    ) -> Result<(), JsValue> {
         let char_ref = self.get_character_mut(id)?;
         char_ref.position = cgmath::Vector3::new(x, y, z);
         Ok(())
     }
 
     /// Set world rotation (degrees) for an existing character entity.
-    pub fn set_character_rotation(&mut self, id: u32, rx: f32, ry: f32, rz: f32) -> Result<(), JsValue> {
+    pub fn set_character_rotation(
+        &mut self,
+        id: u32,
+        rx: f32,
+        ry: f32,
+        rz: f32,
+    ) -> Result<(), JsValue> {
         let char_ref = self.get_character_mut(id)?;
         char_ref.rotation = cgmath::Vector3::new(rx, ry, rz);
         Ok(())
@@ -583,7 +597,9 @@ impl CanvasRenderer {
                 return Ok(character);
             }
         }
-        Err(JsValue::from_str(&format!("character entity {id} not found")))
+        Err(JsValue::from_str(&format!(
+            "character entity {id} not found"
+        )))
     }
 
     fn apply_animation_sample(&mut self) {

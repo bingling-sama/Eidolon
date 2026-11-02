@@ -51,8 +51,6 @@ impl NametagPass {
     }
 }
 
-
-
 pub(crate) struct CachedNametag {
     #[allow(dead_code)]
     pub text: String,

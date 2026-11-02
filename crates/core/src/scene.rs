@@ -50,7 +50,11 @@ impl Scene {
 
         for character in &self.characters {
             let pos = character.position;
-            let height = if character.nametag.is_some() { 2.3 } else { 1.8 };
+            let height = if character.nametag.is_some() {
+                2.3
+            } else {
+                1.8
+            };
             let radius = 0.5;
 
             min_x = min_x.min(pos.x - radius);

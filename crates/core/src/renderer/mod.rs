@@ -707,7 +707,8 @@ impl Renderer {
                 let has_elytra = equipment.is_some_and(|eq| eq.kind() == BackEquipmentKind::Elytra);
 
                 if has_cape {
-                    let cape_uniform = compute_cape_uniform(character, &scene.camera, width, height);
+                    let cape_uniform =
+                        compute_cape_uniform(character, &scene.camera, width, height);
                     let offset = (slot_base + CAPE_UNIFORM_INDEX as usize)
                         * (self.uniform_aligned_size as usize);
                     let bytes = bytemuck::bytes_of(&cape_uniform);
@@ -721,8 +722,8 @@ impl Renderer {
                         .into_iter()
                         .zip(elytra_uniforms)
                     {
-                        let offset = (slot_base + index as usize)
-                            * (self.uniform_aligned_size as usize);
+                        let offset =
+                            (slot_base + index as usize) * (self.uniform_aligned_size as usize);
                         let bytes = bytemuck::bytes_of(&uniform);
                         uniform_bytes[offset..offset + bytes.len()].copy_from_slice(bytes);
                     }
@@ -738,13 +739,13 @@ impl Renderer {
                 }
             }
 
-            let uniform_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Frame Dynamic Uniform Buffer Chunk"),
-                    contents: &uniform_bytes,
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
+            let uniform_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Frame Dynamic Uniform Buffer Chunk"),
+                        contents: &uniform_bytes,
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
 
             let uniform_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Frame Uniform Bind Group Chunk"),
@@ -854,8 +855,8 @@ impl Renderer {
                                 &self.models.elytra_model().right_wing,
                             ),
                         ] {
-                            let dynamic_offset = ((slot_base + index as usize) as u32)
-                                * self.uniform_aligned_size;
+                            let dynamic_offset =
+                                ((slot_base + index as usize) as u32) * self.uniform_aligned_size;
                             render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
                             render_pass.set_vertex_buffer(0, wing.vertex_buffer.slice(..));
                             render_pass.draw(0..wing.vertex_count, 0..1);
