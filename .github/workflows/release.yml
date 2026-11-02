@@ -203,10 +203,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Authenticate with crates.io (OIDC Trusted Publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        continue-on-error: true
+
       - name: Publish eidolon-core and eidolon-cli
-        if: env.CARGO_REGISTRY_TOKEN != ''
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        if: env.CARGO_REGISTRY_TOKEN != ''
         run: |
           cargo publish -p eidolon-core --token "$CARGO_REGISTRY_TOKEN"
           echo "Waiting 25 seconds for crates.io index propagation..."
