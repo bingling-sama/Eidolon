@@ -13,7 +13,6 @@
 - `resources_zh-CN.md` 内置资源与素材致谢
 - `contributing_zh-CN.md` 贡献指南
 - `credits_zh-CN.md` 项目致谢
-- `../examples/server/README_zh-CN.md` 高性能 HTTP 渲染微服务与 SkinRenderMC API 兼容
 
 ## 语言
 

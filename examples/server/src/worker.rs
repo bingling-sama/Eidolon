@@ -45,68 +45,70 @@ impl RenderWorkerPool {
     pub fn new(num_workers: usize, queue_capacity: usize) -> Self {
         let (sender, receiver) = bounded::<RenderJob>(queue_capacity);
 
-        for worker_id in 0..num_workers {
-            let rx = receiver.clone();
-            thread::Builder::new()
-                .name(format!("render-worker-{worker_id}"))
-                .spawn(move || {
-                    info!("Render worker {} started", worker_id);
-                    let renderer = match Renderer::new() {
-                        Ok(r) => r,
-                        Err(e) => {
-                            error!("Worker {worker_id} failed to initialize Renderer: {e}");
-                            return;
-                        }
-                    };
-                    info!("Worker {} Renderer initialized successfully", worker_id);
-
-                    while let Ok(job) = rx.recv() {
-                        let result = match job.mode {
-                            RenderMode::Single => execute_render(
-                                &renderer,
-                                job.skin_bytes,
-                                job.cape_bytes,
-                                job.elytra_bytes,
-                                &job.query,
-                            ),
-                            RenderMode::Front => execute_render_single_view(
-                                &renderer,
-                                job.skin_bytes,
-                                job.cape_bytes,
-                                job.elytra_bytes,
-                                &job.query,
-                                false,
-                            ),
-                            RenderMode::Back => execute_render_single_view(
-                                &renderer,
-                                job.skin_bytes,
-                                job.cape_bytes,
-                                job.elytra_bytes,
-                                &job.query,
-                                true,
-                            ),
-                            RenderMode::Both => execute_render_both(
-                                &renderer,
-                                job.skin_bytes,
-                                job.cape_bytes,
-                                job.elytra_bytes,
-                                &job.query,
-                            ),
-                            RenderMode::JsonAll => execute_render_json_all(
-                                &renderer,
-                                job.skin_bytes,
-                                job.cape_bytes,
-                                job.elytra_bytes,
-                                &job.query,
-                            ),
+        if num_workers > 0 {
+            for worker_id in 0..num_workers {
+                let rx = receiver.clone();
+                thread::Builder::new()
+                    .name(format!("render-worker-{worker_id}"))
+                    .spawn(move || {
+                        info!("Render worker {} started", worker_id);
+                        let renderer = match Renderer::new() {
+                            Ok(r) => r,
+                            Err(e) => {
+                                error!("Worker {worker_id} failed to initialize Renderer: {e}");
+                                return;
+                            }
                         };
-                        let _ = job.responder.send(result);
-                    }
-                    info!("Render worker {} shutting down", worker_id);
-                    // Leak renderer on process exit to avoid Mesa/OSMesa driver destruction race with main thread exit
-                    std::mem::forget(renderer);
-                })
-                .expect("Failed to spawn render worker thread");
+                        info!("Worker {} Renderer initialized successfully", worker_id);
+
+                        while let Ok(job) = rx.recv() {
+                            let result = match job.mode {
+                                RenderMode::Single => execute_render(
+                                    &renderer,
+                                    job.skin_bytes,
+                                    job.cape_bytes,
+                                    job.elytra_bytes,
+                                    &job.query,
+                                ),
+                                RenderMode::Front => execute_render_single_view(
+                                    &renderer,
+                                    job.skin_bytes,
+                                    job.cape_bytes,
+                                    job.elytra_bytes,
+                                    &job.query,
+                                    false,
+                                ),
+                                RenderMode::Back => execute_render_single_view(
+                                    &renderer,
+                                    job.skin_bytes,
+                                    job.cape_bytes,
+                                    job.elytra_bytes,
+                                    &job.query,
+                                    true,
+                                ),
+                                RenderMode::Both => execute_render_both(
+                                    &renderer,
+                                    job.skin_bytes,
+                                    job.cape_bytes,
+                                    job.elytra_bytes,
+                                    &job.query,
+                                ),
+                                RenderMode::JsonAll => execute_render_json_all(
+                                    &renderer,
+                                    job.skin_bytes,
+                                    job.cape_bytes,
+                                    job.elytra_bytes,
+                                    &job.query,
+                                ),
+                            };
+                            let _ = job.responder.send(result);
+                        }
+                        info!("Render worker {} shutting down", worker_id);
+                        // Leak renderer on process exit to avoid Mesa/OSMesa driver destruction race with main thread exit
+                        std::mem::forget(renderer);
+                    })
+                    .expect("Failed to spawn render worker thread");
+            }
         }
 
         Self { sender }

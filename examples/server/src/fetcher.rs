@@ -115,6 +115,20 @@ impl TextureFetcher {
             )));
         }
 
+        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(AppError::FetchError(
+                "Mojang profile API rate limit exceeded (HTTP 429)".to_string(),
+            ));
+        }
+
+        if !resp.status().is_success() {
+            return Err(AppError::FetchError(format!(
+                "Mojang profile API returned error HTTP {}: {}",
+                resp.status(),
+                resp.status().canonical_reason().unwrap_or("")
+            )));
+        }
+
         let bytes = resp
             .bytes()
             .await
@@ -135,9 +149,25 @@ impl TextureFetcher {
                 AppError::FetchError(format!("Mojang session API request failed: {e}"))
             })?;
 
-        if !session_resp.status().is_success() {
+        if session_resp.status() == reqwest::StatusCode::NOT_FOUND
+            || session_resp.status() == reqwest::StatusCode::NO_CONTENT
+        {
             return Err(AppError::NotFound(format!(
-                "Failed to fetch textures for player {name}"
+                "Player {name} profile not found in Mojang session server."
+            )));
+        }
+
+        if session_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(AppError::FetchError(
+                "Mojang session API rate limit exceeded (HTTP 429)".to_string(),
+            ));
+        }
+
+        if !session_resp.status().is_success() {
+            return Err(AppError::FetchError(format!(
+                "Mojang session API returned error HTTP {}: {}",
+                session_resp.status(),
+                session_resp.status().canonical_reason().unwrap_or("")
             )));
         }
 
@@ -148,7 +178,7 @@ impl TextureFetcher {
         let session_info: serde_json::Value = serde_json::from_slice(&session_bytes)
             .map_err(|e| AppError::FetchError(format!("Failed to parse session JSON: {e}")))?;
 
-        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info)?;
+        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info, uuid)?;
         Ok((skin_url, cape_url, official_name, is_slim))
     }
 
@@ -173,6 +203,20 @@ impl TextureFetcher {
             )));
         }
 
+        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(AppError::FetchError(
+                "LittleSkin profile API rate limit exceeded (HTTP 429)".to_string(),
+            ));
+        }
+
+        if !resp.status().is_success() {
+            return Err(AppError::FetchError(format!(
+                "LittleSkin profile API returned error HTTP {}: {}",
+                resp.status(),
+                resp.status().canonical_reason().unwrap_or("")
+            )));
+        }
+
         let bytes = resp
             .bytes()
             .await
@@ -193,9 +237,25 @@ impl TextureFetcher {
             AppError::FetchError(format!("LittleSkin session API request failed: {e}"))
         })?;
 
-        if !session_resp.status().is_success() {
+        if session_resp.status() == reqwest::StatusCode::NOT_FOUND
+            || session_resp.status() == reqwest::StatusCode::NO_CONTENT
+        {
             return Err(AppError::NotFound(format!(
-                "Failed to fetch textures for LittleSkin player {name}"
+                "LittleSkin player {name} session profile not found."
+            )));
+        }
+
+        if session_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(AppError::FetchError(
+                "LittleSkin session API rate limit exceeded (HTTP 429)".to_string(),
+            ));
+        }
+
+        if !session_resp.status().is_success() {
+            return Err(AppError::FetchError(format!(
+                "LittleSkin session API returned error HTTP {}: {}",
+                session_resp.status(),
+                session_resp.status().canonical_reason().unwrap_or("")
             )));
         }
 
@@ -207,13 +267,14 @@ impl TextureFetcher {
                 AppError::FetchError(format!("Failed to parse LittleSkin session JSON: {e}"))
             })?;
 
-        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info)?;
+        let (skin_url, cape_url, is_slim) = extract_textures_from_profile(&session_info, uuid)?;
         Ok((skin_url, cape_url, official_name, is_slim))
     }
 }
 
 fn extract_textures_from_profile(
     session_info: &serde_json::Value,
+    uuid: &str,
 ) -> Result<(String, Option<String>, bool), AppError> {
     let properties = session_info["properties"]
         .as_array()
@@ -228,17 +289,24 @@ fn extract_textures_from_profile(
                 let text_val: serde_json::Value = serde_json::from_slice(&decoded)
                     .map_err(|e| AppError::FetchError(format!("Invalid texture JSON: {e}")))?;
 
-                let skin_url = text_val["textures"]["SKIN"]["url"]
-                    .as_str()
-                    .ok_or_else(|| {
-                        AppError::NotFound("No skin texture found in profile".to_string())
-                    })?
-                    .to_string();
-
-                let is_slim = text_val["textures"]["SKIN"]["metadata"]["model"]
-                    .as_str()
-                    .map(|m| m.eq_ignore_ascii_case("slim"))
-                    .unwrap_or(false);
+                let (skin_url, is_slim) = if let Some(skin_url) =
+                    text_val["textures"]["SKIN"]["url"].as_str()
+                {
+                    let is_slim = text_val["textures"]["SKIN"]["metadata"]["model"]
+                        .as_str()
+                        .map(|m| m.eq_ignore_ascii_case("slim"))
+                        .unwrap_or(false);
+                    (skin_url.to_string(), is_slim)
+                } else {
+                    // Fallback to official default Steve/Alex texture based on player UUID
+                    let is_slim = default_model_is_alex(uuid);
+                    let fallback_url = if is_slim {
+                        "https://textures.minecraft.net/texture/88a95d732e79ced2b24b426e2e5055fa08f1b626d37fa10b93081e646fd1a46b".to_string()
+                    } else {
+                        "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dcb13f7df319a71824766".to_string()
+                    };
+                    (fallback_url, is_slim)
+                };
 
                 let cape_url = text_val["textures"]["CAPE"]["url"]
                     .as_str()
@@ -249,9 +317,30 @@ fn extract_textures_from_profile(
         }
     }
 
-    Err(AppError::NotFound(
-        "No texture property found in profile".to_string(),
-    ))
+    // If profile has no textures property, fallback to default Steve/Alex based on UUID
+    let is_slim = default_model_is_alex(uuid);
+    let fallback_url = if is_slim {
+        "https://textures.minecraft.net/texture/88a95d732e79ced2b24b426e2e5055fa08f1b626d37fa10b93081e646fd1a46b".to_string()
+    } else {
+        "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dcb13f7df319a71824766".to_string()
+    };
+    Ok((fallback_url, None, is_slim))
+}
+
+pub fn default_model_is_alex(uuid: &str) -> bool {
+    let clean = uuid.replace('-', "");
+    if clean.len() != 32 {
+        return false;
+    }
+    if let (Ok(msb), Ok(lsb)) = (
+        u64::from_str_radix(&clean[0..16], 16),
+        u64::from_str_radix(&clean[16..32], 16),
+    ) {
+        let hash = (msb >> 32) ^ msb ^ (lsb >> 32) ^ lsb;
+        (hash & 1) == 1
+    } else {
+        false
+    }
 }
 
 fn url_encode(input: &str) -> String {
@@ -280,5 +369,31 @@ mod tests {
         assert_eq!(url_encode("Steve 1"), "Steve%201");
         assert_eq!(url_encode("Alex/Steve"), "Alex%2FSteve");
         assert_eq!(url_encode("冰"), "%E5%86%B0");
+    }
+
+    #[test]
+    fn test_default_model_is_alex() {
+        // Test deterministic UUID hash calculation
+        let alex_uuid = "00000000000000000000000000000001";
+        let steve_uuid = "00000000000000000000000000000002";
+        assert!(default_model_is_alex(alex_uuid));
+        assert!(!default_model_is_alex(steve_uuid));
+    }
+
+    #[test]
+    fn test_extract_textures_missing_skin_fallback() {
+        let alex_uuid = "00000000000000000000000000000001";
+        // Profile with empty properties
+        let empty_profile = serde_json::json!({
+            "id": alex_uuid,
+            "name": "TestAlex",
+            "properties": []
+        });
+
+        let (skin_url, cape_url, is_slim) =
+            extract_textures_from_profile(&empty_profile, alex_uuid).unwrap();
+        assert!(skin_url.contains("textures.minecraft.net"));
+        assert_eq!(cape_url, None);
+        assert!(is_slim);
     }
 }

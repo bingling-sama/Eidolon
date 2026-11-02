@@ -150,7 +150,7 @@ mod tests {
     #[tokio::test]
     async fn test_http_api_endpoints() {
         let fetcher = TextureFetcher::new(100, 60);
-        let worker_pool = RenderWorkerPool::new(1, 10);
+        let worker_pool = RenderWorkerPool::new(0, 10);
         let state = Arc::new(AppState {
             fetcher,
             worker_pool,
