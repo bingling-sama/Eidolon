@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EidolonSceneConfig",
+  "description": "Eidolon multi-character 3D scene configuration",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "yaw": { "type": "number", "default": 180.0 },
+        "pitch": { "type": "number", "default": 90.0 },
+        "scale": { "type": "number", "default": 1.0 },
+        "target": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["skin"],
+        "properties": {
+          "skin": { "type": "string" },
+          "skin_type": {
+            "type": "string",
+            "enum": ["classic", "slim"],
+            "default": "classic"
+          },
+          "position": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3,
+            "default": [0.0, 0.0, 0.0]
+          },
+          "rotation": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3,
+            "default": [0.0, 0.0, 0.0]
+          },
+          "posture": {
+            "type": "string",
+            "enum": ["idle", "walk", "run", "wave", "fly"],
+            "default": "idle"
+          },
+          "nametag": { "type": ["string", "null"] },
+          "nametag_see_through": { "type": "boolean", "default": true },
+          "cape": { "type": ["string", "null"] },
+          "elytra": { "type": ["string", "null"] }
+        }
+      }
+    }
+  },
+  "required": ["characters"]
+}

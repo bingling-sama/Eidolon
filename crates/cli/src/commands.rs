@@ -12,11 +12,13 @@ use winit::event_loop::EventLoop;
 use crate::args::{resolve_render_output, RenderAnimationArgs, SceneArgs, ViewportArgs};
 use crate::preview::{PreviewApp, PreviewInteraction, PreviewPlayback};
 use crate::scene::{
-    apply_posture_overrides, load_character, scene_state_and_camera_from_scene, PostureOverrides,
+    apply_posture_overrides, load_character, load_scene_from_config,
+    scene_state_and_camera_from_scene, PostureOverrides,
 };
 
 pub fn run_render(
-    skin: String,
+    skin: Option<String>,
+    scene_config: Option<PathBuf>,
     output: Option<String>,
     viewport: ViewportArgs,
     scene: SceneArgs,
@@ -56,7 +58,6 @@ pub fn run_render(
     };
 
     info!("Minecraft skin renderer");
-    info!("Skin: {}", skin);
     info!(
         "Output: {} ({}x{})",
         output, viewport.width, viewport.height
@@ -66,6 +67,29 @@ pub fn run_render(
     let renderer = Renderer::new()?;
     info!("Renderer ready");
 
+    if let Some(config_path) = scene_config {
+        info!("Loading scene from config: {}", config_path.display());
+        let loaded_scene = load_scene_from_config(&renderer, config_path)?;
+        info!(
+            "Scene loaded with {} characters",
+            loaded_scene.characters.len()
+        );
+
+        info!("Rendering scene...");
+        let mut frame_producer = |_time| {
+            renderer.render_scene(&loaded_scene, viewport.width, viewport.height)
+        };
+        let written = write_output(&output_path, output_intent, &mut frame_producer)?;
+        info!("Done. Saved: {}", written.display());
+        return Ok(());
+    }
+
+    let skin = skin.ok_or_else(|| {
+        error!("Skin path or --scene-config must be provided");
+        "skin path or --scene-config must be provided"
+    })?;
+
+    info!("Skin: {}", skin);
     info!("Loading character resources");
     let (mut character, camera) = load_character(&renderer, &skin, &scene)?;
     info!("Character resources loaded");
@@ -84,7 +108,8 @@ pub fn run_render(
 }
 
 pub fn run_preview(
-    skin: String,
+    skin: Option<String>,
+    scene_config: Option<PathBuf>,
     viewport: ViewportArgs,
     scene: SceneArgs,
     transparent: bool,
@@ -98,6 +123,8 @@ pub fn run_preview(
         renderer: None,
         window: None,
         character: None,
+        scene: None,
+        scene_config_path: scene_config,
         scene_state,
         camera,
         texture_path: skin,

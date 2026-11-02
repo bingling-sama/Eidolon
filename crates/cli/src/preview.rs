@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use eidolon_core::{
@@ -7,6 +8,7 @@ use eidolon_core::{
     character::{Character, Posture},
     error::EidolonError,
     renderer::Renderer,
+    scene::Scene,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -16,15 +18,17 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::args::PostureCli;
-use crate::scene::{PostureOverrides, SceneState};
+use crate::scene::{load_scene_from_config, PostureOverrides, SceneState};
 
 pub struct PreviewApp {
     pub renderer: Option<Renderer>,
     pub window: Option<Arc<Window>>,
     pub character: Option<Character>,
+    pub scene: Option<Scene>,
+    pub scene_config_path: Option<PathBuf>,
     pub scene_state: SceneState,
     pub camera: Camera,
-    pub texture_path: String,
+    pub texture_path: Option<String>,
     pub cape_atlas_path: Option<String>,
     pub elytra_atlas_path: Option<String>,
     pub initial_size: PhysicalSize<u32>,
@@ -264,21 +268,6 @@ impl ApplicationHandler for PreviewApp {
             }
             renderer
         };
-        let body = renderer
-            .load_body(&self.texture_path, self.scene_state.skin_type)
-            .expect("Failed to load body");
-        let mut character = Character::from_body(body);
-        self.scene_state.apply_to(&mut character);
-        let atlas_path = self
-            .cape_atlas_path
-            .as_deref()
-            .or(self.elytra_atlas_path.as_deref());
-        if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
-            let atlas = renderer
-                .load_back_equipment_atlas(path)
-                .expect("Failed to load back equipment atlas");
-            character.equip(BackEquipment::new(atlas, kind));
-        }
         let size = window.inner_size();
         renderer.resize(size.width, size.height);
         #[cfg(windows)]
@@ -286,8 +275,31 @@ impl ApplicationHandler for PreviewApp {
             composition.commit();
         }
 
+        if let Some(config_path) = &self.scene_config_path {
+            let loaded_scene = load_scene_from_config(&renderer, config_path)
+                .expect("Failed to load scene from config");
+            self.camera = loaded_scene.camera;
+            self.scene = Some(loaded_scene);
+        } else if let Some(texture_path) = &self.texture_path {
+            let body = renderer
+                .load_body(texture_path, self.scene_state.skin_type)
+                .expect("Failed to load body");
+            let mut character = Character::from_body(body);
+            self.scene_state.apply_to(&mut character);
+            let atlas_path = self
+                .cape_atlas_path
+                .as_deref()
+                .or(self.elytra_atlas_path.as_deref());
+            if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
+                let atlas = renderer
+                    .load_back_equipment_atlas(path)
+                    .expect("Failed to load back equipment atlas");
+                character.equip(BackEquipment::new(atlas, kind));
+            }
+            self.character = Some(character);
+        }
+
         self.renderer = Some(renderer);
-        self.character = Some(character);
         #[cfg(windows)]
         {
             self.composition = composition;
@@ -323,13 +335,26 @@ impl ApplicationHandler for PreviewApp {
                     .mouse_input(button, state == ElementState::Pressed);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if let Some(character) = &mut self.character {
-                    self.interaction.cursor_moved(
-                        position.x,
-                        position.y,
-                        &mut character.position,
-                        &mut self.camera,
-                    );
+                let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                let target_pos = if let Some(character) = &mut self.character {
+                    &mut character.position
+                } else if let Some(scene) = &mut self.scene {
+                    if let Some(first) = scene.characters.first_mut() {
+                        &mut first.position
+                    } else {
+                        &mut dummy_pos
+                    }
+                } else {
+                    &mut dummy_pos
+                };
+                self.interaction.cursor_moved(
+                    position.x,
+                    position.y,
+                    target_pos,
+                    &mut self.camera,
+                );
+                if let Some(scene) = &mut self.scene {
+                    scene.camera = self.camera;
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -340,9 +365,22 @@ impl ApplicationHandler for PreviewApp {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(position) => position.y as f32 / 50.0,
                 };
-                if let Some(character) = &mut self.character {
-                    self.interaction
-                        .scroll(lines, &mut character.position, &mut self.camera);
+                let mut dummy_pos = cgmath::Vector3::new(0.0, 0.0, 0.0);
+                let target_pos = if let Some(character) = &mut self.character {
+                    &mut character.position
+                } else if let Some(scene) = &mut self.scene {
+                    if let Some(first) = scene.characters.first_mut() {
+                        &mut first.position
+                    } else {
+                        &mut dummy_pos
+                    }
+                } else {
+                    &mut dummy_pos
+                };
+                self.interaction
+                    .scroll(lines, target_pos, &mut self.camera);
+                if let Some(scene) = &mut self.scene {
+                    scene.camera = self.camera;
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -378,8 +416,19 @@ impl ApplicationHandler for PreviewApp {
                 if let Some(character) = &mut self.character {
                     character.posture = self.posture_overrides.apply(self.playback.sample());
                 }
-                if let (Some(renderer), Some(character)) = (&self.renderer, &self.character) {
-                    match renderer.render_frame(character, &self.camera) {
+                if let Some(scene) = &mut self.scene {
+                    scene.camera = self.camera;
+                }
+                if let Some(renderer) = &self.renderer {
+                    let render_result = if let Some(scene) = &self.scene {
+                        renderer.render_scene_frame(scene)
+                    } else if let Some(character) = &self.character {
+                        renderer.render_frame(character, &self.camera)
+                    } else {
+                        Ok(())
+                    };
+
+                    match render_result {
                         Ok(()) => {}
                         Err(EidolonError::Surface(
                             eidolon_core::error::SurfaceError::Lost
