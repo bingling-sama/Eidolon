@@ -58,12 +58,13 @@ fn parse_post_query(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
     if content_type.contains("application/json") || bytes.first() == Some(&b'{') {
-        serde_json::from_slice(&bytes)
-            .map_err(|e| AppError::BadRequest(format!("Invalid JSON body: {e}")))
+        let body_q: RenderQuery = serde_json::from_slice(&bytes)
+            .map_err(|e| AppError::BadRequest(format!("Invalid JSON body: {e}")))?;
+        Ok(query.merge_with(body_q))
     } else if let Ok(body_str) = std::str::from_utf8(&bytes) {
         if let Ok(uri) = format!("/?{body_str}").parse() {
             if let Ok(axum::extract::Query(form_q)) = axum::extract::Query::try_from_uri(&uri) {
-                return Ok(form_q);
+                return Ok(query.merge_with(form_q));
             }
         }
         Ok(query)

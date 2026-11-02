@@ -208,6 +208,106 @@ impl RenderQuery {
         (w, h)
     }
 
+    pub fn merge_with(mut self, other: RenderQuery) -> Self {
+        if other.skin_url.is_some() {
+            self.skin_url = other.skin_url;
+        }
+        if other.cape_url.is_some() {
+            self.cape_url = other.cape_url;
+        }
+        if other.elytra_url.is_some() {
+            self.elytra_url = other.elytra_url;
+        }
+        if other.slim.is_some() {
+            self.slim = other.slim;
+        }
+        if other.nametag.is_some() {
+            self.nametag = other.nametag;
+        }
+        if other.disable_nametag_see_through.is_some() {
+            self.disable_nametag_see_through = other.disable_nametag_see_through;
+        }
+        if other.posture.is_some() {
+            self.posture = other.posture;
+        }
+        if other.cape_pitch.is_some() {
+            self.cape_pitch = other.cape_pitch;
+        }
+        if other.elytra_pitch.is_some() {
+            self.elytra_pitch = other.elytra_pitch;
+        }
+        if other.elytra_spread.is_some() {
+            self.elytra_spread = other.elytra_spread;
+        }
+        if other.head_yaw.is_some() {
+            self.head_yaw = other.head_yaw;
+        }
+        if other.head_pitch.is_some() {
+            self.head_pitch = other.head_pitch;
+        }
+        if other.left_arm_roll.is_some() {
+            self.left_arm_roll = other.left_arm_roll;
+        }
+        if other.left_arm_pitch.is_some() {
+            self.left_arm_pitch = other.left_arm_pitch;
+        }
+        if other.right_arm_roll.is_some() {
+            self.right_arm_roll = other.right_arm_roll;
+        }
+        if other.right_arm_pitch.is_some() {
+            self.right_arm_pitch = other.right_arm_pitch;
+        }
+        if other.left_leg_pitch.is_some() {
+            self.left_leg_pitch = other.left_leg_pitch;
+        }
+        if other.right_leg_pitch.is_some() {
+            self.right_leg_pitch = other.right_leg_pitch;
+        }
+        if other.cam_yaw.is_some() {
+            self.cam_yaw = other.cam_yaw;
+        }
+        if other.cam_pitch.is_some() {
+            self.cam_pitch = other.cam_pitch;
+        }
+        if other.cam_zoom.is_some() {
+            self.cam_zoom = other.cam_zoom;
+        }
+        if other.width.is_some() {
+            self.width = other.width;
+        }
+        if other.height.is_some() {
+            self.height = other.height;
+        }
+        if other.format.is_some() {
+            self.format = other.format;
+        }
+        if other.definition.is_some() {
+            self.definition = other.definition;
+        }
+        if other.transparent.is_some() {
+            self.transparent = other.transparent;
+        }
+        if other.pos_x.is_some() {
+            self.pos_x = other.pos_x;
+        }
+        if other.pos_y.is_some() {
+            self.pos_y = other.pos_y;
+        }
+        if other.pos_z.is_some() {
+            self.pos_z = other.pos_z;
+        }
+        if other.rot_x.is_some() {
+            self.rot_x = other.rot_x;
+        }
+        if other.rot_y.is_some() {
+            self.rot_y = other.rot_y;
+        }
+        if other.rot_z.is_some() {
+            self.rot_z = other.rot_z;
+        }
+        self
+    }
+
     pub fn is_webp(&self) -> bool {
         self.format
             .as_deref()
@@ -280,5 +380,26 @@ mod tests {
         assert_eq!(parsed.transparent, Some(false));
         assert_eq!(parsed.slim, Some(true));
         assert_eq!(parsed.definition, Some(1.2));
+    }
+
+    #[test]
+    fn test_merge_with() {
+        let q1 = RenderQuery {
+            definition: Some(2.0),
+            transparent: Some(true),
+            ..Default::default()
+        };
+        let q2 = RenderQuery {
+            skin_url: Some("https://example.com/skin.png".to_string()),
+            transparent: Some(false),
+            ..Default::default()
+        };
+        let merged = q1.merge_with(q2);
+        assert_eq!(merged.definition, Some(2.0));
+        assert_eq!(merged.transparent, Some(false));
+        assert_eq!(
+            merged.skin_url.as_deref(),
+            Some("https://example.com/skin.png")
+        );
     }
 }

@@ -14,6 +14,11 @@
 - `contributing_zh-CN.md` 贡献指南
 - `credits_zh-CN.md` 项目致谢
 
+## 示例与服务
+
+- `../examples/server/README_zh-CN.md` 高性能 HTTP 渲染微服务与 SkinRenderMC API 兼容
+- `../examples/wasm/README.md` WebAssembly 与 WebGPU 浏览器集成示例
+
 ## 语言
 
 - 中文（本文件）

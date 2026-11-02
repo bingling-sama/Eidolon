@@ -301,16 +301,10 @@ fn execute_render_single_view(
         apply_opaque_background(&mut frame);
     }
 
-    let (format, content_type) = if query.is_webp() {
-        (StaticFormat::WebP, "image/webp")
-    } else {
-        (StaticFormat::Png, "image/png")
-    };
-
-    let encoded = encode_static_image(&frame, format)
+    let encoded = encode_static_image(&frame, StaticFormat::Png)
         .map_err(|e| AppError::Internal(format!("Failed to encode image: {e}")))?;
 
-    Ok((encoded, content_type))
+    Ok((encoded, "image/png"))
 }
 
 fn execute_render_both(
@@ -368,16 +362,10 @@ fn execute_render_both(
         apply_opaque_background(&mut combined);
     }
 
-    let (format, content_type) = if query.is_webp() {
-        (StaticFormat::WebP, "image/webp")
-    } else {
-        (StaticFormat::Png, "image/png")
-    };
-
-    let encoded = encode_static_image(&combined, format)
+    let encoded = encode_static_image(&combined, StaticFormat::Png)
         .map_err(|e| AppError::Internal(format!("Failed to encode image: {e}")))?;
 
-    Ok((encoded, content_type))
+    Ok((encoded, "image/png"))
 }
 
 fn execute_render_json_all(
@@ -579,7 +567,9 @@ mod tests {
             Ok(r) => r,
             Err(_) => return,
         };
-        let skin_bytes = std::fs::read("../../resources/bingling_sama.png")
+        let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../resources/bingling_sama.png");
+        let skin_bytes = std::fs::read(&manifest_path)
             .or_else(|_| std::fs::read("resources/bingling_sama.png"))
             .expect("Skin file should exist");
         let query = RenderQuery {

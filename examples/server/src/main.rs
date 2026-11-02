@@ -231,5 +231,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 8. POST /url/image/front with mixed query and JSON body
+        let res = client
+            .post(format!("http://{addr}/url/image/front?definition=2.0"))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }

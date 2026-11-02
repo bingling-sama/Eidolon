@@ -176,6 +176,23 @@ Healthcheck endpoint. Returns JSON:
 - **Texture Caching**: Downloaded texture bytes are cached in an in-memory LRU cache (`--cache-entries`, `--cache-ttl`).
 - **Memory Footprint**: `/url/json/all` concurrently renders three separate views and encodes them to base64, which temporarily allocates multiple image buffers. Ensure worker concurrency (`--workers`) matches host memory capacity.
 
+## Testing
+
+Run the server microservice test suite (10 unit and HTTP integration tests):
+
+```bash
+cargo test -p eidolon-server
+```
+
+The test suite covers:
+- Route matching and HTTP status code mappings (`GET /`, `/health`, error handlers)
+- POST parameter decoding and Query/Body parameter merging
+- Definition resolution scaling calculations (`0.8..=3.5`)
+- Opaque `#F0F0F0` background alpha blending
+- Mojang/LittleSkin URL percent-encoding (`url_encode`)
+- Java-compliant UUID hash parity determination (`default_model_is_alex`) and default Steve/Alex fallback
+- Dual-view horizontal stitching and PNG encoding
+
 ## Python Integration (`skinrendermcapi.py`)
 
 Replace `subprocess.run(["eidolon", "render", ...])` with a direct HTTP request:

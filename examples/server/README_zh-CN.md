@@ -176,6 +176,23 @@ curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/textur
 - **纹理缓存机制**：已下载的皮肤与披风二进制缓存于内存 LRU 缓存中（通过 `--cache-entries` 与 `--cache-ttl` 调整）。
 - **内存占用考量**：`/url/json/all` 端点会并发渲染 3 个视角并编码为 Base64，请求期间会短暂占用未压缩的 RGBA 帧缓冲显存与内存。配置并发数（`--workers`）时请匹配宿主机资源。
 
+## 自动化测试
+
+运行服务端微服务测试套件（包含 10 个单元测试与 HTTP 集成测试）：
+
+```bash
+cargo test -p eidolon-server
+```
+
+测试套件涵盖：
+- HTTP 路由分发与状态码映射（`GET /`、`/health`、参数错误拦截）
+- POST 参数多源合并（Query 串与 Request Body 组合覆盖）
+- 分辨率缩放乘数计算（`0.8..=3.5`）
+- `#F0F0F0` 浅灰不透明底色 Alpha 混合
+- Mojang/LittleSkin URL 百分号编码（`url_encode`）
+- 官方 Java 版 UUID 哈希奇偶模型判定（`default_model_is_alex`）与默认 Steve/Alex 皮肤回退
+- 正反双视角水平拼接与严格 PNG 编码
+
 ## Python 集成示例 (`skinrendermcapi.py`)
 
 将原有的 `subprocess.run(["eidolon", "render", ...])` 替换为 HTTP 请求：
