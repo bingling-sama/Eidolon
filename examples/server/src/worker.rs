@@ -333,7 +333,7 @@ fn execute_render_both(
         target: [0.0, 1.0, 0.0],
     };
 
-    let front_frame = renderer
+    let mut front_frame = renderer
         .render(&character, &front_camera, half_width, total_height)
         .map_err(|e| AppError::RenderError(format!("Rendering front view failed: {e}")))?;
 
@@ -345,7 +345,7 @@ fn execute_render_both(
         target: [0.0, 1.0, 0.0],
     };
 
-    let back_frame = renderer
+    let mut back_frame = renderer
         .render(
             &character,
             &back_camera,
@@ -355,12 +355,14 @@ fn execute_render_both(
         .map_err(|e| AppError::RenderError(format!("Rendering back view failed: {e}")))?;
 
     let mut combined = image::RgbaImage::new(total_width, total_height);
-    image::imageops::overlay(&mut combined, &front_frame, 0, 0);
-    image::imageops::overlay(&mut combined, &back_frame, half_width as i64, 0);
-
     if query.transparent == Some(false) {
+        apply_opaque_background(&mut front_frame);
+        apply_opaque_background(&mut back_frame);
         apply_opaque_background(&mut combined);
     }
+
+    image::imageops::overlay(&mut combined, &front_frame, 0, 0);
+    image::imageops::overlay(&mut combined, &back_frame, half_width as i64, 0);
 
     let encoded = encode_static_image(&combined, StaticFormat::Png)
         .map_err(|e| AppError::Internal(format!("Failed to encode image: {e}")))?;

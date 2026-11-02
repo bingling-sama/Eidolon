@@ -241,5 +241,25 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 9. POST /url/image/front with malformed JSON body returns 400
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/json")
+            .body("{invalid-json}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 10. POST /url/image/front with malformed form urlencoded body returns 400
+        let res = client
+            .post(format!("http://{addr}/url/image/front"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body("%ZZ%invalid")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }

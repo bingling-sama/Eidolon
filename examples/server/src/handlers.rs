@@ -61,15 +61,17 @@ fn parse_post_query(
         let body_q: RenderQuery = serde_json::from_slice(&bytes)
             .map_err(|e| AppError::BadRequest(format!("Invalid JSON body: {e}")))?;
         Ok(query.merge_with(body_q))
-    } else if let Ok(body_str) = std::str::from_utf8(&bytes) {
-        if let Ok(uri) = format!("/?{body_str}").parse() {
-            if let Ok(axum::extract::Query(form_q)) = axum::extract::Query::try_from_uri(&uri) {
-                return Ok(query.merge_with(form_q));
-            }
-        }
-        Ok(query)
     } else {
-        Ok(query)
+        // Parse as application/x-www-form-urlencoded
+        let body_str = std::str::from_utf8(&bytes)
+            .map_err(|e| AppError::BadRequest(format!("Invalid UTF-8 body: {e}")))?;
+        let uri = format!("/?{body_str}")
+            .parse()
+            .map_err(|e| AppError::BadRequest(format!("Invalid form query format: {e}")))?;
+        match axum::extract::Query::<RenderQuery>::try_from_uri(&uri) {
+            Ok(axum::extract::Query(form_q)) => Ok(query.merge_with(form_q)),
+            Err(e) => Err(AppError::BadRequest(format!("Invalid form body data: {e}"))),
+        }
     }
 }
 
