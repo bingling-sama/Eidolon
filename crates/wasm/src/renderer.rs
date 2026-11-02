@@ -6,6 +6,7 @@ use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon_core::renderer::Renderer;
+use eidolon_core::scene::Scene;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageFormat;
@@ -18,6 +19,7 @@ use wasm_bindgen::prelude::*;
 pub struct CanvasRenderer {
     inner: Renderer,
     character: Option<Character>,
+    scene_characters: Vec<Option<Character>>,
     pending_posture: Option<Posture>,
     skin_type: SkinType,
     camera: Camera,
@@ -39,6 +41,7 @@ impl CanvasRenderer {
         Ok(CanvasRenderer {
             inner,
             character: None,
+            scene_characters: Vec::new(),
             pending_posture: Some(DefaultPostures::STAND),
             skin_type: SkinType::Classic,
             camera: Camera::default(),
@@ -351,15 +354,31 @@ impl CanvasRenderer {
         height: u32,
         format: Option<String>,
     ) -> Result<Vec<u8>, JsValue> {
-        let character = self
-            .character
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("no character resources loaded"))?;
-        let image_buffer = self
-            .inner
-            .render_async(character, &self.camera, width, height)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let active_scene_chars: Vec<Character> = self
+            .scene_characters
+            .iter()
+            .filter_map(|c| c.clone())
+            .collect();
+
+        let image_buffer = if !active_scene_chars.is_empty() {
+            let scene = Scene {
+                characters: active_scene_chars,
+                camera: self.camera,
+            };
+            self.inner
+                .render_scene_async(&scene, width, height)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?
+        } else {
+            let character = self
+                .character
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("no character resources loaded"))?;
+            self.inner
+                .render_async(character, &self.camera, width, height)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?
+        };
         let format_str = format.as_deref().unwrap_or("png");
         let mut encoded_bytes = Vec::new();
         match format_str.to_ascii_lowercase().as_str() {
@@ -398,6 +417,23 @@ impl CanvasRenderer {
 
     /// Present one frame to the canvas. Call in a rAF loop at 60fps.
     pub fn render_frame(&self) -> Result<(), JsValue> {
+        let active_scene_chars: Vec<Character> = self
+            .scene_characters
+            .iter()
+            .filter_map(|c| c.clone())
+            .collect();
+
+        if !active_scene_chars.is_empty() {
+            let scene = Scene {
+                characters: active_scene_chars,
+                camera: self.camera,
+            };
+            self.inner
+                .render_scene_frame(&scene)
+                .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
+            return Ok(());
+        }
+
         let character = self
             .character
             .as_ref()
@@ -407,9 +443,125 @@ impl CanvasRenderer {
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         Ok(())
     }
+
+    // ── Multi-Character / Multi-Model Scene API ──
+
+    /// Add a new character entity to the scene with given skin bytes and model type.
+    /// Returns an integer entity ID.
+    pub fn add_character(&mut self, skin_bytes: &[u8], skin_type: &str) -> Result<u32, JsValue> {
+        let st = parse_skin_type_str(skin_type)?;
+        let body = self
+            .inner
+            .load_body_from_memory(skin_bytes, st)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let character = Character::from_body(body);
+        let id = self.scene_characters.len() as u32;
+        self.scene_characters.push(Some(character));
+        log::info!("Added character entity {}", id);
+        Ok(id)
+    }
+
+    /// Remove a character entity by ID.
+    pub fn remove_character(&mut self, id: u32) -> Result<(), JsValue> {
+        let idx = id as usize;
+        if idx < self.scene_characters.len() && self.scene_characters[idx].is_some() {
+            self.scene_characters[idx] = None;
+            log::info!("Removed character entity {}", id);
+            Ok(())
+        } else {
+            Err(JsValue::from_str(&format!("invalid character entity ID: {id}")))
+        }
+    }
+
+    /// Number of active character entities in the scene.
+    pub fn get_character_count(&self) -> u32 {
+        self.scene_characters.iter().filter(|c| c.is_some()).count() as u32
+    }
+
+    /// Set skin for an existing character entity.
+    pub fn set_character_skin(
+        &mut self,
+        id: u32,
+        skin_bytes: &[u8],
+        skin_type: &str,
+    ) -> Result<(), JsValue> {
+        let st = parse_skin_type_str(skin_type)?;
+        let body = self
+            .inner
+            .load_body_from_memory(skin_bytes, st)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.attach_body(body);
+        Ok(())
+    }
+
+    /// Set cape for an existing character entity.
+    pub fn set_character_cape(&mut self, id: u32, cape_bytes: &[u8]) -> Result<(), JsValue> {
+        let atlas = self
+            .inner
+            .load_back_equipment_atlas_from_memory(cape_bytes)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let equipment = BackEquipment::new(atlas, BackEquipmentKind::Cape);
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.equip(equipment);
+        Ok(())
+    }
+
+    /// Clear cape/back equipment for an existing character entity.
+    pub fn clear_character_cape(&mut self, id: u32) -> Result<(), JsValue> {
+        let char_ref = self.get_character_mut(id)?;
+        let _ = char_ref.unequip();
+        Ok(())
+    }
+
+    /// Set posture for an existing character entity by name.
+    pub fn set_character_posture(&mut self, id: u32, posture_name: &str) -> Result<(), JsValue> {
+        let posture = parse_posture_str(posture_name)?;
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.posture = posture;
+        Ok(())
+    }
+
+    /// Set world position for an existing character entity.
+    pub fn set_character_position(&mut self, id: u32, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.position = cgmath::Vector3::new(x, y, z);
+        Ok(())
+    }
+
+    /// Set world rotation (degrees) for an existing character entity.
+    pub fn set_character_rotation(&mut self, id: u32, rx: f32, ry: f32, rz: f32) -> Result<(), JsValue> {
+        let char_ref = self.get_character_mut(id)?;
+        char_ref.rotation = cgmath::Vector3::new(rx, ry, rz);
+        Ok(())
+    }
+
+    /// Set nametag and see-through toggle for an existing character entity.
+    pub fn set_character_nametag(
+        &mut self,
+        id: u32,
+        name: Option<String>,
+        see_through: bool,
+    ) -> Result<(), JsValue> {
+        let char_ref = self.get_character_mut(id)?;
+        let nametag = name.filter(|s| !s.trim().is_empty());
+        char_ref.nametag = nametag;
+        char_ref.nametag_see_through = see_through;
+        Ok(())
+    }
 }
 
 impl CanvasRenderer {
+    fn get_character_mut(&mut self, id: u32) -> Result<&mut Character, JsValue> {
+        let idx = id as usize;
+        if idx < self.scene_characters.len() {
+            if let Some(character) = &mut self.scene_characters[idx] {
+                return Ok(character);
+            }
+        }
+        Err(JsValue::from_str(&format!("character entity {id} not found")))
+    }
+
     fn apply_animation_sample(&mut self) {
         let mut posture = self.timeline.sample();
         if let Some((pitch, spread)) = self.elytra_override {
@@ -456,6 +608,25 @@ fn parse_animation(preset: &str) -> Result<AnimationPreset, JsValue> {
         "wave" => Ok(AnimationPreset::Wave),
         "fly" => Ok(AnimationPreset::Fly),
         other => Err(JsValue::from_str(&format!("unknown animation: '{other}'"))),
+    }
+}
+
+fn parse_skin_type_str(skin_type: &str) -> Result<SkinType, JsValue> {
+    match skin_type.to_lowercase().as_str() {
+        "classic" => Ok(SkinType::Classic),
+        "slim" => Ok(SkinType::Slim),
+        other => Err(JsValue::from_str(&format!("unknown skin type: '{other}'"))),
+    }
+}
+
+fn parse_posture_str(preset: &str) -> Result<Posture, JsValue> {
+    match preset.to_lowercase().as_str() {
+        "stand" | "idle" => Ok(DefaultPostures::STAND),
+        "wave" => Ok(DefaultPostures::WAVE),
+        "walking" | "walk" => Ok(DefaultPostures::WALKING),
+        "running" | "run" => Ok(DefaultPostures::RUNNING),
+        "flying" | "fly" => Ok(DefaultPostures::FLYING),
+        other => Err(JsValue::from_str(&format!("unknown posture: '{other}'"))),
     }
 }
 
