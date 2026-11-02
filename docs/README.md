@@ -13,6 +13,7 @@ This folder contains the full documentation for Eidolon. Start with the overview
 - `resources.md` Built-in resources and asset credits
 - `contributing.md` How to contribute
 - `credits.md` Project acknowledgements
+- `../examples/server/README.md` High-performance HTTP rendering microservice & SkinRenderMC API
 
 ## Languages
 

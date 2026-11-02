@@ -244,13 +244,9 @@ fn execute_render(
     };
 
     let (width, height) = query.dimensions();
-    let mut frame = renderer
+    let frame = renderer
         .render(&character, &camera, width, height)
         .map_err(|e| AppError::RenderError(format!("Rendering failed: {e}")))?;
-
-    if query.transparent == Some(false) {
-        apply_opaque_background(&mut frame);
-    }
 
     let (format, content_type) = if query.is_webp() {
         (StaticFormat::WebP, "image/webp")

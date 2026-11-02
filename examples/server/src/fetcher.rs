@@ -100,7 +100,8 @@ impl TextureFetcher {
         &self,
         name: &str,
     ) -> Result<(String, Option<String>, String, bool), AppError> {
-        let profile_url = format!("https://api.mojang.com/users/profiles/minecraft/{name}");
+        let encoded_name = url_encode(name.trim());
+        let profile_url = format!("https://api.mojang.com/users/profiles/minecraft/{encoded_name}");
         let resp =
             self.client.get(&profile_url).send().await.map_err(|e| {
                 AppError::FetchError(format!("Mojang profile API request failed: {e}"))
@@ -156,8 +157,10 @@ impl TextureFetcher {
         &self,
         name: &str,
     ) -> Result<(String, Option<String>, String, bool), AppError> {
-        let profile_url =
-            format!("https://littleskin.cn/api/yggdrasil/api/users/profiles/minecraft/{name}");
+        let encoded_name = url_encode(name.trim());
+        let profile_url = format!(
+            "https://littleskin.cn/api/yggdrasil/api/users/profiles/minecraft/{encoded_name}"
+        );
         let resp = self.client.get(&profile_url).send().await.map_err(|e| {
             AppError::FetchError(format!("LittleSkin profile API request failed: {e}"))
         })?;
@@ -249,4 +252,33 @@ fn extract_textures_from_profile(
     Err(AppError::NotFound(
         "No texture property found in profile".to_string(),
     ))
+}
+
+fn url_encode(input: &str) -> String {
+    let mut encoded = String::new();
+    for byte in input.bytes() {
+        match byte {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                use std::fmt::Write;
+                let _ = write!(encoded, "%{:02X}", byte);
+            }
+        }
+    }
+    encoded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_encode() {
+        assert_eq!(url_encode("Steve"), "Steve");
+        assert_eq!(url_encode("Steve 1"), "Steve%201");
+        assert_eq!(url_encode("Alex/Steve"), "Alex%2FSteve");
+        assert_eq!(url_encode("冰"), "%E5%86%B0");
+    }
 }

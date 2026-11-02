@@ -204,10 +204,12 @@ async fn handle_render(
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
-    headers.insert(
-        header::CACHE_CONTROL,
-        "public, max-age=86400".parse().unwrap(),
-    );
+    let cache_control = if mode == RenderMode::JsonAll {
+        "no-store, no-cache, must-revalidate"
+    } else {
+        "public, max-age=86400"
+    };
+    headers.insert(header::CACHE_CONTROL, cache_control.parse().unwrap());
     headers.insert("X-Render-Time-Ms", elapsed_ms.to_string().parse().unwrap());
 
     Ok((StatusCode::OK, headers, bytes).into_response())
