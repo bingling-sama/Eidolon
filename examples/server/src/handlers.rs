@@ -227,7 +227,7 @@ async fn handle_render(
             skin_bytes,
             cape_bytes,
             elytra_bytes,
-            query,
+            query: Box::new(query),
             mode,
         },
         responder: tx,
@@ -253,6 +253,9 @@ async fn handle_render(
 
     Ok((StatusCode::OK, headers, bytes).into_response())
 }
+
+type CharacterTextureResult = (usize, Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>);
+type CharacterTextureTuple = (Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>);
 
 pub async fn render_scene_handler(
     State(state): State<Arc<AppState>>,
@@ -298,11 +301,16 @@ pub async fn render_scene_handler(
             let skin_bytes = skin_res?;
             let cape_bytes = cape_res?;
             let elytra_bytes = elytra_res?;
-            Result::<_, AppError>::Ok((idx, skin_bytes, cape_bytes, elytra_bytes))
+            Result::<CharacterTextureResult, AppError>::Ok((
+                idx,
+                skin_bytes,
+                cape_bytes,
+                elytra_bytes,
+            ))
         });
     }
 
-    let mut fetched_results: Vec<Option<(Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>)>> =
+    let mut fetched_results: Vec<Option<CharacterTextureTuple>> =
         (0..query.characters.len()).map(|_| None).collect();
     while let Some(join_res) = join_set.join_next().await {
         let (idx, skin_bytes, cape_bytes, elytra_bytes) =
@@ -327,7 +335,7 @@ pub async fn render_scene_handler(
     let job = RenderJob {
         payload: JobPayload::Scene {
             characters: scene_characters,
-            query,
+            query: Box::new(query),
         },
         responder: tx,
     };

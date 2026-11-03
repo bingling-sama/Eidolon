@@ -39,12 +39,12 @@ pub enum JobPayload {
         skin_bytes: Vec<u8>,
         cape_bytes: Option<Vec<u8>>,
         elytra_bytes: Option<Vec<u8>>,
-        query: RenderQuery,
+        query: Box<RenderQuery>,
         mode: RenderMode,
     },
     Scene {
         characters: Vec<SceneCharacterTextures>,
-        query: SceneRenderQuery,
+        query: Box<SceneRenderQuery>,
     },
 }
 
@@ -409,7 +409,6 @@ fn execute_render_scene(
         .map_err(|e| AppError::Internal(format!("Failed to encode image: {e}")))?;
 
     Ok((encoded, content_type))
->>>>>>> 79f24a7 (feat(server): add multi-character scene render endpoint)
 }
 
 fn execute_render(
