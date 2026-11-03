@@ -1,6 +1,6 @@
 {
   "name": "@eidolonmc/wasm",
-  "version": "0.0.3-alpha",
+  "version": "0.0.4-alpha",
   "description": "WebAssembly bindings for Eidolon Minecraft skin renderer",
   "homepage": "https://github.com/bingling-sama/eidolon",
   "repository": {

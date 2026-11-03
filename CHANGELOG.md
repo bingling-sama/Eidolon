@@ -1,7 +1,50 @@
 # Changelog
 
 All notable changes to Eidolon will be documented in this file.
-## [0.0.3-alpha] - 2026-11-01
+## [0.0.4-alpha] - 2026-11-03
+
+### Bug Fixes
+
+- Address code review findings for multi-character rendering ([b49c6e1](https://github.com/bingling-sama/eidolon/commit/b49c6e10de197fe7108082053ffdd329987f5191))
+- Address review findings for docs, nametag depth, wasm elytra, and config errors ([403e490](https://github.com/bingling-sama/eidolon/commit/403e490c6393159f22db65aa2e7df48d21da0a1b))
+- Align auto-framing target centering, sync library docs, and add scene config docs ([f690e8a](https://github.com/bingling-sama/eidolon/commit/f690e8a1f886518b34308ccd0bd7ec45dd07e7d9))
+- *(server)* Address review findings for SkinRenderMC compatibility ([7d3d259](https://github.com/bingling-sama/eidolon/commit/7d3d2597ce0b2ff920787c26104849e6950bef01))
+- *(server)* Encode query usernames, fix json_all cache headers, and add http tests ([369c334](https://github.com/bingling-sama/eidolon/commit/369c334c47aabc9e46fd09282d6b729fd0954182))
+- *(server)* Handle upstream rate limits, fallback missing skin, and fix test worker lifecycle ([bf3ad4f](https://github.com/bingling-sama/eidolon/commit/bf3ad4f37f35f5c9d41840910ce328a779537dfe))
+- *(server)* Merge POST query parameters, enforce PNG, and update docs ([9c3b331](https://github.com/bingling-sama/eidolon/commit/9c3b3317e79291a7ddf0f67f848363b3413910c3))
+- *(server)* Improve form error handling and unify both view opaque blending ([2dc4173](https://github.com/bingling-sama/eidolon/commit/2dc4173de918abf92f933e2ac5d284d848c9fe4e))
+- *(server)* Map Mojang session API 400 status to BadRequest ([f589779](https://github.com/bingling-sama/eidolon/commit/f5897794b31f14a58732379441c9111b1f03d4f5))
+- *(server)* Map LittleSkin session API 400 status to BadRequest ([a1c3c23](https://github.com/bingling-sama/eidolon/commit/a1c3c230def8134647d0c8c644071655d62d332a))
+
+### CI/CD
+
+- Support crates.io OIDC Trusted Publishing with fallback token ([c9282e8](https://github.com/bingling-sama/eidolon/commit/c9282e8a1b54f6a4e52c8a1ce8e6c2aa98fe5d31))
+
+### Documentation
+
+- Add package READMEs for eidolon-core, eidolon-cli, and @eidolonmc/wasm ([4c8bc38](https://github.com/bingling-sama/eidolon/commit/4c8bc3856455183a55936a5f08f64bd3daf0ebe7))
+- Add multi-character scene preview image ([a57d51f](https://github.com/bingling-sama/eidolon/commit/a57d51fd2d1974650fd13ea3ac900fc9760b92b2))
+
+### Features
+
+- *(core)* Introduce Scene data structure and camera framing helpers ([cadb231](https://github.com/bingling-sama/eidolon/commit/cadb231334a38716c8aabc81b4305196ee682748))
+- *(renderer)* Support multi-character rendering in single render pass ([265fc5c](https://github.com/bingling-sama/eidolon/commit/265fc5cfa9dcce79ba8d3a2f90835b217df5f8ef))
+- *(cli)* Support multi-character scene configuration and rendering ([d484f84](https://github.com/bingling-sama/eidolon/commit/d484f8495402a4618b784ab0a362b008f793f8fc))
+- *(wasm)* Add multi-character entity manipulation API to CanvasRenderer ([4caca82](https://github.com/bingling-sama/eidolon/commit/4caca82b433344c5c7666d3775b1b51266d86f4a))
+- *(server)* Add full API compatibility with SkinRenderMC ([0ebe08d](https://github.com/bingling-sama/eidolon/commit/0ebe08d7929d09e0d0b0253d6260c4a82269571c))
+- *(server)* Add visual preview image, improve POST parameter parsing, and enhance missing skin fallback ([d2db7c4](https://github.com/bingling-sama/eidolon/commit/d2db7c4221fe7bc343374779c697ba4a55b182a0))
+
+### Refactor
+
+- *(core)* Narrow chunk constants visibility and add buffer scaling unit tests ([3e791a3](https://github.com/bingling-sama/eidolon/commit/3e791a35f9da68537c807c2be7f6b56c0a4facd5))
+- *(server)* Relocate preview image, refine JSON sniffing, and handle 400 status ([914ad07](https://github.com/bingling-sama/eidolon/commit/914ad075d207322f6670bb16717b50d9c14c9f4f))
+- Scope PR changes strictly to server and restore docs structure ([7720f20](https://github.com/bingling-sama/eidolon/commit/7720f20b91d0382a2491b918d3ee5d90cb91fcab))
+
+### Styling
+
+- Apply cargo fmt across workspace ([c0370d0](https://github.com/bingling-sama/eidolon/commit/c0370d0ef8a46aa2af73a476cee5079d8e42508d))
+
+## [0.0.3-alpha] - 2026-11-02
 
 ### Bug Fixes
 
@@ -14,6 +57,7 @@ All notable changes to Eidolon will be documented in this file.
 - *(animation)* Mirror the arm roll between both arms ([1a41211](https://github.com/bingling-sama/eidolon/commit/1a41211a8238650e2adeb12e16287575cde026ee))
 - *(cli)* Keep the preview window attributes immutable off Windows ([de78e00](https://github.com/bingling-sama/eidolon/commit/de78e004c66647c78a095933079be3a9e3b276e4))
 - *(cli)* Tighten the composition preview path ([adbe731](https://github.com/bingling-sama/eidolon/commit/adbe7312094f6b5c0dd1ba0180f924754b0364ad))
+- *(ci)* Fix crates packaging, npm trusted publishing and macos runner ([5b17efe](https://github.com/bingling-sama/eidolon/commit/5b17efee7a7b8a55011302bcb26b387b42d61a83))
 
 ### CI/CD
 
@@ -66,9 +110,6 @@ All notable changes to Eidolon will be documented in this file.
 
 ### Refactor
 
-- Rewrite with wgpu, replacing opengl ([23dde28](https://github.com/bingling-sama/eidolon/commit/23dde28d102e11e63291e6130cf10931ff666b6e))
-- Refactor renderer module into parts, enhance code readability ([c2df82a](https://github.com/bingling-sama/eidolon/commit/c2df82ab50f6d850e20208ae4d2259316fec45f8))
-- Optimize depth texture management in Renderer ([7855c91](https://github.com/bingling-sama/eidolon/commit/7855c9197c47c1cff76b6b04ff2486fe3b7edcca))
 - Update default posture values and integrate into CLI arguments ([80ec76c](https://github.com/bingling-sama/eidolon/commit/80ec76cb50d8d978107c3fbf720a33fa990e4c8d))
 - *(core)* Decouple asset loading and enable Send+Sync ([302e73e](https://github.com/bingling-sama/eidolon/commit/302e73ebb334ccee3d7bae821b742b27c55be9fb))
 - *(assets)* Collapse skin conversion into RawSkin ([5414331](https://github.com/bingling-sama/eidolon/commit/5414331ee53db0270543d2d926af3bfa6008b38a))
@@ -97,6 +138,14 @@ All notable changes to Eidolon will be documented in this file.
 ### Security
 
 - Replace panicking unwrap()/expect() with proper error propagation ([7b1701c](https://github.com/bingling-sama/eidolon/commit/7b1701cb2213042f68a7cbdd7ba8e9a1be92f79c))
+
+## [0.0.2-alpha] - 2026-03-24
+
+### Refactor
+
+- Rewrite with wgpu, replacing opengl ([23dde28](https://github.com/bingling-sama/eidolon/commit/23dde28d102e11e63291e6130cf10931ff666b6e))
+- Refactor renderer module into parts, enhance code readability ([c2df82a](https://github.com/bingling-sama/eidolon/commit/c2df82ab50f6d850e20208ae4d2259316fec45f8))
+- Optimize depth texture management in Renderer ([7855c91](https://github.com/bingling-sama/eidolon/commit/7855c9197c47c1cff76b6b04ff2486fe3b7edcca))
 
 ## [0.0.1-alpha] - 2025-08-24
 
