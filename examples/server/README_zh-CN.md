@@ -52,7 +52,7 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 ![SkinRenderMC 预览](../../docs/skinrendermc-preview.png)
 
-*图：双视角（`both`）渲染输出效果，包含 `#F0F0F0` 不透明浅灰背景（`transparent=false`）与头顶 `nametag` 名牌。*
+*图：双视角（`both`）渲染输出效果，包含 `#FFFFFF` 不透明纯白背景（`transparent=false`）与头顶 `nametag` 名牌。*
 
 #### 1. `GET /`
 返回 SkinRenderMC 状态载荷：
@@ -68,14 +68,14 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 - **路径参数**：`{view}` - `front`、`back` 或 `both`。
 - **输出尺寸**：
-  - `front` / `back`：严格由 `definition` 缩放：`300 * definition` × `300 * definition`（例如默认 `definition=1.5` 时为 450x450）。
-  - `both`：严格由 `definition` 缩放：`600 * definition` × `300 * definition`（例如 900x450），水平拼接正面（左）与背面（右）。
+  - `front` / `back`：严格由 `definition` 缩放：`350 * definition` × `670 * definition`（例如默认 `definition=1.5` 时为 525x1005）。
+  - `both`：严格由 `definition` 缩放：`700 * definition` × `670 * definition`（例如 1050x1005），水平拼接正面（左）与背面（右）。
 - **查询 / 请求体参数**：
   - `skinUrl`（string，必填）：玩家皮肤图片 URL 或路径。
   - `capeUrl`（string，可选）：玩家披风图片 URL 或路径。
   - `nameTag` 或 `nametag`（string，可选）：头顶名牌文本。
   - `definition`（float，可选，默认 `1.5`）：分辨率倍率，取值范围 `0.8..=3.5`。
-  - `transparent`（bool，可选，默认 `true`）：为 `false` 时，透明区域将混合到 `#F0F0F0` 浅灰底色上。
+  - `transparent`（bool，可选，默认 `true`）：为 `false` 时，透明区域将混合到 `#FFFFFF` 纯白底色上。
   - `slim`（bool，可选）：显式覆盖 Alex 纤细手臂模型判定。
 
 ```bash
@@ -188,7 +188,7 @@ cargo test -p eidolon-server
 - HTTP 路由分发与状态码映射（`GET /`、`/health`、参数错误拦截）
 - POST 参数多源合并（Query 串与 Request Body 组合覆盖）
 - 分辨率缩放乘数计算（`0.8..=3.5`）
-- `#F0F0F0` 浅灰不透明底色 Alpha 混合
+- `#FFFFFF` 纯白不透明底色 Alpha 混合
 - Mojang/LittleSkin URL 百分号编码（`url_encode`）
 - 官方 Java 版 UUID 哈希奇偶模型判定（`default_model_is_alex`）与默认 Steve/Alex 皮肤回退
 - 正反双视角水平拼接与严格 PNG 编码
