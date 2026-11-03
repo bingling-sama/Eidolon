@@ -68,13 +68,13 @@ Renders character images by texture URL for a given view (`front`, `back`, or `b
 
 - **Path Parameter**: `{view}` - `front`, `back`, or `both`.
 - **Dimensions**:
-  - `front` / `back`: Strictly derived from `definition`: `350 * definition` × `670 * definition` (e.g. 525x1005 at default definition 1.5).
-  - `both`: Strictly derived from `definition`: `700 * definition` × `670 * definition` (e.g. 1050x1005 at default definition 1.5), stitching front (left) and back (right).
+  - `front` / `back`: Strictly derived from `definition`: `350 * definition` × `670 * definition` (e.g. 700x1340 at default definition 2.0).
+  - `both`: Strictly derived from `definition`: `700 * definition` × `670 * definition` (e.g. 1400x1340 at default definition 2.0), stitching front (left) and back (right).
 - **Query / JSON / Form Parameters**:
   - `skinUrl` (string, required): Direct URL or path to player skin.
   - `capeUrl` (string, optional): Direct URL or path to player cape.
   - `nameTag` or `nametag` (string, optional): Text for player nameplate above head.
-  - `definition` (float, optional, default `1.5`): Resolution multiplier in range `0.8..=3.5`.
+  - `definition` (float, optional, default `2.0`): Resolution multiplier in range `0.8..=3.5`.
   - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#FFFFFF` opaque background.
   - `slim` (bool, optional): Overrides Alex 3px arm detection.
 

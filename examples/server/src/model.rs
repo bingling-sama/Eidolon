@@ -314,9 +314,9 @@ impl RenderQuery {
             .is_some_and(|f| f.eq_ignore_ascii_case("webp"))
     }
 
-    /// Resolution scaling factor from definition (default: 1.5, clamped 0.8..=3.5)
+    /// Resolution scaling factor from definition (default: 2.0, clamped 0.8..=3.5)
     pub fn resolved_definition(&self) -> f32 {
-        self.definition.unwrap_or(1.5).clamp(0.8, 3.5)
+        self.definition.unwrap_or(2.0).clamp(0.8, 3.5)
     }
 
     /// Single view dimension derived strictly from definition (base 350x670 * definition)
@@ -343,17 +343,17 @@ mod tests {
     #[test]
     fn test_skinrendermc_dimensions_scaling() {
         let mut query = RenderQuery::default();
-        // default definition = 1.5, base 350x670 -> (525, 1005)
-        assert_eq!(query.skinrendermc_single_dimensions(), (525, 1005));
-        assert_eq!(query.skinrendermc_both_dimensions(), (1050, 1005));
+        // default definition = 2.0, base 350x670 -> (700, 1340)
+        assert_eq!(query.skinrendermc_single_dimensions(), (700, 1340));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1400, 1340));
 
         query.definition = Some(1.0);
         assert_eq!(query.skinrendermc_single_dimensions(), (350, 670));
         assert_eq!(query.skinrendermc_both_dimensions(), (700, 670));
 
-        query.definition = Some(2.0);
-        assert_eq!(query.skinrendermc_single_dimensions(), (700, 1340));
-        assert_eq!(query.skinrendermc_both_dimensions(), (1400, 1340));
+        query.definition = Some(1.5);
+        assert_eq!(query.skinrendermc_single_dimensions(), (525, 1005));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1050, 1005));
 
         // Clamping to bounds 0.8..=3.5
         query.definition = Some(0.1);

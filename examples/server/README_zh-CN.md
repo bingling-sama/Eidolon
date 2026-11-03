@@ -68,13 +68,13 @@ cargo run --release -p eidolon-server -- --port 8080 --workers 2
 
 - **路径参数**：`{view}` - `front`、`back` 或 `both`。
 - **输出尺寸**：
-  - `front` / `back`：严格由 `definition` 缩放：`350 * definition` × `670 * definition`（例如默认 `definition=1.5` 时为 525x1005）。
-  - `both`：严格由 `definition` 缩放：`700 * definition` × `670 * definition`（例如 1050x1005），水平拼接正面（左）与背面（右）。
+  - `front` / `back`：严格由 `definition` 缩放：`350 * definition` × `670 * definition`（例如默认 `definition=2.0` 时为 700x1340）。
+  - `both`：严格由 `definition` 缩放：`700 * definition` × `670 * definition`（例如 1400x1340），水平拼接正面（左）与背面（右）。
 - **查询 / 请求体参数**：
   - `skinUrl`（string，必填）：玩家皮肤图片 URL 或路径。
   - `capeUrl`（string，可选）：玩家披风图片 URL 或路径。
   - `nameTag` 或 `nametag`（string，可选）：头顶名牌文本。
-  - `definition`（float，可选，默认 `1.5`）：分辨率倍率，取值范围 `0.8..=3.5`。
+  - `definition`（float，可选，默认 `2.0`）：分辨率倍率，取值范围 `0.8..=3.5`。
   - `transparent`（bool，可选，默认 `true`）：为 `false` 时，透明区域将混合到 `#FFFFFF` 纯白底色上。
   - `slim`（bool，可选）：显式覆盖 Alex 纤细手臂模型判定。
 
