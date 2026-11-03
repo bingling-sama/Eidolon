@@ -279,7 +279,9 @@ fn write_animation(
 ) -> Result<(), EidolonError> {
     match format {
         AnimationFormat::Gif => {
-            use gif::{Encoder as GifEncoder, Frame as GifFrame, Repeat};
+            use gif::{DisposalMethod, Encoder as GifEncoder, Frame as GifFrame, Repeat};
+            use imagequant::Attributes;
+            use rgb::FromSlice;
             use std::fs::File;
             use std::io::BufWriter;
 
@@ -298,13 +300,67 @@ fn write_animation(
                     EidolonError::output(format!("failed to set GIF loop: {error}"))
                 })?;
 
+            let mut attr = Attributes::new();
+            attr.set_speed(4).map_err(|error| {
+                EidolonError::output(format!("failed to configure GIF quantization speed: {error}"))
+            })?;
+            attr.set_quality(0, 90).map_err(|error| {
+                EidolonError::output(format!("failed to configure GIF quantization quality: {error}"))
+            })?;
+
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
-                let mut rgba = image.into_raw();
-                let mut frame =
-                    GifFrame::from_rgba_speed(size.0 as u16, size.1 as u16, &mut rgba, 10);
-                frame.delay = gif_delay_cs(frame_index, schedule.fps()) as u16;
+                let raw = image.into_raw();
+                let rgba_slice: &[imagequant::RGBA] = raw.as_slice().as_rgba();
+
+                let mut quant_image = attr
+                    .new_image_borrowed(rgba_slice, size.0 as usize, size.1 as usize, 0.0)
+                    .map_err(|error| {
+                        EidolonError::output(format!("failed to prepare GIF frame: {error}"))
+                    })?;
+
+                let has_transparency = raw.chunks_exact(4).any(|chunk| chunk[3] < 128);
+                if has_transparency {
+                    quant_image
+                        .add_fixed_color(imagequant::RGBA::new(0, 0, 0, 0))
+                        .map_err(|error| {
+                            EidolonError::output(format!("failed to reserve transparent color: {error}"))
+                        })?;
+                }
+
+                let mut quant = attr.quantize(&mut quant_image).map_err(|error| {
+                    EidolonError::output(format!("failed to quantize GIF frame: {error}"))
+                })?;
+                quant.set_dithering_level(1.0).map_err(|error| {
+                    EidolonError::output(format!("failed to set GIF dithering: {error}"))
+                })?;
+
+                let (palette_raw, pixels_indexed) =
+                    quant.remapped(&mut quant_image).map_err(|error| {
+                        EidolonError::output(format!("failed to remap GIF frame: {error}"))
+                    })?;
+
+                let mut palette_rgb = Vec::with_capacity(palette_raw.len() * 3);
+                let mut transparent_idx: Option<u8> = None;
+                for (i, p) in palette_raw.iter().enumerate() {
+                    palette_rgb.extend_from_slice(&[p.r, p.g, p.b]);
+                    if p.a < 128 && transparent_idx.is_none() {
+                        transparent_idx = Some(i as u8);
+                    }
+                }
+
+                let frame = GifFrame {
+                    width: size.0 as u16,
+                    height: size.1 as u16,
+                    delay: gif_delay_cs(frame_index, schedule.fps()) as u16,
+                    dispose: DisposalMethod::Keep,
+                    transparent: transparent_idx,
+                    palette: Some(palette_rgb),
+                    buffer: std::borrow::Cow::Owned(pixels_indexed),
+                    ..Default::default()
+                };
+
                 encoder.write_frame(&frame).map_err(|error| {
                     EidolonError::output(format!("failed to write GIF: {error}"))
                 })?;
@@ -390,11 +446,12 @@ fn write_animation(
             Ok(())
         }
         AnimationFormat::Avif => {
+            use rgb::FromSlice;
             use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
 
-            let mut frames_data: Vec<Vec<RGBA8>> =
-                Vec::with_capacity(schedule.frame_count() as usize);
-            let mut frame_durations: Vec<u32> = Vec::with_capacity(schedule.frame_count() as usize);
+            let frame_count = schedule.frame_count() as usize;
+            let mut raw_frames: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
+            let mut frame_durations: Vec<u32> = Vec::with_capacity(frame_count);
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
@@ -402,23 +459,18 @@ fn write_animation(
                 let duration_ms = webp_timestamp_ms(frame_index + 1, schedule.fps())
                     - webp_timestamp_ms(frame_index, schedule.fps());
                 frame_durations.push(duration_ms);
-
-                let raw = image.into_raw();
-                let rgba_vec: Vec<RGBA8> = raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-                    .collect();
-                frames_data.push(rgba_vec);
+                raw_frames.push(image.into_raw());
             }
 
-            let anim_frames: Vec<AnimFrameRgba> = frames_data
+            let anim_frames: Vec<AnimFrameRgba> = raw_frames
                 .iter()
                 .zip(frame_durations.iter())
-                .map(|(data, &duration_ms)| AnimFrameRgba {
-                    rgba: Img::new(data.as_slice(), size.0 as usize, size.1 as usize),
-                    duration_ms,
+                .map(|(raw, &duration_ms)| {
+                    let rgba_slice: &[RGBA8] = raw.as_slice().as_rgba();
+                    AnimFrameRgba {
+                        rgba: Img::new(rgba_slice, size.0 as usize, size.1 as usize),
+                        duration_ms,
+                    }
                 })
                 .collect();
 
