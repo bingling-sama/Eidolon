@@ -1,8 +1,8 @@
 services:
   eidolon-server:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: examples/server/Dockerfile
     image: eidolon-server:latest
     container_name: eidolon-server
     restart: unless-stopped

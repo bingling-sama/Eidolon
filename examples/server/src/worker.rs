@@ -172,12 +172,13 @@ fn apply_overrides(mut posture: Posture, query: &RenderQuery) -> Posture {
     posture
 }
 
-fn build_character(
+fn build_character_with_posture(
     renderer: &Renderer,
     skin_bytes: &[u8],
     cape_bytes: Option<&[u8]>,
     elytra_bytes: Option<&[u8]>,
     query: &RenderQuery,
+    posture: Posture,
 ) -> Result<Character, AppError> {
     let skin_type = if query.is_slim(skin_bytes) {
         SkinType::Slim
@@ -202,9 +203,7 @@ fn build_character(
         character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
     }
 
-    let (preset, sample_time) = resolve_preset_and_time(query.posture.as_deref());
-    let base_posture = preset.sample(sample_time);
-    character.posture = apply_overrides(base_posture, query);
+    character.posture = apply_overrides(posture, query);
 
     character.nametag = query.resolved_nametag().map(|s| s.to_string());
     character.nametag_see_through = !query.disable_nametag_see_through.unwrap_or(false);
@@ -221,6 +220,25 @@ fn build_character(
     );
 
     Ok(character)
+}
+
+fn build_character(
+    renderer: &Renderer,
+    skin_bytes: &[u8],
+    cape_bytes: Option<&[u8]>,
+    elytra_bytes: Option<&[u8]>,
+    query: &RenderQuery,
+) -> Result<Character, AppError> {
+    let (preset, sample_time) = resolve_preset_and_time(query.posture.as_deref());
+    let base_posture = preset.sample(sample_time);
+    build_character_with_posture(
+        renderer,
+        skin_bytes,
+        cape_bytes,
+        elytra_bytes,
+        query,
+        base_posture,
+    )
 }
 
 fn execute_render(
@@ -262,6 +280,40 @@ fn execute_render(
     Ok((encoded, content_type))
 }
 
+/// SkinRenderMC fakeAnimation formula matching skinview3d:
+/// t=10 for front view, t=12 for back view
+fn skinrendermc_fake_animation(t: f32, head_pitch: f32) -> Posture {
+    let left_leg_pitch = (t.sin() * 0.5).to_degrees();
+    let right_leg_pitch = ((t + std::f32::consts::PI).sin() * 0.5).to_degrees();
+    let left_arm_pitch = ((t + std::f32::consts::PI).sin() * 0.5).to_degrees();
+    let right_arm_pitch = (t.sin() * 0.5).to_degrees();
+
+    let basic_arm_roll = std::f32::consts::PI * 0.02;
+    let left_arm_roll = (t.cos() * 0.03 + basic_arm_roll).to_degrees();
+    let right_arm_roll = ((t + std::f32::consts::PI).cos() * 0.03 - basic_arm_roll)
+        .abs()
+        .to_degrees();
+
+    let basic_cape_rotation_x = std::f32::consts::PI * 0.06;
+    let cape_pitch = ((t / 1.5).sin() * 0.06 + basic_cape_rotation_x).to_degrees();
+
+    Posture {
+        cape_pitch,
+        body_pitch: 0.0,
+        elytra_pitch: 15.0,
+        elytra_yaw: 0.57,
+        elytra_roll: 15.0,
+        head_yaw: 0.0,
+        head_pitch,
+        left_arm_roll,
+        left_arm_pitch,
+        right_arm_roll,
+        right_arm_pitch,
+        left_leg_pitch,
+        right_leg_pitch,
+    }
+}
+
 fn execute_render_single_view(
     renderer: &Renderer,
     skin_bytes: Vec<u8>,
@@ -270,27 +322,39 @@ fn execute_render_single_view(
     query: &RenderQuery,
     is_back: bool,
 ) -> Result<(Vec<u8>, &'static str), AppError> {
-    let character = build_character(
+    let posture = if query.posture.is_some() {
+        let (preset, sample_time) = resolve_preset_and_time(query.posture.as_deref());
+        preset.sample(sample_time)
+    } else if is_back {
+        skinrendermc_fake_animation(12.0, 0.0)
+    } else {
+        skinrendermc_fake_animation(10.0, -11.46)
+    };
+
+    let character = build_character_with_posture(
         renderer,
         &skin_bytes,
         cape_bytes.as_deref(),
         elytra_bytes.as_deref(),
         query,
+        posture,
     )?;
 
     let (width, height) = query.skinrendermc_single_dimensions();
-    let base_yaw = query.cam_yaw.unwrap_or(195.0);
-    let yaw = if is_back {
-        (base_yaw - 180.0).rem_euclid(360.0)
+    let camera = if is_back {
+        Camera {
+            yaw: query.cam_yaw.unwrap_or(26.65),
+            pitch: query.cam_pitch.unwrap_or(89.8),
+            scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
+            target: [0.0, 1.0, 0.0],
+        }
     } else {
-        base_yaw
-    };
-
-    let camera = Camera {
-        yaw,
-        pitch: query.cam_pitch.unwrap_or(90.0),
-        scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
-        target: [0.0, 1.0, 0.0],
+        Camera {
+            yaw: query.cam_yaw.unwrap_or(205.54),
+            pitch: query.cam_pitch.unwrap_or(91.62),
+            scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
+            target: [0.0, 1.0, 0.0],
+        }
     };
 
     let mut frame = renderer
@@ -314,40 +378,62 @@ fn execute_render_both(
     elytra_bytes: Option<Vec<u8>>,
     query: &RenderQuery,
 ) -> Result<(Vec<u8>, &'static str), AppError> {
-    let character = build_character(
+    let (front_posture, back_posture) = if query.posture.is_some() {
+        let (preset, sample_time) = resolve_preset_and_time(query.posture.as_deref());
+        let p = preset.sample(sample_time);
+        (p, p)
+    } else {
+        (
+            skinrendermc_fake_animation(10.0, -11.46),
+            skinrendermc_fake_animation(12.0, 0.0),
+        )
+    };
+
+    let front_character = build_character_with_posture(
         renderer,
         &skin_bytes,
         cape_bytes.as_deref(),
         elytra_bytes.as_deref(),
         query,
+        front_posture,
+    )?;
+
+    let back_character = build_character_with_posture(
+        renderer,
+        &skin_bytes,
+        cape_bytes.as_deref(),
+        elytra_bytes.as_deref(),
+        query,
+        back_posture,
     )?;
 
     let (total_width, total_height) = query.skinrendermc_both_dimensions();
     let half_width = total_width / 2;
 
-    let front_yaw = query.cam_yaw.unwrap_or(195.0);
     let front_camera = Camera {
-        yaw: front_yaw,
-        pitch: query.cam_pitch.unwrap_or(90.0),
+        yaw: query.cam_yaw.unwrap_or(205.54),
+        pitch: query.cam_pitch.unwrap_or(91.62),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
         target: [0.0, 1.0, 0.0],
     };
 
     let mut front_frame = renderer
-        .render(&character, &front_camera, half_width, total_height)
+        .render(&front_character, &front_camera, half_width, total_height)
         .map_err(|e| AppError::RenderError(format!("Rendering front view failed: {e}")))?;
 
-    let back_yaw = (front_yaw - 180.0).rem_euclid(360.0);
     let back_camera = Camera {
-        yaw: back_yaw,
-        pitch: query.cam_pitch.unwrap_or(90.0),
+        yaw: query
+            .cam_yaw
+            .map(|y| (y - 180.0).rem_euclid(360.0))
+            .unwrap_or(26.65),
+        pitch: query.cam_pitch.unwrap_or(89.8),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
         target: [0.0, 1.0, 0.0],
     };
 
     let mut back_frame = renderer
         .render(
-            &character,
+            &back_character,
             &back_camera,
             total_width - half_width,
             total_height,
@@ -376,41 +462,63 @@ fn execute_render_json_all(
     elytra_bytes: Option<Vec<u8>>,
     query: &RenderQuery,
 ) -> Result<(Vec<u8>, &'static str), AppError> {
-    let character = build_character(
+    let (front_posture, back_posture) = if query.posture.is_some() {
+        let (preset, sample_time) = resolve_preset_and_time(query.posture.as_deref());
+        let p = preset.sample(sample_time);
+        (p, p)
+    } else {
+        (
+            skinrendermc_fake_animation(10.0, -11.46),
+            skinrendermc_fake_animation(12.0, 0.0),
+        )
+    };
+
+    let front_character = build_character_with_posture(
         renderer,
         &skin_bytes,
         cape_bytes.as_deref(),
         elytra_bytes.as_deref(),
         query,
+        front_posture,
+    )?;
+
+    let back_character = build_character_with_posture(
+        renderer,
+        &skin_bytes,
+        cape_bytes.as_deref(),
+        elytra_bytes.as_deref(),
+        query,
+        back_posture,
     )?;
 
     let is_slim = query.is_slim(&skin_bytes);
     let (total_width, total_height) = query.skinrendermc_both_dimensions();
     let half_width = total_width / 2;
 
-    let front_yaw = query.cam_yaw.unwrap_or(195.0);
     let front_camera = Camera {
-        yaw: front_yaw,
-        pitch: query.cam_pitch.unwrap_or(90.0),
+        yaw: query.cam_yaw.unwrap_or(205.54),
+        pitch: query.cam_pitch.unwrap_or(91.62),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
         target: [0.0, 1.0, 0.0],
     };
 
     let mut front_frame = renderer
-        .render(&character, &front_camera, half_width, total_height)
+        .render(&front_character, &front_camera, half_width, total_height)
         .map_err(|e| AppError::RenderError(format!("Rendering front view failed: {e}")))?;
 
-    let back_yaw = (front_yaw - 180.0).rem_euclid(360.0);
     let back_camera = Camera {
-        yaw: back_yaw,
-        pitch: query.cam_pitch.unwrap_or(90.0),
+        yaw: query
+            .cam_yaw
+            .map(|y| (y - 180.0).rem_euclid(360.0))
+            .unwrap_or(26.65),
+        pitch: query.cam_pitch.unwrap_or(89.8),
         scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
         target: [0.0, 1.0, 0.0],
     };
 
     let mut back_frame = renderer
         .render(
-            &character,
+            &back_character,
             &back_camera,
             total_width - half_width,
             total_height,
@@ -514,8 +622,8 @@ fn apply_opaque_background(img: &mut image::RgbaImage) {
     for pixel in img.pixels_mut() {
         if pixel[3] < 255 {
             let alpha = pixel[3] as f32 / 255.0;
-            // SkinRenderMC default background: light grayish #F0F0F0
-            let bg = 240.0;
+            // SkinRenderMC default background: pure white #FFFFFF
+            let bg = 255.0;
             pixel[0] = (pixel[0] as f32 * alpha + bg * (1.0 - alpha)).round() as u8;
             pixel[1] = (pixel[1] as f32 * alpha + bg * (1.0 - alpha)).round() as u8;
             pixel[2] = (pixel[2] as f32 * alpha + bg * (1.0 - alpha)).round() as u8;
@@ -551,11 +659,11 @@ mod tests {
 
         apply_opaque_background(&mut img);
 
-        // Fully transparent becomes #F0F0F0 (240, 240, 240, 255)
-        assert_eq!(img.get_pixel(0, 0), &image::Rgba([240, 240, 240, 255]));
+        // Fully transparent becomes #FFFFFF (255, 255, 255, 255)
+        assert_eq!(img.get_pixel(0, 0), &image::Rgba([255, 255, 255, 255]));
         // Fully opaque unchanged
         assert_eq!(img.get_pixel(1, 0), &image::Rgba([255, 0, 0, 255]));
-        // Semi-transparent blended onto 240
+        // Semi-transparent blended onto 255
         let p = img.get_pixel(0, 1);
         assert_eq!(p[3], 255);
         assert!(p[1] > 100);

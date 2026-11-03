@@ -314,24 +314,25 @@ impl RenderQuery {
             .is_some_and(|f| f.eq_ignore_ascii_case("webp"))
     }
 
-    /// Resolution scaling factor from definition (default: 1.5, clamped 0.8..=3.5)
+    /// Resolution scaling factor from definition (default: 2.0, clamped 0.8..=3.5)
     pub fn resolved_definition(&self) -> f32 {
-        self.definition.unwrap_or(1.5).clamp(0.8, 3.5)
+        self.definition.unwrap_or(2.0).clamp(0.8, 3.5)
     }
 
-    /// Single view dimension derived strictly from definition (base 300x300 * definition)
+    /// Single view dimension derived strictly from definition (base 350x670 * definition)
     pub fn skinrendermc_single_dimensions(&self) -> (u32, u32) {
         let scale = self.resolved_definition();
-        let size = ((300.0 * scale).round() as u32).clamp(32, 4096);
-        (size, size)
+        let w = ((350.0 * scale).round() as u32).clamp(32, 4096);
+        let h = ((670.0 * scale).round() as u32).clamp(32, 4096);
+        (w, h)
     }
 
-    /// Both views dimensions derived strictly from definition (base 600x300 * definition)
+    /// Both views dimensions derived strictly from definition (base 700x670 * definition)
     pub fn skinrendermc_both_dimensions(&self) -> (u32, u32) {
         let scale = self.resolved_definition();
-        let h = ((300.0 * scale).round() as u32).clamp(32, 4096);
-        let w = h * 2;
-        (w, h)
+        let single_w = ((350.0 * scale).round() as u32).clamp(32, 4096);
+        let h = ((670.0 * scale).round() as u32).clamp(32, 4096);
+        (single_w * 2, h)
     }
 }
 
@@ -342,23 +343,24 @@ mod tests {
     #[test]
     fn test_skinrendermc_dimensions_scaling() {
         let mut query = RenderQuery::default();
-        assert_eq!(query.skinrendermc_single_dimensions(), (450, 450));
-        assert_eq!(query.skinrendermc_both_dimensions(), (900, 450));
+        // default definition = 2.0, base 350x670 -> (700, 1340)
+        assert_eq!(query.skinrendermc_single_dimensions(), (700, 1340));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1400, 1340));
 
         query.definition = Some(1.0);
-        assert_eq!(query.skinrendermc_single_dimensions(), (300, 300));
-        assert_eq!(query.skinrendermc_both_dimensions(), (600, 300));
+        assert_eq!(query.skinrendermc_single_dimensions(), (350, 670));
+        assert_eq!(query.skinrendermc_both_dimensions(), (700, 670));
 
-        query.definition = Some(2.0);
-        assert_eq!(query.skinrendermc_single_dimensions(), (600, 600));
-        assert_eq!(query.skinrendermc_both_dimensions(), (1200, 600));
+        query.definition = Some(1.5);
+        assert_eq!(query.skinrendermc_single_dimensions(), (525, 1005));
+        assert_eq!(query.skinrendermc_both_dimensions(), (1050, 1005));
 
         // Clamping to bounds 0.8..=3.5
         query.definition = Some(0.1);
-        assert_eq!(query.skinrendermc_single_dimensions(), (240, 240));
+        assert_eq!(query.skinrendermc_single_dimensions(), (280, 536));
 
         query.definition = Some(10.0);
-        assert_eq!(query.skinrendermc_single_dimensions(), (1050, 1050));
+        assert_eq!(query.skinrendermc_single_dimensions(), (1225, 2345));
     }
 
     #[test]

@@ -42,6 +42,7 @@ Eidolon is structured as a Cargo + pnpm monorepo:
   - `src/renderer.rs`: `CanvasRenderer` real-time WebGPU canvas presenter, animation controls, multi-character scene entity management APIs, and offscreen frame capture.
 - `examples/rust`: Standalone Rust usage examples depending on `eidolon-core`.
 - `examples/wasm`: Web studio application consuming `@eidolonmc/wasm`.
+- `examples/server`: Resident high-performance HTTP microservice for offscreen skin rendering with worker thread pool, LRU image caching, and 1:1 SkinRenderMC API drop-in compatibility.
 
 ## Render Flow
 

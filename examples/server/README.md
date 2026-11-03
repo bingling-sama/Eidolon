@@ -14,11 +14,14 @@ A resident high-performance HTTP microservice for offscreen Minecraft skin rende
 ### 1. Docker (Recommended)
 
 ```bash
-# Start with docker-compose
-docker compose up -d --build
+# Start with docker-compose from repository root
+docker compose -f examples/server/docker-compose.yml up -d --build
 
-# Or build & run directly
-docker build -t eidolon-server .
+# Or from examples/server directory directly
+cd examples/server && docker compose up -d --build
+
+# Or build & run directly with Docker
+docker build -f examples/server/Dockerfile -t eidolon-server .
 docker run -d --name eidolon-server -p 8080:8080 eidolon-server
 ```
 
@@ -52,7 +55,7 @@ The server provides 1:1 drop-in replacement endpoints matching the [SerinaNya/Sk
 
 ![SkinRenderMC Preview](../../docs/skinrendermc-preview.png)
 
-*Figure: Dual-view (`both`) rendered output with `#F0F0F0` opaque background (`transparent=false`) and overhead `nametag`.*
+*Figure: Dual-view (`both`) rendered output with `#FFFFFF` opaque background (`transparent=false`) and overhead `nametag`.*
 
 #### 1. `GET /`
 Returns the SkinRenderMC status payload.
@@ -68,14 +71,14 @@ Renders character images by texture URL for a given view (`front`, `back`, or `b
 
 - **Path Parameter**: `{view}` - `front`, `back`, or `both`.
 - **Dimensions**:
-  - `front` / `back`: Strictly derived from `definition`: `300 * definition` × `300 * definition` (e.g. 450x450 at default definition 1.5).
-  - `both`: Strictly derived from `definition`: `600 * definition` × `300 * definition` (e.g. 900x450), stitching front (left) and back (right).
+  - `front` / `back`: Strictly derived from `definition`: `350 * definition` × `670 * definition` (e.g. 700x1340 at default definition 2.0).
+  - `both`: Strictly derived from `definition`: `700 * definition` × `670 * definition` (e.g. 1400x1340 at default definition 2.0), stitching front (left) and back (right).
 - **Query / JSON / Form Parameters**:
   - `skinUrl` (string, required): Direct URL or path to player skin.
   - `capeUrl` (string, optional): Direct URL or path to player cape.
   - `nameTag` or `nametag` (string, optional): Text for player nameplate above head.
-  - `definition` (float, optional, default `1.5`): Resolution multiplier in range `0.8..=3.5`.
-  - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#F0F0F0` opaque background.
+  - `definition` (float, optional, default `2.0`): Resolution multiplier in range `0.8..=3.5`.
+  - `transparent` (bool, optional, default `true`): If `false`, transparent areas are blended onto `#FFFFFF` opaque background.
   - `slim` (bool, optional): Overrides Alex 3px arm detection.
 
 ```bash
@@ -90,7 +93,7 @@ curl -X POST "http://127.0.0.1:8080/url/image/both" \
 ```
 
 #### 3. `GET /url/json/all`
-Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload. Respects `transparent=false` by compositing on `#F0F0F0`.
+Renders `front`, `back`, and `both` views simultaneously and returns them as Base64 strings in a JSON payload. Respects `transparent=false` by compositing on `#FFFFFF`.
 
 - **Output**:
 ```json
@@ -188,7 +191,7 @@ The test suite covers:
 - Route matching and HTTP status code mappings (`GET /`, `/health`, error handlers)
 - POST parameter decoding and Query/Body parameter merging
 - Definition resolution scaling calculations (`0.8..=3.5`)
-- Opaque `#F0F0F0` background alpha blending
+- Opaque `#FFFFFF` background alpha blending
 - Mojang/LittleSkin URL percent-encoding (`url_encode`)
 - Java-compliant UUID hash parity determination (`default_model_is_alex`) and default Steve/Alex fallback
 - Dual-view horizontal stitching and PNG encoding
