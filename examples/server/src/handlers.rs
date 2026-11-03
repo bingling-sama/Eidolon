@@ -12,8 +12,8 @@ use tokio::sync::oneshot;
 
 use crate::error::AppError;
 use crate::fetcher::TextureFetcher;
-use crate::model::RenderQuery;
-use crate::worker::{RenderJob, RenderMode, RenderWorkerPool};
+use crate::model::{RenderQuery, SceneRenderQuery};
+use crate::worker::{JobPayload, RenderJob, RenderMode, RenderWorkerPool, SceneCharacterTextures};
 
 pub struct AppState {
     pub fetcher: TextureFetcher,
@@ -223,11 +223,13 @@ async fn handle_render(
 
     let (tx, rx) = oneshot::channel();
     let job = RenderJob {
-        skin_bytes,
-        cape_bytes,
-        elytra_bytes,
-        query,
-        mode,
+        payload: crate::worker::JobPayload::Single {
+            skin_bytes,
+            cape_bytes,
+            elytra_bytes,
+            query,
+            mode,
+        },
         responder: tx,
     };
 
@@ -247,6 +249,96 @@ async fn handle_render(
         "public, max-age=86400"
     };
     headers.insert(header::CACHE_CONTROL, cache_control.parse().unwrap());
+    headers.insert("X-Render-Time-Ms", elapsed_ms.to_string().parse().unwrap());
+
+    Ok((StatusCode::OK, headers, bytes).into_response())
+}
+
+pub async fn render_scene_handler(
+    State(state): State<Arc<AppState>>,
+    Json(query): Json<SceneRenderQuery>,
+) -> Result<Response, AppError> {
+    let start = Instant::now();
+
+    if query.characters.is_empty() {
+        return Err(AppError::BadRequest(
+            "Scene must contain at least one character in 'characters'".to_string(),
+        ));
+    }
+
+    let mut char_futs = Vec::with_capacity(query.characters.len());
+
+    for char_q in &query.characters {
+        let skin_target = char_q.resolved_skin_url().ok_or_else(|| {
+            AppError::BadRequest("Each character must have a 'skin' or 'skinUrl'".to_string())
+        })?;
+        let cape_target = char_q.resolved_cape_url();
+        let elytra_target = char_q.resolved_elytra_url();
+
+        let fetcher = &state.fetcher;
+        let skin_fut = fetcher.fetch(skin_target);
+        let cape_fut = async move {
+            match cape_target {
+                Some(t) => fetcher.fetch(t).await.map(Some),
+                None => Ok(None),
+            }
+        };
+        let elytra_fut = async move {
+            match elytra_target {
+                Some(t) => fetcher.fetch(t).await.map(Some),
+                None => Ok(None),
+            }
+        };
+
+        char_futs.push(async move {
+            let (skin_res, cape_res, elytra_res) = tokio::join!(skin_fut, cape_fut, elytra_fut);
+            let skin_bytes = skin_res?;
+            let cape_bytes = cape_res?;
+            let elytra_bytes = elytra_res?;
+            Result::<_, AppError>::Ok((skin_bytes, cape_bytes, elytra_bytes))
+        });
+    }
+
+    let mut fetched_results = Vec::with_capacity(char_futs.len());
+    for fut in char_futs {
+        fetched_results.push(fut.await?);
+    }
+
+    let mut scene_characters = Vec::with_capacity(query.characters.len());
+    for (char_q, (skin_bytes, cape_bytes, elytra_bytes)) in
+        query.characters.clone().into_iter().zip(fetched_results)
+    {
+        scene_characters.push(SceneCharacterTextures {
+            skin_bytes,
+            cape_bytes,
+            elytra_bytes,
+            query: char_q,
+        });
+    }
+
+    let (tx, rx) = oneshot::channel();
+    let job = RenderJob {
+        payload: JobPayload::Scene {
+            characters: scene_characters,
+            query,
+        },
+        responder: tx,
+    };
+
+    state.worker_pool.submit(job)?;
+
+    let (bytes, content_type) = rx
+        .await
+        .map_err(|_| AppError::Internal("Worker dropped render task".to_string()))??;
+
+    let elapsed_ms = start.elapsed().as_millis();
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
+    headers.insert(
+        header::CACHE_CONTROL,
+        "public, max-age=86400".parse().unwrap(),
+    );
     headers.insert("X-Render-Time-Ms", elapsed_ms.to_string().parse().unwrap());
 
     Ok((StatusCode::OK, headers, bytes).into_response())

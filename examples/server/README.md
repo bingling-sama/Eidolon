@@ -162,6 +162,49 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&capeUrl=https://textures.minecraft.net/texture/yyy&slim=1&posture=wave" -o player.png
 ```
 
+#### `POST /scene/render` (Multi-character Scene Rendering)
+
+Renders a 3D scene containing multiple characters specified in JSON. If `camera` is omitted, the camera automatically frames and centers all characters in the scene.
+
+##### Request Body
+
+```json
+{
+  "width": 800,
+  "height": 600,
+  "format": "png",
+  "transparent": true,
+  "camera": {
+    "yaw": 180.0,
+    "pitch": 90.0,
+    "scale": 1.0,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "https://textures.minecraft.net/texture/xxx",
+      "skin_type": "classic",
+      "position": [-0.8, 0.0, 0.0],
+      "rotation": [0.0, 15.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    },
+    {
+      "skin": "https://textures.minecraft.net/texture/yyy",
+      "cape": "https://textures.minecraft.net/texture/zzz",
+      "skin_type": "slim",
+      "position": [0.8, 0.0, 0.0],
+      "rotation": [0.0, -15.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve"
+    }
+  ]
+}
+```
+
+- Each character supports: `skin` (or `skinUrl`), `cape` (or `capeUrl`), `elytra` (or `elytraUrl`), `skin_type` (or `slim`), `position` (or `pos_x`, `pos_y`, `pos_z`), `rotation` (or `rot_x`, `rot_y`, `rot_z`), `posture`, `nametag`, and joint angle overrides.
+- Returns `image/png` or `image/webp`.
+
 ### 2. `GET /health`
 
 Healthcheck endpoint. Returns JSON:
