@@ -41,6 +41,7 @@ Eidolon 采用 Cargo + pnpm Monorepo 架构：
   - `src/renderer.rs`：`CanvasRenderer` 实时 WebGPU 画布呈现、动画时间轴控制、多角色实体管理 API 与离屏截图。
 - `examples/rust`：依赖 `eidolon-core` 的 Rust 调用示例。
 - `examples/wasm`：基于 Vite 的 Web 端交互演示与自动化评测套件。
+- `examples/server`：常驻高性能 HTTP 离屏皮肤渲染微服务，具备工作线程池、LRU 内存图片缓存，并提供与 SkinRenderMC 1:1 即插即用兼容的 HTTP API。
 
 ## 渲染流程
 

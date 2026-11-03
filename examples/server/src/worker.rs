@@ -343,10 +343,7 @@ fn execute_render_single_view(
     let (width, height) = query.skinrendermc_single_dimensions();
     let camera = if is_back {
         Camera {
-            yaw: query
-                .cam_yaw
-                .map(|y| (y - 180.0).rem_euclid(360.0))
-                .unwrap_or(26.65),
+            yaw: query.cam_yaw.unwrap_or(26.65),
             pitch: query.cam_pitch.unwrap_or(89.8),
             scale: query.cam_zoom.unwrap_or(1.0).max(0.01),
             target: [0.0, 1.0, 0.0],
