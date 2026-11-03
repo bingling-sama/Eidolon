@@ -1,15 +1,18 @@
-name: Release Server
+name: Release Server Docker
 
 on:
   push:
-    tags:
-      - 'server-v[0-9]+.[0-9]+.[0-9]+*'
+    branches: [main]
+    paths:
+      - 'examples/server/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'crates/**'
+      - 'resources/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/release-server.yml'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Image tag version (e.g. 0.1.0 or v0.1.0)'
-        required: true
-        default: '0.1.0'
 
 permissions:
   contents: read
@@ -52,20 +55,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine version tag
-        id: version_step
+      - name: Determine commit SHA
+        id: vars
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RAW_VER="${{ github.event.inputs.version }}"
-          else
-            # Extract version from tag server-v1.2.3 -> 1.2.3
-            RAW_VER="${GITHUB_REF_NAME#server-v}"
-            RAW_VER="${RAW_VER#server-}"
-          fi
-          # Strip leading 'v' if present
-          CLEAN_VER="${RAW_VER#v}"
-          echo "version=${CLEAN_VER}" >> $GITHUB_OUTPUT
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,7 +79,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-server
           tags: |
-            type=raw,value=${{ steps.version_step.outputs.version }}
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+            type=raw,value=${{ steps.vars.outputs.sha }}
             type=raw,value=latest
 
       - name: Build and push Docker image
