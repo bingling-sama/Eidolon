@@ -14,11 +14,14 @@ A resident high-performance HTTP microservice for offscreen Minecraft skin rende
 ### 1. Docker (Recommended)
 
 ```bash
-# Start with docker-compose
-docker compose up -d --build
+# Start with docker-compose from repository root
+docker compose -f examples/server/docker-compose.yml up -d --build
 
-# Or build & run directly
-docker build -t eidolon-server .
+# Or from examples/server directory directly
+cd examples/server && docker compose up -d --build
+
+# Or build & run directly with Docker
+docker build -f examples/server/Dockerfile -t eidolon-server .
 docker run -d --name eidolon-server -p 8080:8080 eidolon-server
 ```
 

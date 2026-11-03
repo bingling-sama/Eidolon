@@ -14,11 +14,14 @@
 ### 1. Docker（推荐）
 
 ```bash
-# 使用 docker-compose 启动
-docker compose up -d --build
+# 在项目根目录使用 docker-compose 启动
+docker compose -f examples/server/docker-compose.yml up -d --build
 
-# 或直接构建运行
-docker build -t eidolon-server .
+# 或直接在 examples/server 目录下启动
+cd examples/server && docker compose up -d --build
+
+# 或使用 Docker 命令直接构建运行
+docker build -f examples/server/Dockerfile -t eidolon-server .
 docker run -d --name eidolon-server -p 8080:8080 eidolon-server
 ```
 

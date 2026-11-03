@@ -4,10 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'crates/**'
       - 'examples/server/**'
+      - 'crates/**'
       - 'resources/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -15,10 +13,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'crates/**'
       - 'examples/server/**'
+      - 'crates/**'
       - 'resources/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -43,7 +39,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./examples/server/Dockerfile
           load: true
           tags: eidolon-server:ci
 
