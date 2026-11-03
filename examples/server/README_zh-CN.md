@@ -162,6 +162,49 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&capeUrl=https://textures.minecraft.net/texture/yyy&slim=1&posture=wave" -o player.png
 ```
 
+#### `POST /scene/render`（多人物场景渲染）
+
+接收 JSON 配置，渲染包含多个角色的 3D 场景图。若未显式指定 `camera`，则会自动根据场景内所有角色计算最佳居中包围框与缩放（auto-frame）。
+
+##### 请求体结构
+
+```json
+{
+  "width": 800,
+  "height": 600,
+  "format": "png",
+  "transparent": true,
+  "camera": {
+    "yaw": 180.0,
+    "pitch": 90.0,
+    "scale": 1.0,
+    "target": [0.0, 1.0, 0.0]
+  },
+  "characters": [
+    {
+      "skin": "https://textures.minecraft.net/texture/xxx",
+      "skin_type": "classic",
+      "position": [-0.8, 0.0, 0.0],
+      "rotation": [0.0, 15.0, 0.0],
+      "posture": "wave",
+      "nametag": "Alex"
+    },
+    {
+      "skin": "https://textures.minecraft.net/texture/yyy",
+      "cape": "https://textures.minecraft.net/texture/zzz",
+      "skin_type": "slim",
+      "position": [0.8, 0.0, 0.0],
+      "rotation": [0.0, -15.0, 0.0],
+      "posture": "walk",
+      "nametag": "Steve"
+    }
+  ]
+}
+```
+
+- 每个角色支持：`skin`（或 `skinUrl`）、`cape`（或 `capeUrl`）、`elytra`（或 `elytraUrl`）、`skin_type`（或 `slim`）、`position`（或 `pos_x`, `pos_y`, `pos_z`）、`rotation`（或 `rot_x`, `rot_y`, `rot_z`）、`posture`、`nametag` 及关节微调参数。
+- 支持返回 `image/png` 或 `image/webp`。
+
 ### 2. `GET /health`
 
 健康检查端点。返回 JSON：
@@ -181,7 +224,7 @@ curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/textur
 
 ## 自动化测试
 
-运行服务端微服务测试套件（包含 10 个单元测试与 HTTP 集成测试）：
+运行服务端微服务测试套件（包含 12 个单元测试与 HTTP 集成测试）：
 
 ```bash
 cargo test -p eidolon-server

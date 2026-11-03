@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 use tracing::{error, info};
 
 use crate::error::AppError;
-use crate::model::RenderQuery;
+use crate::model::{RenderQuery, SceneCharacterQuery, SceneRenderQuery};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderMode {
@@ -27,12 +27,29 @@ pub enum RenderMode {
     JsonAll,
 }
 
-pub struct RenderJob {
+pub struct SceneCharacterTextures {
     pub skin_bytes: Vec<u8>,
     pub cape_bytes: Option<Vec<u8>>,
     pub elytra_bytes: Option<Vec<u8>>,
-    pub query: RenderQuery,
-    pub mode: RenderMode,
+    pub query: SceneCharacterQuery,
+}
+
+pub enum JobPayload {
+    Single {
+        skin_bytes: Vec<u8>,
+        cape_bytes: Option<Vec<u8>>,
+        elytra_bytes: Option<Vec<u8>>,
+        query: Box<RenderQuery>,
+        mode: RenderMode,
+    },
+    Scene {
+        characters: Vec<SceneCharacterTextures>,
+        query: Box<SceneRenderQuery>,
+    },
+}
+
+pub struct RenderJob {
+    pub payload: JobPayload,
     pub responder: oneshot::Sender<Result<(Vec<u8>, &'static str), AppError>>,
 }
 
@@ -62,44 +79,55 @@ impl RenderWorkerPool {
                         info!("Worker {} Renderer initialized successfully", worker_id);
 
                         while let Ok(job) = rx.recv() {
-                            let result = match job.mode {
-                                RenderMode::Single => execute_render(
-                                    &renderer,
-                                    job.skin_bytes,
-                                    job.cape_bytes,
-                                    job.elytra_bytes,
-                                    &job.query,
-                                ),
-                                RenderMode::Front => execute_render_single_view(
-                                    &renderer,
-                                    job.skin_bytes,
-                                    job.cape_bytes,
-                                    job.elytra_bytes,
-                                    &job.query,
-                                    false,
-                                ),
-                                RenderMode::Back => execute_render_single_view(
-                                    &renderer,
-                                    job.skin_bytes,
-                                    job.cape_bytes,
-                                    job.elytra_bytes,
-                                    &job.query,
-                                    true,
-                                ),
-                                RenderMode::Both => execute_render_both(
-                                    &renderer,
-                                    job.skin_bytes,
-                                    job.cape_bytes,
-                                    job.elytra_bytes,
-                                    &job.query,
-                                ),
-                                RenderMode::JsonAll => execute_render_json_all(
-                                    &renderer,
-                                    job.skin_bytes,
-                                    job.cape_bytes,
-                                    job.elytra_bytes,
-                                    &job.query,
-                                ),
+                            let result = match job.payload {
+                                JobPayload::Single {
+                                    skin_bytes,
+                                    cape_bytes,
+                                    elytra_bytes,
+                                    query,
+                                    mode,
+                                } => match mode {
+                                    RenderMode::Single => execute_render(
+                                        &renderer,
+                                        skin_bytes,
+                                        cape_bytes,
+                                        elytra_bytes,
+                                        &query,
+                                    ),
+                                    RenderMode::Front => execute_render_single_view(
+                                        &renderer,
+                                        skin_bytes,
+                                        cape_bytes,
+                                        elytra_bytes,
+                                        &query,
+                                        false,
+                                    ),
+                                    RenderMode::Back => execute_render_single_view(
+                                        &renderer,
+                                        skin_bytes,
+                                        cape_bytes,
+                                        elytra_bytes,
+                                        &query,
+                                        true,
+                                    ),
+                                    RenderMode::Both => execute_render_both(
+                                        &renderer,
+                                        skin_bytes,
+                                        cape_bytes,
+                                        elytra_bytes,
+                                        &query,
+                                    ),
+                                    RenderMode::JsonAll => execute_render_json_all(
+                                        &renderer,
+                                        skin_bytes,
+                                        cape_bytes,
+                                        elytra_bytes,
+                                        &query,
+                                    ),
+                                },
+                                JobPayload::Scene { characters, query } => {
+                                    execute_render_scene(&renderer, characters, &query)
+                                }
                             };
                             let _ = job.responder.send(result);
                         }
@@ -239,6 +267,148 @@ fn build_character(
         query,
         base_posture,
     )
+}
+
+fn apply_scene_overrides(mut posture: Posture, query: &SceneCharacterQuery) -> Posture {
+    if let Some(v) = query.cape_pitch {
+        posture.cape_pitch = v;
+    }
+    if let Some(v) = query.elytra_pitch {
+        posture.elytra_pitch = v;
+    }
+    if let Some(v) = query.elytra_spread {
+        posture.elytra_roll = v;
+    }
+    if let Some(v) = query.head_yaw {
+        posture.head_yaw = v;
+    }
+    if let Some(v) = query.head_pitch {
+        posture.head_pitch = v;
+    }
+    if let Some(v) = query.left_arm_roll {
+        posture.left_arm_roll = v;
+    }
+    if let Some(v) = query.left_arm_pitch {
+        posture.left_arm_pitch = v;
+    }
+    if let Some(v) = query.right_arm_roll {
+        posture.right_arm_roll = v;
+    }
+    if let Some(v) = query.right_arm_pitch {
+        posture.right_arm_pitch = v;
+    }
+    if let Some(v) = query.left_leg_pitch {
+        posture.left_leg_pitch = v;
+    }
+    if let Some(v) = query.right_leg_pitch {
+        posture.right_leg_pitch = v;
+    }
+    posture
+}
+
+fn build_scene_character(
+    renderer: &Renderer,
+    skin_bytes: &[u8],
+    cape_bytes: Option<&[u8]>,
+    elytra_bytes: Option<&[u8]>,
+    char_q: &SceneCharacterQuery,
+) -> Result<Character, AppError> {
+    let skin_type = if char_q.is_slim(skin_bytes) {
+        SkinType::Slim
+    } else {
+        SkinType::Classic
+    };
+
+    let body = renderer
+        .load_body_from_memory(skin_bytes, skin_type)
+        .map_err(|e| AppError::RenderError(format!("Failed to load skin image: {e}")))?;
+    let mut character = Character::from_body(body);
+
+    if let Some(bytes) = cape_bytes {
+        let atlas = renderer
+            .load_back_equipment_atlas_from_memory(bytes)
+            .map_err(|e| AppError::RenderError(format!("Failed to load cape: {e}")))?;
+        character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+    } else if let Some(bytes) = elytra_bytes {
+        let atlas = renderer
+            .load_back_equipment_atlas_from_memory(bytes)
+            .map_err(|e| AppError::RenderError(format!("Failed to load elytra: {e}")))?;
+        character.equip(BackEquipment::new(atlas, BackEquipmentKind::Elytra));
+    }
+
+    let (preset, sample_time) = resolve_preset_and_time(char_q.posture.as_deref());
+    let base_posture = preset.sample(sample_time);
+    character.posture = apply_scene_overrides(base_posture, char_q);
+
+    character.nametag = char_q.resolved_nametag().map(|s| s.to_string());
+    character.nametag_see_through = char_q.resolved_nametag_see_through();
+
+    let pos = char_q.resolved_position();
+    character.position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);
+
+    let rot = char_q.resolved_rotation();
+    character.rotation = cgmath::Vector3::new(rot[0], rot[1], rot[2]);
+
+    Ok(character)
+}
+
+fn execute_render_scene(
+    renderer: &Renderer,
+    characters: Vec<SceneCharacterTextures>,
+    query: &SceneRenderQuery,
+) -> Result<(Vec<u8>, &'static str), AppError> {
+    let (width, height) = query.dimensions();
+
+    let (camera, auto_frame) = if let Some(ref cam_cfg) = query.camera {
+        (
+            Camera {
+                yaw: cam_cfg.yaw.unwrap_or(180.0),
+                pitch: cam_cfg.pitch.unwrap_or(90.0),
+                scale: cam_cfg.scale.unwrap_or(1.0).max(0.01),
+                target: cam_cfg.target.unwrap_or([0.0, 1.0, 0.0]),
+            },
+            false,
+        )
+    } else {
+        (Camera::default(), true)
+    };
+
+    let mut scene = eidolon_core::scene::Scene::new(camera);
+
+    for char_tex in &characters {
+        let character = build_scene_character(
+            renderer,
+            &char_tex.skin_bytes,
+            char_tex.cape_bytes.as_deref(),
+            char_tex.elytra_bytes.as_deref(),
+            &char_tex.query,
+        )?;
+        scene.add_character(character);
+    }
+
+    if auto_frame && !scene.characters.is_empty() {
+        let aspect = width as f32 / height.max(1) as f32;
+        scene.auto_frame_camera(60.0, aspect);
+    }
+
+    let mut frame = renderer
+        .render_scene(&scene, width, height)
+        .map_err(|e| AppError::RenderError(format!("Scene rendering failed: {e}")))?;
+
+    if query.transparent == Some(false) {
+        apply_opaque_background(&mut frame);
+    }
+
+    let (format, content_type) = if query.is_webp() {
+        (StaticFormat::WebP, "image/webp")
+    } else {
+        (StaticFormat::Png, "image/png")
+    };
+
+    let encoded = encode_static_image(&frame, format)
+        .map_err(|e| AppError::Internal(format!("Failed to encode image: {e}")))?;
+
+    Ok((encoded, content_type))
 }
 
 fn execute_render(
@@ -688,6 +858,54 @@ mod tests {
         };
         let (bytes, content_type) =
             execute_render_both(&renderer, skin_bytes, None, None, &query).unwrap();
+        assert_eq!(content_type, "image/png");
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_execute_render_scene() {
+        let renderer = match Renderer::new() {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../resources/bingling_sama.png");
+        let skin_bytes = std::fs::read(&manifest_path)
+            .or_else(|_| std::fs::read("resources/bingling_sama.png"))
+            .expect("Skin file should exist");
+
+        let char1 = SceneCharacterTextures {
+            skin_bytes: skin_bytes.clone(),
+            cape_bytes: None,
+            elytra_bytes: None,
+            query: SceneCharacterQuery {
+                nametag: Some("Player1".to_string()),
+                pos_x: Some(-0.8),
+                posture: Some("wave".to_string()),
+                ..Default::default()
+            },
+        };
+        let char2 = SceneCharacterTextures {
+            skin_bytes,
+            cape_bytes: None,
+            elytra_bytes: None,
+            query: SceneCharacterQuery {
+                nametag: Some("Player2".to_string()),
+                pos_x: Some(0.8),
+                posture: Some("walk".to_string()),
+                ..Default::default()
+            },
+        };
+
+        let scene_query = SceneRenderQuery {
+            width: Some(400),
+            height: Some(300),
+            transparent: Some(true),
+            ..Default::default()
+        };
+
+        let (bytes, content_type) =
+            execute_render_scene(&renderer, vec![char1, char2], &scene_query).unwrap();
         assert_eq!(content_type, "image/png");
         assert!(!bytes.is_empty());
     }

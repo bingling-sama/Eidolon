@@ -7,7 +7,10 @@ mod worker;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use clap::Parser;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -17,8 +20,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::fetcher::TextureFetcher;
 use crate::handlers::{
     health_handler, littleskin_image_handler, mojang_image_handler, render_get_handler,
-    render_post_handler, root_handler, url_image_get_handler, url_image_post_handler,
-    url_json_all_handler, AppState,
+    render_post_handler, render_scene_handler, root_handler, url_image_get_handler,
+    url_image_post_handler, url_json_all_handler, AppState,
 };
 use crate::worker::RenderWorkerPool;
 
@@ -107,6 +110,7 @@ pub fn create_app(state: Arc<AppState>) -> Router {
         .route("/", get(root_handler))
         .route("/health", get(health_handler))
         .route("/render", get(render_get_handler).post(render_post_handler))
+        .route("/scene/render", post(render_scene_handler))
         .route(
             "/url/image/{view}",
             get(url_image_get_handler).post(url_image_post_handler),
@@ -270,6 +274,26 @@ mod tests {
             .await
             .unwrap();
         // Missing skinUrl still parsed from JSON body and correctly yields 400 (not form decode error)
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 12. POST /scene/render with empty characters list returns 400
+        let res = client
+            .post(format!("http://{addr}/scene/render"))
+            .header("Content-Type", "application/json")
+            .body("{\"characters\": []}")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+        // 13. POST /scene/render with character missing skin returns 400
+        let res = client
+            .post(format!("http://{addr}/scene/render"))
+            .header("Content-Type", "application/json")
+            .body("{\"characters\": [{}]}")
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
     }
 }

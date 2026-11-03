@@ -32,7 +32,7 @@ pnpm --dir examples/wasm run test:e2e
 
 - **核心库单元测试** (`crates/core`)：包含 116 个单元测试，全面覆盖相机矩阵计算、皮肤图集转换、纹理分析与格式分类、动画预设与时间轴播放、nametag 光栅化、模型加载与多格式输出编码。使用 `cargo test -p eidolon-core --lib -- --test-threads=1` 运行。
 - **CLI 参数测试** (`crates/cli`)：包含 59 个针对命令行参数解析、默认值及子命令选项的自动化测试。使用 `cargo test -p eidolon-cli` 运行。
-- **服务端微服务测试** (`examples/server`)：包含 10 个单元测试与 HTTP 集成测试，覆盖查询参数解析、分辨率缩放、多源参数合并、URL 百分号编码、日期格式化、不透明背景混合、默认皮肤回退、双视角拼接与 HTTP 路由分发。使用 `cargo test -p eidolon-server` 运行。
+- **服务端微服务测试** (`examples/server`)：包含 12 个单元测试与 HTTP 集成测试，覆盖查询参数解析、分辨率缩放、多源参数合并、URL 百分号编码、日期格式化、不透明背景混合、默认皮肤回退、双视角拼接、多角色场景渲染与 HTTP 路由分发。使用 `cargo test -p eidolon-server` 运行。
 - **WASM 浏览器端 E2E 测试** (`examples/wasm`)：包含 13 个 Playwright 端到端测试，验证真实浏览器中 WebGPU 画布呈现、动画循环、响应式控件与多格式导出。使用 `pnpm --dir examples/wasm run test:e2e` 运行。
 
 可以使用命令行进行手动 smoke test：
