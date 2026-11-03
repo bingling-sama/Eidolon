@@ -302,10 +302,14 @@ fn write_animation(
 
             let mut attr = Attributes::new();
             attr.set_speed(4).map_err(|error| {
-                EidolonError::output(format!("failed to configure GIF quantization speed: {error}"))
+                EidolonError::output(format!(
+                    "failed to configure GIF quantization speed: {error}"
+                ))
             })?;
             attr.set_quality(0, 90).map_err(|error| {
-                EidolonError::output(format!("failed to configure GIF quantization quality: {error}"))
+                EidolonError::output(format!(
+                    "failed to configure GIF quantization quality: {error}"
+                ))
             })?;
 
             for frame_index in 0..schedule.frame_count() {
@@ -320,12 +324,14 @@ fn write_animation(
                         EidolonError::output(format!("failed to prepare GIF frame: {error}"))
                     })?;
 
-                let has_transparency = raw.chunks_exact(4).any(|chunk| chunk[3] < 128);
+                let has_transparency = rgba_slice.iter().any(|p| p.a < 128);
                 if has_transparency {
                     quant_image
                         .add_fixed_color(imagequant::RGBA::new(0, 0, 0, 0))
                         .map_err(|error| {
-                            EidolonError::output(format!("failed to reserve transparent color: {error}"))
+                            EidolonError::output(format!(
+                                "failed to reserve transparent color: {error}"
+                            ))
                         })?;
                 }
 
