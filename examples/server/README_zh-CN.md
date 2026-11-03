@@ -224,7 +224,7 @@ curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/textur
 
 ## 自动化测试
 
-运行服务端微服务测试套件（包含 10 个单元测试与 HTTP 集成测试）：
+运行服务端微服务测试套件（包含 12 个单元测试与 HTTP 集成测试）：
 
 ```bash
 cargo test -p eidolon-server

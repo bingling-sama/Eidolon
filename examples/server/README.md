@@ -224,7 +224,7 @@ Healthcheck endpoint. Returns JSON:
 
 ## Testing
 
-Run the server microservice test suite (10 unit and HTTP integration tests):
+Run the server microservice test suite (12 unit and HTTP integration tests):
 
 ```bash
 cargo test -p eidolon-server

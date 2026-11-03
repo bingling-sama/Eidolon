@@ -341,7 +341,7 @@ fn build_scene_character(
     character.posture = apply_scene_overrides(base_posture, char_q);
 
     character.nametag = char_q.resolved_nametag().map(|s| s.to_string());
-    character.nametag_see_through = !char_q.disable_nametag_see_through.unwrap_or(false);
+    character.nametag_see_through = char_q.resolved_nametag_see_through();
 
     let pos = char_q.resolved_position();
     character.position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);

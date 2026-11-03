@@ -266,48 +266,55 @@ pub async fn render_scene_handler(
         ));
     }
 
-    let mut char_futs = Vec::with_capacity(query.characters.len());
+    let mut join_set = tokio::task::JoinSet::new();
 
-    for char_q in &query.characters {
-        let skin_target = char_q.resolved_skin_url().ok_or_else(|| {
-            AppError::BadRequest("Each character must have a 'skin' or 'skinUrl'".to_string())
-        })?;
-        let cape_target = char_q.resolved_cape_url();
-        let elytra_target = char_q.resolved_elytra_url();
+    for (idx, char_q) in query.characters.iter().enumerate() {
+        let skin_target = char_q
+            .resolved_skin_url()
+            .ok_or_else(|| {
+                AppError::BadRequest("Each character must have a 'skin' or 'skinUrl'".to_string())
+            })?
+            .to_string();
+        let cape_target = char_q.resolved_cape_url().map(|s| s.to_string());
+        let elytra_target = char_q.resolved_elytra_url().map(|s| s.to_string());
 
-        let fetcher = &state.fetcher;
-        let skin_fut = fetcher.fetch(skin_target);
-        let cape_fut = async move {
-            match cape_target {
-                Some(t) => fetcher.fetch(t).await.map(Some),
-                None => Ok(None),
-            }
-        };
-        let elytra_fut = async move {
-            match elytra_target {
-                Some(t) => fetcher.fetch(t).await.map(Some),
-                None => Ok(None),
-            }
-        };
+        let fetcher = state.fetcher.clone();
+        join_set.spawn(async move {
+            let skin_fut = fetcher.fetch(&skin_target);
+            let cape_fut = async {
+                match cape_target {
+                    Some(ref t) => fetcher.fetch(t).await.map(Some),
+                    None => Ok(None),
+                }
+            };
+            let elytra_fut = async {
+                match elytra_target {
+                    Some(ref t) => fetcher.fetch(t).await.map(Some),
+                    None => Ok(None),
+                }
+            };
 
-        char_futs.push(async move {
             let (skin_res, cape_res, elytra_res) = tokio::join!(skin_fut, cape_fut, elytra_fut);
             let skin_bytes = skin_res?;
             let cape_bytes = cape_res?;
             let elytra_bytes = elytra_res?;
-            Result::<_, AppError>::Ok((skin_bytes, cape_bytes, elytra_bytes))
+            Result::<_, AppError>::Ok((idx, skin_bytes, cape_bytes, elytra_bytes))
         });
     }
 
-    let mut fetched_results = Vec::with_capacity(char_futs.len());
-    for fut in char_futs {
-        fetched_results.push(fut.await?);
+    let mut fetched_results: Vec<Option<(Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>)>> =
+        (0..query.characters.len()).map(|_| None).collect();
+    while let Some(join_res) = join_set.join_next().await {
+        let (idx, skin_bytes, cape_bytes, elytra_bytes) =
+            join_res.map_err(|e| AppError::Internal(format!("Fetch task failed: {e}")))??;
+        fetched_results[idx] = Some((skin_bytes, cape_bytes, elytra_bytes));
     }
 
     let mut scene_characters = Vec::with_capacity(query.characters.len());
-    for (char_q, (skin_bytes, cape_bytes, elytra_bytes)) in
-        query.characters.clone().into_iter().zip(fetched_results)
-    {
+    for (char_q, textures_opt) in query.characters.clone().into_iter().zip(fetched_results) {
+        let (skin_bytes, cape_bytes, elytra_bytes) = textures_opt.ok_or_else(|| {
+            AppError::Internal("Missing texture results for character".to_string())
+        })?;
         scene_characters.push(SceneCharacterTextures {
             skin_bytes,
             cape_bytes,

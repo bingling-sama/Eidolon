@@ -101,6 +101,13 @@ pub struct SceneCharacterQuery {
     pub nametag: Option<String>,
     #[serde(
         default,
+        alias = "nametagSeeThrough",
+        alias = "nametag_see_through",
+        deserialize_with = "deserialize_flexible_bool"
+    )]
+    pub nametag_see_through: Option<bool>,
+    #[serde(
+        default,
         alias = "disableNametagSeeThrough",
         alias = "disable_nametag_see_through",
         deserialize_with = "deserialize_flexible_bool"
@@ -179,6 +186,16 @@ impl SceneCharacterQuery {
         } else {
             false
         }
+    }
+
+    pub fn resolved_nametag_see_through(&self) -> bool {
+        if let Some(see_through) = self.nametag_see_through {
+            return see_through;
+        }
+        if let Some(disable) = self.disable_nametag_see_through {
+            return !disable;
+        }
+        true
     }
 
     pub fn resolved_position(&self) -> [f32; 3] {
@@ -567,5 +584,20 @@ mod tests {
             merged.skin_url.as_deref(),
             Some("https://example.com/skin.png")
         );
+    }
+
+    #[test]
+    fn test_scene_character_nametag_see_through() {
+        let json1 = r#"{"nametag_see_through": false}"#;
+        let c1: SceneCharacterQuery = serde_json::from_str(json1).unwrap();
+        assert!(!c1.resolved_nametag_see_through());
+
+        let json2 = r#"{"disable_nametag_see_through": true}"#;
+        let c2: SceneCharacterQuery = serde_json::from_str(json2).unwrap();
+        assert!(!c2.resolved_nametag_see_through());
+
+        let json3 = r#"{}"#;
+        let c3: SceneCharacterQuery = serde_json::from_str(json3).unwrap();
+        assert!(c3.resolved_nametag_see_through());
     }
 }
