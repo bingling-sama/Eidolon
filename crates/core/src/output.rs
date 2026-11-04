@@ -279,9 +279,8 @@ fn write_animation(
 ) -> Result<(), EidolonError> {
     match format {
         AnimationFormat::Gif => {
+            use exoquant::{convert_to_indexed, ditherer, optimizer, Color};
             use gif::{DisposalMethod, Encoder as GifEncoder, Frame as GifFrame, Repeat};
-            use imagequant::Attributes;
-            use rgb::FromSlice;
             use std::fs::File;
             use std::io::BufWriter;
 
@@ -300,60 +299,63 @@ fn write_animation(
                     EidolonError::output(format!("failed to set GIF loop: {error}"))
                 })?;
 
-            let mut attr = Attributes::new();
-            attr.set_speed(4).map_err(|error| {
-                EidolonError::output(format!(
-                    "failed to configure GIF quantization speed: {error}"
-                ))
-            })?;
-            attr.set_quality(0, 90).map_err(|error| {
-                EidolonError::output(format!(
-                    "failed to configure GIF quantization quality: {error}"
-                ))
-            })?;
+            let ditherer = ditherer::FloydSteinberg::new();
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
                 let raw = image.into_raw();
-                let rgba_slice: &[imagequant::RGBA] = raw.as_slice().as_rgba();
+                let pixels: Vec<Color> = raw
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|&[r, g, b, a]| Color::new(r, g, b, a))
+                    .collect();
 
-                let mut quant_image = attr
-                    .new_image_borrowed(rgba_slice, size.0 as usize, size.1 as usize, 0.0)
-                    .map_err(|error| {
-                        EidolonError::output(format!("failed to prepare GIF frame: {error}"))
-                    })?;
+                let has_transparency = pixels.iter().any(|p| p.a < 128);
 
-                let has_transparency = rgba_slice.iter().any(|p| p.a < 128);
-                if has_transparency {
-                    quant_image
-                        .add_fixed_color(imagequant::RGBA::new(0, 0, 0, 0))
-                        .map_err(|error| {
-                            EidolonError::output(format!(
-                                "failed to reserve transparent color: {error}"
-                            ))
-                        })?;
-                }
+                let (mut palette_raw, mut pixels_indexed) = convert_to_indexed(
+                    &pixels,
+                    size.0 as usize,
+                    256,
+                    &optimizer::KMeans,
+                    &ditherer,
+                );
 
-                let mut quant = attr.quantize(&mut quant_image).map_err(|error| {
-                    EidolonError::output(format!("failed to quantize GIF frame: {error}"))
-                })?;
-                quant.set_dithering_level(1.0).map_err(|error| {
-                    EidolonError::output(format!("failed to set GIF dithering: {error}"))
-                })?;
+                let transparent_idx: Option<u8> = if has_transparency {
+                    let t_idx = match palette_raw.iter().position(|p| p.a < 128) {
+                        Some(idx) => idx as u8,
+                        None => {
+                            if palette_raw.len() >= 256 {
+                                palette_raw.pop();
+                            }
+                            palette_raw.push(Color::new(0, 0, 0, 0));
+                            (palette_raw.len() - 1) as u8
+                        }
+                    };
 
-                let (palette_raw, pixels_indexed) =
-                    quant.remapped(&mut quant_image).map_err(|error| {
-                        EidolonError::output(format!("failed to remap GIF frame: {error}"))
-                    })?;
+                    let opaque_fallback = palette_raw
+                        .iter()
+                        .position(|p| p.a >= 128)
+                        .map(|i| i as u8)
+                        .unwrap_or(0);
+
+                    for (pixel, indexed) in pixels.iter().zip(pixels_indexed.iter_mut()) {
+                        if pixel.a < 128 {
+                            *indexed = t_idx;
+                        } else if *indexed == t_idx {
+                            *indexed = opaque_fallback;
+                        }
+                    }
+
+                    Some(t_idx)
+                } else {
+                    None
+                };
 
                 let mut palette_rgb = Vec::with_capacity(palette_raw.len() * 3);
-                let mut transparent_idx: Option<u8> = None;
-                for (i, p) in palette_raw.iter().enumerate() {
+                for p in &palette_raw {
                     palette_rgb.extend_from_slice(&[p.r, p.g, p.b]);
-                    if p.a < 128 && transparent_idx.is_none() {
-                        transparent_idx = Some(i as u8);
-                    }
                 }
 
                 let frame = GifFrame {

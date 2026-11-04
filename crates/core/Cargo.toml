@@ -46,7 +46,7 @@ gif.workspace = true
 webp-animation.workspace = true
 png.workspace = true
 zenravif.workspace = true
-imagequant.workspace = true
+exoquant.workspace = true
 rgb.workspace = true
 
 [dev-dependencies]
