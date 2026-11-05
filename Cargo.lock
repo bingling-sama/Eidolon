@@ -972,7 +972,6 @@ dependencies = [
  "bytemuck",
  "cgmath",
  "criterion",
- "exoquant",
  "futures-channel",
  "getrandom 0.3.4",
  "gif",
@@ -981,6 +980,7 @@ dependencies = [
  "log",
  "png",
  "pollster",
+ "quantizr",
  "rgb",
  "tobj",
  "wasm-bindgen",
@@ -1120,12 +1120,6 @@ dependencies = [
  "event-listener",
  "pin-project-lite",
 ]
-
-[[package]]
-name = "exoquant"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5048aeecde83b7455a63b44aa54da5321d6171cff2adb8a5959849e142e5e4aa"
 
 [[package]]
 name = "exr"
@@ -2896,6 +2890,12 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
+
+[[package]]
+name = "quantizr"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b28ab4659f6754222a9e96c7a48f68dba03a620f23803c67ccd4ca7c35d55f5f"
 
 [[package]]
 name = "quick-error"

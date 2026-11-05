@@ -279,8 +279,8 @@ fn write_animation(
 ) -> Result<(), EidolonError> {
     match format {
         AnimationFormat::Gif => {
-            use exoquant::{convert_to_indexed, ditherer, optimizer, Color};
             use gif::{DisposalMethod, Encoder as GifEncoder, Frame as GifFrame, Repeat};
+            use quantizr::{Image as QuantImage, Options as QuantOptions, QuantizeResult};
             use std::fs::File;
             use std::io::BufWriter;
 
@@ -299,63 +299,61 @@ fn write_animation(
                     EidolonError::output(format!("failed to set GIF loop: {error}"))
                 })?;
 
-            let ditherer = ditherer::FloydSteinberg::new();
+            let mut opts = QuantOptions::default();
+            opts.set_max_colors(256).map_err(|error| {
+                EidolonError::output(format!("failed to configure GIF palette size: {error:?}"))
+            })?;
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
                 let raw = image.into_raw();
-                let pixels: Vec<Color> = raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .map(|&[r, g, b, a]| Color::new(r, g, b, a))
-                    .collect();
 
-                let has_transparency = pixels.iter().any(|p| p.a < 128);
+                let quant_image =
+                    QuantImage::new(&raw, size.0 as usize, size.1 as usize).map_err(|error| {
+                        EidolonError::output(format!("failed to prepare GIF frame: {error:?}"))
+                    })?;
 
-                let (mut palette_raw, mut pixels_indexed) = convert_to_indexed(
-                    &pixels,
-                    size.0 as usize,
-                    256,
-                    &optimizer::KMeans,
-                    &ditherer,
-                );
+                let mut result = QuantizeResult::quantize(&quant_image, &opts);
+                result.set_dithering_level(1.0).map_err(|error| {
+                    EidolonError::output(format!("failed to set GIF dithering: {error:?}"))
+                })?;
 
-                let transparent_idx: Option<u8> = if has_transparency {
-                    let t_idx = match palette_raw.iter().position(|p| p.a < 128) {
-                        Some(idx) => idx as u8,
-                        None => {
-                            if palette_raw.len() >= 256 {
-                                palette_raw.pop();
-                            }
-                            palette_raw.push(Color::new(0, 0, 0, 0));
-                            (palette_raw.len() - 1) as u8
-                        }
-                    };
+                let mut pixels_indexed = vec![0u8; (size.0 * size.1) as usize];
+                result
+                    .remap_image(&quant_image, &mut pixels_indexed)
+                    .map_err(|error| {
+                        EidolonError::output(format!("failed to remap GIF frame: {error:?}"))
+                    })?;
 
-                    let opaque_fallback = palette_raw
-                        .iter()
-                        .position(|p| p.a >= 128)
+                let palette = result.get_palette();
+                let count = palette.count as usize;
+                let mut palette_rgb = Vec::with_capacity(count * 3);
+                let mut transparent_idx: Option<u8> = None;
+
+                for i in 0..count {
+                    let c = palette.entries[i];
+                    palette_rgb.extend_from_slice(&[c.r, c.g, c.b]);
+                    if c.a < 128 && transparent_idx.is_none() {
+                        transparent_idx = Some(i as u8);
+                    }
+                }
+
+                if let Some(t_idx) = transparent_idx {
+                    let opaque_fallback = (0..count)
+                        .find(|&i| palette.entries[i].a >= 128)
                         .map(|i| i as u8)
                         .unwrap_or(0);
 
-                    for (pixel, indexed) in pixels.iter().zip(pixels_indexed.iter_mut()) {
-                        if pixel.a < 128 {
+                    for (chunk, indexed) in
+                        raw.as_chunks::<4>().0.iter().zip(pixels_indexed.iter_mut())
+                    {
+                        if chunk[3] < 128 {
                             *indexed = t_idx;
                         } else if *indexed == t_idx {
                             *indexed = opaque_fallback;
                         }
                     }
-
-                    Some(t_idx)
-                } else {
-                    None
-                };
-
-                let mut palette_rgb = Vec::with_capacity(palette_raw.len() * 3);
-                for p in &palette_raw {
-                    palette_rgb.extend_from_slice(&[p.r, p.g, p.b]);
                 }
 
                 let frame = GifFrame {
@@ -660,6 +658,67 @@ mod tests {
         }
         assert_eq!(frame_count, 4);
         assert_eq!(delays, [25, 25, 25, 25]);
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_preserves_alpha_mask_and_avoids_dithering_leakage() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 1, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-alpha-{}.gif",
+            std::process::id()
+        ));
+
+        let mut frame_producer = |_| {
+            let mut img = RgbaImage::new(4, 4);
+            for y in 0..4 {
+                for x in 0..4 {
+                    if y < 2 {
+                        img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+                    } else {
+                        img.put_pixel(x, y, image::Rgba([200, 100, 50, 255]));
+                    }
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (4, 4),
+            &schedule,
+            0,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        let frame = decoder.read_next_frame().unwrap().unwrap();
+
+        for y in 0..4 {
+            for x in 0..4 {
+                let offset = ((y * 4 + x) * 4) as usize;
+                let alpha = frame.buffer[offset + 3];
+                if y < 2 {
+                    assert_eq!(
+                        alpha, 0,
+                        "transparent background pixel at ({x}, {y}) must remain transparent"
+                    );
+                } else {
+                    assert_eq!(
+                        alpha, 255,
+                        "opaque foreground pixel at ({x}, {y}) must remain opaque"
+                    );
+                }
+            }
+        }
+
         fs::remove_file(path).ok();
     }
 
