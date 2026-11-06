@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to Eidolon will be documented in this file.
+## [0.0.5-alpha.2] - 2026-11-06
+
+### CI/CD
+
+- *(release)* Install cross from git main for aarch64 build ([c8ca41c](https://github.com/bingling-sama/eidolon/commit/c8ca41cc38e19eb9b7a6ace42711430cef02a37b))
+
 ## [0.0.5-alpha.1] - 2026-11-06
 
 ### CI/CD
