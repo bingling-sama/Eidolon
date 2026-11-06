@@ -1,6 +1,29 @@
 # Changelog
 
 All notable changes to Eidolon will be documented in this file.
+## [0.0.5-alpha] - 2026-11-06
+
+### Bug Fixes
+
+- *(server)* Simplify back view custom yaw and document server in workspace layout ([c006adb](https://github.com/bingling-sama/eidolon/commit/c006adb68cba1820c04378b0003bf950bb17e2a8))
+- *(server)* Support concurrent character fetch and nametag_see_through field ([9673f5b](https://github.com/bingling-sama/eidolon/commit/9673f5bb71c1a6fdb3b6722a3e66f4d7b2f1ff75))
+- *(server)* Resolve clippy warnings on enum variant size and type complexity ([ceb7ad1](https://github.com/bingling-sama/eidolon/commit/ceb7ad11cf66ebefeabe73f1c71f4c0e0494739e))
+
+### CI/CD
+
+- Add separate release workflow for server to GHCR ([55d489f](https://github.com/bingling-sama/eidolon/commit/55d489fbfca77100e2af471857302cd1d7c67409))
+- Trigger server docker release automatically on main changes using commit hash ([2c54185](https://github.com/bingling-sama/eidolon/commit/2c54185889956e21577056c907c7c6dd9e508b0e))
+
+### Features
+
+- *(server)* Align dimensions, fakeAnimation posture, camera, and #FFFFFF background with SkinRenderMC ([5e34c17](https://github.com/bingling-sama/eidolon/commit/5e34c173e2cc06822b91b846a836b8f4056c2478))
+- *(server)* Update default definition to 2.0 ([882bd9e](https://github.com/bingling-sama/eidolon/commit/882bd9e03b016c4ab9c5ddd7d54cf28062aebf3f))
+- *(server)* Add multi-character scene render endpoint ([a1bca6f](https://github.com/bingling-sama/eidolon/commit/a1bca6f2af037867b2c506769ce5519f20d991ea))
+
+### Refactor
+
+- *(server)* Move Dockerfile and docker-compose.yml into examples/server ([29746ba](https://github.com/bingling-sama/eidolon/commit/29746baaff8aafc2cbeaa1372c0b3afed5d8717f))
+
 ## [0.0.4-alpha] - 2026-11-03
 
 ### Bug Fixes
