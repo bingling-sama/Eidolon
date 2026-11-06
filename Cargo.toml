@@ -9,7 +9,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.5-alpha"
+version = "0.0.5-alpha.1"
 edition = "2021"
 license = "MIT"
 homepage = "https://github.com/bingling-sama/eidolon"
@@ -17,7 +17,7 @@ repository = "https://github.com/bingling-sama/eidolon"
 
 [workspace.dependencies]
 # Workspace crates
-eidolon-core = { path = "crates/core", version = "0.0.5-alpha" }
+eidolon-core = { path = "crates/core", version = "0.0.5-alpha.1" }
 
 # Graphics and system
 windows = { version = "0.62", features = [

@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to Eidolon will be documented in this file.
+## [0.0.5-alpha.1] - 2026-11-06
+
+### CI/CD
+
+- Speed up workflows with caching and drop x86_64-apple-darwin ([7280e1f](https://github.com/bingling-sama/eidolon/commit/7280e1f68731ea736d0217139258cea5f476fe07))
+
 ## [0.0.5-alpha] - 2026-11-06
 
 ### Bug Fixes
