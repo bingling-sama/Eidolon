@@ -1,9 +1,21 @@
 # syntax=docker/dockerfile:1
 
-# Stage 1: Build binary
-FROM rust:bookworm AS builder
-
+# Stage 1: Shared toolchain with cargo-chef
+FROM rust:bookworm AS chef
+RUN cargo install cargo-chef --locked
 WORKDIR /build
+
+# Stage 2: Compute dependency recipe (changes only when manifests change)
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY examples/ examples/
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Stage 3: Build dependencies as a cached layer, then the server binary
+FROM chef AS builder
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p eidolon-server
 
 # Copy workspace sources and assets needed for compilation
 COPY Cargo.toml Cargo.lock ./
@@ -14,7 +26,7 @@ COPY examples/ examples/
 # Compile eidolon-server in release mode
 RUN cargo build --release -p eidolon-server
 
-# Stage 2: Minimal runtime image
+# Stage 4: Minimal runtime image
 FROM debian:bookworm-slim AS runner
 
 # Install graphics drivers & runtime tools:

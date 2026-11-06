@@ -37,6 +37,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: wasm
           workspaces: |
             .
             examples/wasm

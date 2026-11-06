@@ -33,12 +33,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install software graphics drivers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgl1-mesa-dri \
-            mesa-vulkan-drivers \
-            libosmesa6-dev
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+        with:
+          packages: libgl1-mesa-dri mesa-vulkan-drivers libosmesa6-dev
+          version: mesa-v1
 
       - name: Run server tests
         env:
@@ -89,3 +87,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=eidolon-server
+          cache-to: type=gha,scope=eidolon-server,mode=max

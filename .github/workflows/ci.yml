@@ -43,14 +43,14 @@ jobs:
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace-test
 
       - name: Install software graphics drivers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgl1-mesa-dri \
-            mesa-vulkan-drivers \
-            libosmesa6-dev
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+        with:
+          packages: libgl1-mesa-dri mesa-vulkan-drivers libosmesa6-dev
+          version: mesa-v1
 
       - name: Run cargo tests
         env:
@@ -91,6 +91,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: wasm
           workspaces: |
             .
             examples/wasm
