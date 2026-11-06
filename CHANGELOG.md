@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to Eidolon will be documented in this file.
+## [0.0.5-alpha.3] - 2026-11-06
+
+### CI/CD
+
+- *(release)* Bump git-cliff-action to v4 ([1edd512](https://github.com/bingling-sama/eidolon/commit/1edd512afc8ab1d357b057748ecbb73fcdcf8404))
+
 ## [0.0.5-alpha.2] - 2026-11-06
 
 ### CI/CD
