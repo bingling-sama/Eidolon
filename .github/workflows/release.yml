@@ -73,9 +73,8 @@ jobs:
 
       - name: Install cross
         if: matrix.use_cross
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cross
+        # The 0.2.5 release image ships a GCC too old for libwebp's NEON intrinsics; use git main
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary
         run: |
