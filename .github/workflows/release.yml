@@ -209,7 +209,7 @@ jobs:
           merge-multiple: true
 
       - name: Generate Release Notes using git-cliff
-        uses: orhun/git-cliff-action@v3
+        uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
           args: --latest --strip header
