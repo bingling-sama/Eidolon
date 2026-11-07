@@ -1,27 +1,12 @@
-use image::{DynamicImage, GenericImageView};
+use image::DynamicImage;
 use serde::{de, Deserialize, Deserializer};
 
 /// Heuristic auto-detection for Alex (slim) skins based on arm transparency.
 pub fn is_slim_skin(image: &DynamicImage) -> bool {
-    let (width, height) = image.dimensions();
-    if width != height || width < 64 {
-        return false;
-    }
-    let scale = width / 64;
-    // In Minecraft 64x64 skins:
-    // Right arm in 64-base:
-    // Classic arm is 4px wide, Alex is 3px wide.
-    // For 3px arm, the extra column at x in [54..56], y in [20..32] is unused and fully transparent.
-    // Check alpha in this region.
-    for x in (54 * scale)..(56 * scale) {
-        for y in (20 * scale)..(32 * scale) {
-            let pixel = image.get_pixel(x, y);
-            if pixel[3] > 0 {
-                return false;
-            }
-        }
-    }
-    true
+    matches!(
+        eidolon_core::classifier::infer_skin_type(image),
+        Some(eidolon_core::body::SkinType::Slim)
+    )
 }
 
 fn deserialize_flexible_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
