@@ -320,6 +320,50 @@ fn bench_animation_export(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_gif_export(c: &mut Criterion) {
+    let renderer = shared_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("Failed to load body");
+    let character = Character::from_body(body);
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 80.0,
+        scale: 1.0,
+        target: [0.0, 1.0, 0.0],
+    };
+
+    let temp_dir = TempDirGuard::new("eidolon_bench_gif");
+    let path = temp_dir.path().join("walk_800x600_30fps.gif");
+
+    let mut group = c.benchmark_group("export_walk_gif_800x600_30fps");
+    group.sample_size(10);
+
+    let mut char_export = character.clone();
+    group.bench_function("quantizr_simd_gif", |b| {
+        b.iter(|| {
+            write_output(
+                &path,
+                OutputIntent::Animation {
+                    format: AnimationFormat::Gif,
+                    preset: AnimationPreset::Walk,
+                    fps: 30,
+                    speed: 1.0,
+                    loop_count: 0,
+                    size: (800, 600),
+                },
+                |time| {
+                    char_export.posture = AnimationPreset::Walk.sample(time);
+                    renderer.render(&char_export, &camera, 800, 600)
+                },
+            )
+            .expect("Failed to export walk GIF animation");
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_render_resolutions,
@@ -329,5 +373,6 @@ criterion_group!(
     bench_animation_and_pose,
     bench_encoding_static,
     bench_animation_export,
+    bench_gif_export,
 );
 criterion_main!(benches);
