@@ -279,7 +279,8 @@ fn write_animation(
 ) -> Result<(), EidolonError> {
     match format {
         AnimationFormat::Gif => {
-            use gif::{Encoder as GifEncoder, Frame as GifFrame, Repeat};
+            use gif::{DisposalMethod, Encoder as GifEncoder, Frame as GifFrame, Repeat};
+            use quantizr::{Image as QuantImage, Options as QuantOptions, QuantizeResult};
             use std::fs::File;
             use std::io::BufWriter;
 
@@ -298,13 +299,74 @@ fn write_animation(
                     EidolonError::output(format!("failed to set GIF loop: {error}"))
                 })?;
 
+            let mut opts = QuantOptions::default();
+            opts.set_max_colors(256).map_err(|error| {
+                EidolonError::output(format!("failed to configure GIF palette size: {error:?}"))
+            })?;
+
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
-                let mut rgba = image.into_raw();
-                let mut frame =
-                    GifFrame::from_rgba_speed(size.0 as u16, size.1 as u16, &mut rgba, 10);
-                frame.delay = gif_delay_cs(frame_index, schedule.fps()) as u16;
+                let raw = image.into_raw();
+
+                let quant_image =
+                    QuantImage::new(&raw, size.0 as usize, size.1 as usize).map_err(|error| {
+                        EidolonError::output(format!("failed to prepare GIF frame: {error:?}"))
+                    })?;
+
+                let mut result = QuantizeResult::quantize(&quant_image, &opts);
+                result.set_dithering_level(1.0).map_err(|error| {
+                    EidolonError::output(format!("failed to set GIF dithering: {error:?}"))
+                })?;
+
+                let mut pixels_indexed = vec![0u8; (size.0 * size.1) as usize];
+                result
+                    .remap_image(&quant_image, &mut pixels_indexed)
+                    .map_err(|error| {
+                        EidolonError::output(format!("failed to remap GIF frame: {error:?}"))
+                    })?;
+
+                let palette = result.get_palette();
+                let count = palette.count as usize;
+                let mut palette_rgb = Vec::with_capacity(count * 3);
+                let mut transparent_idx: Option<u8> = None;
+
+                for i in 0..count {
+                    let c = palette.entries[i];
+                    palette_rgb.extend_from_slice(&[c.r, c.g, c.b]);
+                    if c.a == 0 && transparent_idx.is_none() {
+                        transparent_idx = Some(i as u8);
+                    }
+                }
+
+                if let Some(t_idx) = transparent_idx {
+                    let opaque_fallback = (0..count)
+                        .find(|&i| palette.entries[i].a > 0)
+                        .map(|i| i as u8)
+                        .unwrap_or(0);
+
+                    for (chunk, indexed) in
+                        raw.as_chunks::<4>().0.iter().zip(pixels_indexed.iter_mut())
+                    {
+                        if chunk[3] == 0 {
+                            *indexed = t_idx;
+                        } else if *indexed == t_idx {
+                            *indexed = opaque_fallback;
+                        }
+                    }
+                }
+
+                let frame = GifFrame {
+                    width: size.0 as u16,
+                    height: size.1 as u16,
+                    delay: gif_delay_cs(frame_index, schedule.fps()) as u16,
+                    dispose: DisposalMethod::Keep,
+                    transparent: transparent_idx,
+                    palette: Some(palette_rgb),
+                    buffer: std::borrow::Cow::Owned(pixels_indexed),
+                    ..Default::default()
+                };
+
                 encoder.write_frame(&frame).map_err(|error| {
                     EidolonError::output(format!("failed to write GIF: {error}"))
                 })?;
@@ -390,11 +452,12 @@ fn write_animation(
             Ok(())
         }
         AnimationFormat::Avif => {
+            use rgb::FromSlice;
             use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
 
-            let mut frames_data: Vec<Vec<RGBA8>> =
-                Vec::with_capacity(schedule.frame_count() as usize);
-            let mut frame_durations: Vec<u32> = Vec::with_capacity(schedule.frame_count() as usize);
+            let frame_count = schedule.frame_count() as usize;
+            let mut raw_frames: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
+            let mut frame_durations: Vec<u32> = Vec::with_capacity(frame_count);
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
@@ -402,23 +465,18 @@ fn write_animation(
                 let duration_ms = webp_timestamp_ms(frame_index + 1, schedule.fps())
                     - webp_timestamp_ms(frame_index, schedule.fps());
                 frame_durations.push(duration_ms);
-
-                let raw = image.into_raw();
-                let rgba_vec: Vec<RGBA8> = raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-                    .collect();
-                frames_data.push(rgba_vec);
+                raw_frames.push(image.into_raw());
             }
 
-            let anim_frames: Vec<AnimFrameRgba> = frames_data
+            let anim_frames: Vec<AnimFrameRgba> = raw_frames
                 .iter()
                 .zip(frame_durations.iter())
-                .map(|(data, &duration_ms)| AnimFrameRgba {
-                    rgba: Img::new(data.as_slice(), size.0 as usize, size.1 as usize),
-                    duration_ms,
+                .map(|(raw, &duration_ms)| {
+                    let rgba_slice: &[RGBA8] = raw.as_slice().as_rgba();
+                    AnimFrameRgba {
+                        rgba: Img::new(rgba_slice, size.0 as usize, size.1 as usize),
+                        duration_ms,
+                    }
                 })
                 .collect();
 
@@ -600,6 +658,325 @@ mod tests {
         }
         assert_eq!(frame_count, 4);
         assert_eq!(delays, [25, 25, 25, 25]);
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_preserves_alpha_mask_and_avoids_dithering_leakage() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 1, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-alpha-{}.gif",
+            std::process::id()
+        ));
+
+        let mut frame_producer = |_| {
+            let mut img = RgbaImage::new(4, 4);
+            for y in 0..4 {
+                for x in 0..4 {
+                    if y < 2 {
+                        img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+                    } else {
+                        img.put_pixel(x, y, image::Rgba([200, 100, 50, 255]));
+                    }
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (4, 4),
+            &schedule,
+            0,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        let frame = decoder.read_next_frame().unwrap().unwrap();
+
+        for y in 0..4 {
+            for x in 0..4 {
+                let offset = ((y * 4 + x) * 4) as usize;
+                let alpha = frame.buffer[offset + 3];
+                if y < 2 {
+                    assert_eq!(
+                        alpha, 0,
+                        "transparent background pixel at ({x}, {y}) must remain transparent"
+                    );
+                } else {
+                    assert_eq!(
+                        alpha, 255,
+                        "opaque foreground pixel at ({x}, {y}) must remain opaque"
+                    );
+                }
+            }
+        }
+
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_preserves_alpha_ladder_and_non_zero_cutout() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 1, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-alpha-ladder-{}.gif",
+            std::process::id()
+        ));
+
+        let alpha_steps = [0u8, 1, 64, 127, 128, 255];
+        let width = alpha_steps.len() as u32;
+        let height = 2u32;
+
+        let mut frame_producer = |_| {
+            let mut img = RgbaImage::new(width, height);
+            for (x, &alpha) in alpha_steps.iter().enumerate() {
+                for y in 0..height {
+                    // Give distinct colors to avoid identical palette merging
+                    let r = 50 + (x as u8) * 30;
+                    let g = 200 - (x as u8) * 20;
+                    let b = 120;
+                    img.put_pixel(x as u32, y, image::Rgba([r, g, b, alpha]));
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (width, height),
+            &schedule,
+            0,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        let frame = decoder.read_next_frame().unwrap().unwrap();
+
+        for (x, &alpha_in) in alpha_steps.iter().enumerate() {
+            for y in 0..height {
+                let offset = ((y * width + x as u32) * 4) as usize;
+                let alpha_out = frame.buffer[offset + 3];
+                if alpha_in == 0 {
+                    assert_eq!(
+                        alpha_out, 0,
+                        "alpha == 0 at x={x}, y={y} must decode to fully transparent"
+                    );
+                } else {
+                    assert_eq!(
+                        alpha_out, 255,
+                        "non-zero alpha={alpha_in} at x={x}, y={y} must decode to fully opaque"
+                    );
+                }
+            }
+        }
+
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_prevents_dithering_leakage_into_transparent_background() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 1, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-leakage-{}.gif",
+            std::process::id()
+        ));
+
+        let width = 8u32;
+        let height = 8u32;
+
+        let mut frame_producer = |_| {
+            let mut img = RgbaImage::new(width, height);
+            for y in 0..height {
+                for x in 0..width {
+                    if x < 4 {
+                        // Left half: fully transparent background
+                        img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+                    } else {
+                        // Right half: high-contrast checkerboard triggering maximum Floyd-Steinberg error diffusion
+                        let c = if (x + y) % 2 == 0 { 255 } else { 0 };
+                        img.put_pixel(x, y, image::Rgba([c, c, c, 255]));
+                    }
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (width, height),
+            &schedule,
+            0,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        let frame = decoder.read_next_frame().unwrap().unwrap();
+
+        for y in 0..height {
+            for x in 0..width {
+                let offset = ((y * width + x) * 4) as usize;
+                let alpha_out = frame.buffer[offset + 3];
+                if x < 4 {
+                    assert_eq!(
+                        alpha_out, 0,
+                        "dithering error must not leak into transparent background at ({x}, {y})"
+                    );
+                } else {
+                    assert_eq!(
+                        alpha_out, 255,
+                        "foreground pixel at ({x}, {y}) must remain fully opaque"
+                    );
+                }
+            }
+        }
+
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_handles_complex_gradient_over_256_colors() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 2, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-gradient-{}.gif",
+            std::process::id()
+        ));
+
+        let width = 300u32;
+        let height = 4u32;
+
+        let mut frame_producer = |_| {
+            let mut img = RgbaImage::new(width, height);
+            for y in 0..height {
+                for x in 0..width {
+                    // Corner pixels transparent, rest is dynamic RGB gradient > 256 colors
+                    if (x < 5 || x >= width - 5) && (y == 0 || y == height - 1) {
+                        img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+                    } else {
+                        let r = (x % 256) as u8;
+                        let g = ((x * 3 + y * 50) % 256) as u8;
+                        let b = ((x * 7 + y * 70) % 256) as u8;
+                        img.put_pixel(x, y, image::Rgba([r, g, b, 255]));
+                    }
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (width, height),
+            &schedule,
+            0,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        let frame = decoder.read_next_frame().unwrap().unwrap();
+        assert_eq!(frame.width, width as u16);
+        assert_eq!(frame.height, height as u16);
+
+        // Verify corner is transparent
+        assert_eq!(frame.buffer[3], 0);
+
+        fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gif_encoder_multi_frame_timing_and_palette_independence() {
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 3, 1.0).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-output-gif-multiframe-{}.gif",
+            std::process::id()
+        ));
+
+        let mut frame_producer = |time: Duration| {
+            let frame_idx = (time.as_millis() / 333) as u8;
+            let mut img = RgbaImage::new(4, 4);
+            for y in 0..4 {
+                for x in 0..4 {
+                    if x == 0 && y == 0 {
+                        img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+                    } else {
+                        let color = match frame_idx % 3 {
+                            0 => [200, 20, 20, 255], // Red dominant
+                            1 => [20, 200, 20, 255], // Green dominant
+                            _ => [20, 20, 200, 255], // Blue dominant
+                        };
+                        img.put_pixel(x, y, image::Rgba(color));
+                    }
+                }
+            }
+            Ok(img)
+        };
+
+        write_animation(
+            &path,
+            AnimationFormat::Gif,
+            (4, 4),
+            &schedule,
+            2,
+            &mut frame_producer,
+        )
+        .unwrap();
+
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options
+            .read_info(std::io::Cursor::new(fs::read(&path).unwrap()))
+            .unwrap();
+        assert_eq!(decoder.repeat(), gif::Repeat::Finite(2));
+
+        let mut frame_count = 0;
+        let mut dominant_channels = Vec::new();
+
+        while let Some(frame) = decoder.read_next_frame().unwrap() {
+            frame_count += 1;
+            // Sample pixel (1, 1) offset = (1 * 4 + 1) * 4 = 20
+            let r = frame.buffer[20];
+            let g = frame.buffer[21];
+            let b = frame.buffer[22];
+            let max_c = r.max(g).max(b);
+            if max_c == r {
+                dominant_channels.push("red");
+            } else if max_c == g {
+                dominant_channels.push("green");
+            } else {
+                dominant_channels.push("blue");
+            }
+        }
+
+        assert_eq!(frame_count, 3);
+        assert_eq!(dominant_channels, ["red", "green", "blue"]);
+
         fs::remove_file(path).ok();
     }
 

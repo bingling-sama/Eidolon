@@ -46,6 +46,8 @@ gif.workspace = true
 webp-animation.workspace = true
 png.workspace = true
 zenravif.workspace = true
+quantizr.workspace = true
+rgb.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

@@ -980,6 +980,8 @@ dependencies = [
  "log",
  "png",
  "pollster",
+ "quantizr",
+ "rgb",
  "tobj",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2890,6 +2892,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "quantizr"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b28ab4659f6754222a9e96c7a48f68dba03a620f23803c67ccd4ca7c35d55f5f"
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3248,6 +3256,9 @@ name = "rgb"
 version = "0.8.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "ring"
