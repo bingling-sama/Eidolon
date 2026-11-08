@@ -320,6 +320,49 @@ fn bench_animation_export(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_avif_frame_prep(c: &mut Criterion) {
+    let renderer = shared_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("Failed to load body");
+    let character = Character::from_body(body);
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 80.0,
+        scale: 1.0,
+        target: [0.0, 1.0, 0.0],
+    };
+
+    let sample_img = renderer.render(&character, &camera, 800, 600).unwrap();
+    let sample_raw = sample_img.into_raw();
+
+    let mut avif_group = c.benchmark_group("avif_frame_prep_800x600");
+    avif_group.sample_size(10);
+
+    avif_group.bench_function("zerocopy_slice_borrow", |b| {
+        use rgb::FromSlice;
+        b.iter(|| {
+            let rgba_slice: &[zenravif::RGBA8] = sample_raw.as_slice().as_rgba();
+            std::hint::black_box(rgba_slice);
+        });
+    });
+
+    avif_group.bench_function("legacy_chunk_alloc_vec", |b| {
+        use zenravif::RGBA8;
+        b.iter(|| {
+            let rgba_vec: Vec<RGBA8> = sample_raw
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+                .collect();
+            std::hint::black_box(rgba_vec);
+        });
+    });
+
+    avif_group.finish();
+}
+
 criterion_group!(
     benches,
     bench_render_resolutions,
@@ -329,5 +372,6 @@ criterion_group!(
     bench_animation_and_pose,
     bench_encoding_static,
     bench_animation_export,
+    bench_avif_frame_prep,
 );
 criterion_main!(benches);

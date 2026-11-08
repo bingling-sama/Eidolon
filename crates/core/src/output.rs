@@ -390,11 +390,12 @@ fn write_animation(
             Ok(())
         }
         AnimationFormat::Avif => {
+            use rgb::FromSlice;
             use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
 
-            let mut frames_data: Vec<Vec<RGBA8>> =
-                Vec::with_capacity(schedule.frame_count() as usize);
-            let mut frame_durations: Vec<u32> = Vec::with_capacity(schedule.frame_count() as usize);
+            let frame_count = schedule.frame_count() as usize;
+            let mut raw_frames: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
+            let mut frame_durations: Vec<u32> = Vec::with_capacity(frame_count);
 
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
@@ -403,22 +404,18 @@ fn write_animation(
                     - webp_timestamp_ms(frame_index, schedule.fps());
                 frame_durations.push(duration_ms);
 
-                let raw = image.into_raw();
-                let rgba_vec: Vec<RGBA8> = raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-                    .collect();
-                frames_data.push(rgba_vec);
+                raw_frames.push(image.into_raw());
             }
 
-            let anim_frames: Vec<AnimFrameRgba> = frames_data
+            let anim_frames: Vec<AnimFrameRgba> = raw_frames
                 .iter()
                 .zip(frame_durations.iter())
-                .map(|(data, &duration_ms)| AnimFrameRgba {
-                    rgba: Img::new(data.as_slice(), size.0 as usize, size.1 as usize),
-                    duration_ms,
+                .map(|(raw, &duration_ms)| {
+                    let rgba_slice: &[RGBA8] = raw.as_slice().as_rgba();
+                    AnimFrameRgba {
+                        rgba: Img::new(rgba_slice, size.0 as usize, size.1 as usize),
+                        duration_ms,
+                    }
                 })
                 .collect();
 
