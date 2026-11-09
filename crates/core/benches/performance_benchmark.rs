@@ -329,6 +329,8 @@ fn bench_animation_export(c: &mut Criterion) {
 ///
 /// 2. End-to-end export comparison (`export_walk_avif_comparison_400x300_15fps`):
 ///    Measures end-to-end animation export pipeline (render + prep + encode).
+///    Both pipelines use strictly identical frame durations via cumulative rounding
+///    (`((boundary * 1000 + fps / 2) / fps)`) for fair A/B comparison.
 ///    Demonstrates that while buffer preparation is nearly instant, overall export
 ///    duration is dominated by the underlying AV1 video encoder (zenrav1e).
 fn bench_avif_export(c: &mut Criterion) {
@@ -419,7 +421,10 @@ fn bench_avif_export(c: &mut Criterion) {
                 char_legacy.posture =
                     AnimationPreset::Walk.sample(schedule.sample_time(frame_index));
                 let img = renderer.render(&char_legacy, &camera, 400, 300).unwrap();
-                let duration_ms = 66; // ~15 fps
+                // Match the cumulative rounding timestamp logic from production write_output
+                let fps = schedule.fps();
+                let duration_ms = ((frame_index + 1) * 1_000 + fps / 2) / fps
+                    - (frame_index * 1_000 + fps / 2) / fps;
                 frame_durations.push(duration_ms);
 
                 let raw = img.into_raw();
