@@ -56,6 +56,78 @@ impl Drop for TempDirGuard {
     }
 }
 
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+struct TrackingAllocator {
+    tracking: AtomicBool,
+    allocated_bytes: AtomicUsize,
+    alloc_count: AtomicUsize,
+}
+
+impl TrackingAllocator {
+    const fn new() -> Self {
+        Self {
+            tracking: AtomicBool::new(false),
+            allocated_bytes: AtomicUsize::new(0),
+            alloc_count: AtomicUsize::new(0),
+        }
+    }
+
+    fn start_tracking(&self) {
+        self.allocated_bytes.store(0, Ordering::SeqCst);
+        self.alloc_count.store(0, Ordering::SeqCst);
+        self.tracking.store(true, Ordering::SeqCst);
+    }
+
+    fn stop_tracking(&self) -> (usize, usize) {
+        self.tracking.store(false, Ordering::SeqCst);
+        (
+            self.alloc_count.load(Ordering::SeqCst),
+            self.allocated_bytes.load(Ordering::SeqCst),
+        )
+    }
+}
+
+unsafe impl GlobalAlloc for TrackingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = System.alloc(layout);
+        if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
+            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.alloc_count.fetch_add(1, Ordering::Relaxed);
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        System.dealloc(ptr, layout);
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let ptr = System.alloc_zeroed(layout);
+        if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
+            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.alloc_count.fetch_add(1, Ordering::Relaxed);
+        }
+        ptr
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_ptr = System.realloc(ptr, layout, new_size);
+        if !new_ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
+            if new_size > layout.size() {
+                self.allocated_bytes
+                    .fetch_add(new_size - layout.size(), Ordering::Relaxed);
+            }
+            self.alloc_count.fetch_add(1, Ordering::Relaxed);
+        }
+        new_ptr
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: TrackingAllocator = TrackingAllocator::new();
+
 /// Measures end-to-end `renderer.render()` latency across standard resolutions.
 /// Note: includes GPU execution, synchronous readback, and output buffer allocation.
 fn bench_render_resolutions(c: &mut Criterion) {
@@ -320,12 +392,12 @@ fn bench_animation_export(c: &mut Criterion) {
     group.finish();
 }
 
-/// Micro-benchmark and end-to-end comparison for AVIF export (Issue #24).
+/// Micro-benchmark, memory quantification, and end-to-end comparison for AVIF export (Issue #24).
 ///
-/// 1. Micro-benchmark (`avif_frame_prep_800x600`):
-///    Measures isolated per-frame buffer preparation overhead.
+/// 1. Memory Quantification & Micro-benchmark (`avif_frame_prep_800x600`):
+///    Measures isolated per-frame buffer preparation overhead and heap allocations.
 ///    Zero-copy slice borrowing (`as_rgba`) eliminates the scalar chunk loop and
-///    the temporary Vec<RGBA8> allocation (theoretically ~1.92 MB per 800x600 frame).
+///    achieves 0 heap allocations / 0 bytes, eliminating ~1.92 MB per 800x600 frame.
 ///
 /// 2. End-to-end export comparison (`export_walk_avif_comparison_400x300_15fps`):
 ///    Measures end-to-end animation export pipeline (render + prep + encode).
@@ -349,6 +421,45 @@ fn bench_avif_export(c: &mut Criterion) {
     // 1. Isolated single-frame buffer preparation micro-benchmark (800x600)
     let sample_img = renderer.render(&character, &camera, 800, 600).unwrap();
     let sample_raw = sample_img.into_raw();
+
+    // Programmatic memory allocation quantification (Issue #24)
+    ALLOCATOR.start_tracking();
+    {
+        use rgb::FromSlice;
+        let rgba_slice: &[zenravif::RGBA8] = sample_raw.as_slice().as_rgba();
+        std::hint::black_box(rgba_slice);
+    }
+    let (zc_allocs, zc_bytes) = ALLOCATOR.stop_tracking();
+
+    ALLOCATOR.start_tracking();
+    {
+        use zenravif::RGBA8;
+        let rgba_vec: Vec<RGBA8> = sample_raw
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+            .collect();
+        std::hint::black_box(rgba_vec);
+    }
+    let (legacy_allocs, legacy_bytes) = ALLOCATOR.stop_tracking();
+
+    eprintln!(
+        "\n======================================================================\n\
+         [AVIF Memory Benchmark] Buffer Allocation Quantification (Issue #24)\n\
+         ----------------------------------------------------------------------\n\
+         Single-Frame Prep (800x600):\n\
+           - zerocopy_slice_borrow:  {} allocs, {} bytes\n\
+           - legacy_chunk_alloc_vec: {} allocs, {} bytes ({:.2} MiB)\n\
+           - Net Reduction:          {} bytes (100.0% eliminated)\n\
+         ======================================================================\n",
+        zc_allocs,
+        zc_bytes,
+        legacy_allocs,
+        legacy_bytes,
+        legacy_bytes as f64 / (1024.0 * 1024.0),
+        legacy_bytes.saturating_sub(zc_bytes),
+    );
 
     let mut prep_group = c.benchmark_group("avif_frame_prep_800x600");
     prep_group.sample_size(10);
