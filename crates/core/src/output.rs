@@ -273,6 +273,66 @@ fn gif_delay_cs(frame_index: u32, fps: u32) -> u32 {
     rounded_units(frame_index + 1, 100, fps) - rounded_units(frame_index, 100, fps)
 }
 
+/// Internal prepared animation frames and zero-copy encoder views for AVIF export.
+///
+/// Holds raw pixel allocations in `raw_frames` while `to_anim_frames` produces
+/// borrowed `zenravif::AnimFrameRgba` slices referencing them with zero copy.
+#[doc(hidden)]
+#[cfg(not(target_arch = "wasm32"))]
+pub struct PreparedAvifAnimation {
+    pub raw_frames: Vec<Vec<u8>>,
+    pub frame_durations: Vec<u32>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl PreparedAvifAnimation {
+    /// Collects and validates raw frames, computing accumulated rounded frame durations.
+    pub fn collect_frames<F>(
+        size: (u32, u32),
+        schedule: &AnimationSchedule,
+        mut frame_producer: F,
+    ) -> Result<Self, EidolonError>
+    where
+        F: FnMut(Duration) -> Result<RgbaImage, EidolonError>,
+    {
+        let frame_count = schedule.frame_count() as usize;
+        let mut raw_frames = Vec::with_capacity(frame_count);
+        let mut frame_durations = Vec::with_capacity(frame_count);
+
+        for frame_index in 0..schedule.frame_count() {
+            let image = frame_producer(schedule.sample_time(frame_index))?;
+            validate_frame(&image, size)?;
+            let duration_ms = frame_timestamp_ms(frame_index + 1, schedule.fps())
+                - frame_timestamp_ms(frame_index, schedule.fps());
+            frame_durations.push(duration_ms);
+
+            raw_frames.push(image.into_raw());
+        }
+
+        Ok(Self {
+            raw_frames,
+            frame_durations,
+        })
+    }
+
+    /// Constructs zero-copy encoder input views borrowing directly from the backing raw pixel buffers.
+    ///
+    /// Performs 0 pixel allocations: borrows `&[zenravif::RGBA8]` slices directly via `as_rgba()`.
+    #[inline]
+    pub fn to_anim_frames(&self, size: (u32, u32)) -> Vec<zenravif::AnimFrameRgba<'_>> {
+        use rgb::FromSlice;
+        let mut anim_frames = Vec::with_capacity(self.raw_frames.len());
+        for (raw, &duration_ms) in self.raw_frames.iter().zip(self.frame_durations.iter()) {
+            let rgba_slice: &[zenravif::RGBA8] = raw.as_slice().as_rgba();
+            anim_frames.push(zenravif::AnimFrameRgba {
+                rgba: zenravif::Img::new(rgba_slice, size.0 as usize, size.1 as usize),
+                duration_ms,
+            });
+        }
+        anim_frames
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn write_animation(
     path: &Path,
@@ -395,34 +455,11 @@ fn write_animation(
             Ok(())
         }
         AnimationFormat::Avif => {
-            use rgb::FromSlice;
-            use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
+            use zenravif::Encoder as AvifEncoder;
 
-            let frame_count = schedule.frame_count() as usize;
-            let mut raw_frames: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
-            let mut frame_durations: Vec<u32> = Vec::with_capacity(frame_count);
-
-            for frame_index in 0..schedule.frame_count() {
-                let image = frame_producer(schedule.sample_time(frame_index))?;
-                validate_frame(&image, size)?;
-                let duration_ms = frame_timestamp_ms(frame_index + 1, schedule.fps())
-                    - frame_timestamp_ms(frame_index, schedule.fps());
-                frame_durations.push(duration_ms);
-
-                raw_frames.push(image.into_raw());
-            }
-
-            let anim_frames: Vec<AnimFrameRgba> = raw_frames
-                .iter()
-                .zip(frame_durations.iter())
-                .map(|(raw, &duration_ms)| {
-                    let rgba_slice: &[RGBA8] = raw.as_slice().as_rgba();
-                    AnimFrameRgba {
-                        rgba: Img::new(rgba_slice, size.0 as usize, size.1 as usize),
-                        duration_ms,
-                    }
-                })
-                .collect();
+            let prepared =
+                PreparedAvifAnimation::collect_frames(size, schedule, &mut *frame_producer)?;
+            let anim_frames = prepared.to_anim_frames(size);
 
             let encoder = AvifEncoder::new().with_speed(6);
             let encoded = encoder
@@ -713,5 +750,85 @@ mod tests {
         assert!(encoded.len() > 12);
         assert_eq!(&encoded[4..8], b"ftyp");
         fs::remove_file(path).ok();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn avif_export_correctness_and_validation() {
+        let path =
+            std::env::temp_dir().join(format!("eidolon-t3-avif-{}.avif", std::process::id()));
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 15, 1.0).unwrap();
+        assert_eq!(schedule.fps(), 15);
+        assert_eq!(schedule.frame_count(), 15);
+
+        // Check frame duration calculation (cumulative rounding without drift)
+        let total_duration: u32 = (0..15)
+            .map(|i| frame_timestamp_ms(i + 1, 15) - frame_timestamp_ms(i, 15))
+            .sum();
+        assert_eq!(
+            total_duration, 1_000,
+            "15 frames at 15fps must total exactly 1000ms"
+        );
+
+        // Producer returning frames with different colors and alpha (transparent, semi-transparent, opaque)
+        let mut frame_call_count = 0;
+        let result = write_output(
+            &path,
+            OutputIntent::Animation {
+                format: AnimationFormat::Avif,
+                preset: AnimationPreset::Walk,
+                fps: 15,
+                speed: 1.0,
+                loop_count: 0,
+                size: (4, 4),
+            },
+            |time| {
+                frame_call_count += 1;
+                let idx = (time.as_millis() / 66) as u8;
+                let alpha = match idx % 3 {
+                    0 => 0,
+                    1 => 128,
+                    _ => 255,
+                };
+                Ok(RgbaImage::from_pixel(
+                    4,
+                    4,
+                    image::Rgba([10 * idx, 20 * idx, 30 * idx, alpha]),
+                ))
+            },
+        );
+        assert!(
+            result.is_ok(),
+            "AVIF animation export must succeed: {:?}",
+            result.err()
+        );
+        assert_eq!(frame_call_count, 15, "Must sample all 15 frames");
+
+        let encoded = fs::read(&path).unwrap();
+        assert!(encoded.len() > 12);
+        assert_eq!(
+            &encoded[4..8],
+            b"ftyp",
+            "Must have valid ISOBMFF / AVIF ftyp box header"
+        );
+        fs::remove_file(path).ok();
+
+        // Reject frame dimension mismatch
+        let mismatch_result = write_output(
+            "mismatch.avif",
+            OutputIntent::Animation {
+                format: AnimationFormat::Avif,
+                preset: AnimationPreset::Walk,
+                fps: 15,
+                speed: 1.0,
+                loop_count: 0,
+                size: (4, 4),
+            },
+            |_| Ok(RgbaImage::new(2, 2)),
+        );
+        assert!(
+            matches!(mismatch_result, Err(EidolonError::Output(_))),
+            "Must reject mismatched frame dimensions"
+        );
     }
 }
