@@ -93,7 +93,8 @@ unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ptr = System.alloc(layout);
         if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
-            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.allocated_bytes
+                .fetch_add(layout.size(), Ordering::Relaxed);
             self.alloc_count.fetch_add(1, Ordering::Relaxed);
         }
         ptr
@@ -106,7 +107,8 @@ unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let ptr = System.alloc_zeroed(layout);
         if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
-            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.allocated_bytes
+                .fetch_add(layout.size(), Ordering::Relaxed);
             self.alloc_count.fetch_add(1, Ordering::Relaxed);
         }
         ptr

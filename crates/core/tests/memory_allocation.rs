@@ -40,7 +40,8 @@ unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ptr = System.alloc(layout);
         if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
-            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.allocated_bytes
+                .fetch_add(layout.size(), Ordering::Relaxed);
             self.alloc_count.fetch_add(1, Ordering::Relaxed);
         }
         ptr
@@ -53,7 +54,8 @@ unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let ptr = System.alloc_zeroed(layout);
         if !ptr.is_null() && self.tracking.load(Ordering::Relaxed) {
-            self.allocated_bytes.fetch_add(layout.size(), Ordering::Relaxed);
+            self.allocated_bytes
+                .fetch_add(layout.size(), Ordering::Relaxed);
             self.alloc_count.fetch_add(1, Ordering::Relaxed);
         }
         ptr
@@ -165,17 +167,24 @@ fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
     let (legacy_allocs, legacy_bytes) = ALLOCATOR.stop_tracking();
 
     let expected_frame_heap_bytes = frame_count * width * height * 4;
+    let expected_vector_header_bytes = frame_count * std::mem::size_of::<Vec<zenravif::RGBA8>>();
     assert_eq!(
         legacy_bytes.saturating_sub(zc_bytes),
+        expected_frame_heap_bytes + expected_vector_header_bytes,
+        "Legacy pipeline must allocate pixel buffers ({}) plus Vec headers ({}) more bytes than zero-copy across {} frames",
         expected_frame_heap_bytes,
-        "Legacy pipeline must allocate exactly {} more bytes than zero-copy across {} frames",
-        expected_frame_heap_bytes,
+        expected_vector_header_bytes,
         frame_count
     );
-    assert!(
-        legacy_allocs > zc_allocs,
-        "Legacy pipeline must perform more allocations ({}) than zero-copy ({})",
+    assert_eq!(
+        zc_allocs, 1,
+        "Zero-copy pipeline only performs 1 allocation for the outer AnimFrameRgba slice vector"
+    );
+    assert_eq!(
         legacy_allocs,
-        zc_allocs
+        frame_count + 2,
+        "Legacy pipeline performs {} per-frame buffer allocations plus 2 vector container allocations",
+        frame_count
     );
 }
+
