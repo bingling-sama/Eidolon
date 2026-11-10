@@ -187,4 +187,3 @@ fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
         frame_count
     );
 }
-
