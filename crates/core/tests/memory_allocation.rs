@@ -138,7 +138,7 @@ fn assert_pointer_and_pixel_invariance(
     );
 
     for (i, frame) in anim_frames.iter().enumerate() {
-        let slice = frame.rgba.as_slice();
+        let slice: &[zenravif::RGBA8] = frame.rgba.buf;
         assert_eq!(
             slice.len(),
             (width * height) as usize,
@@ -227,7 +227,7 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     let schedule_15f = AnimationSchedule::new(AnimationPreset::Walk, 15, 1.0).unwrap();
 
     // 1. Pre-create 15 distinct input images with varying RGB and alpha values
-    let mut images_15f: Vec<RgbaImage> = (0..frame_count)
+    let images_15f: Vec<RgbaImage> = (0..frame_count)
         .map(|idx| {
             let alpha = match idx % 3 {
                 0 => 0,
@@ -269,14 +269,11 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     // 4. Measure legacy baseline under identical inputs and symmetric container boundaries
     let mut legacy_source: Vec<RgbaImage> =
         expected_images_15f.iter().map(|img| img.clone()).collect();
+    let legacy_durations = prepared_15f.frame_durations.clone();
     ALLOCATOR.start_tracking();
     let mut legacy_raw: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
-    let mut legacy_durations: Vec<u32> = Vec::with_capacity(frame_count);
-    for frame_index in 0..frame_count {
+    for _ in 0..frame_count {
         let img = legacy_source.remove(0);
-        let duration = eidolon_core::output::frame_timestamp_ms((frame_index + 1) as u32, 15)
-            - eidolon_core::output::frame_timestamp_ms(frame_index as u32, 15);
-        legacy_durations.push(duration);
         legacy_raw.push(img.into_raw());
     }
     // Legacy pixel copy loop into Vec<RGBA8>
