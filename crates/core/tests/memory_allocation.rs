@@ -138,7 +138,7 @@ fn assert_pointer_and_pixel_invariance(
     );
 
     for (i, frame) in anim_frames.iter().enumerate() {
-        let slice: &[zenravif::RGBA8] = frame.rgba.buf;
+        let slice: &[zenravif::RGBA8] = frame.rgba.buf();
         assert_eq!(
             slice.len(),
             (width * height) as usize,
@@ -267,8 +267,7 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     );
 
     // 4. Measure legacy baseline under identical inputs and symmetric container boundaries
-    let mut legacy_source: Vec<RgbaImage> =
-        expected_images_15f.iter().map(|img| img.clone()).collect();
+    let mut legacy_source: Vec<RgbaImage> = expected_images_15f.clone();
     let legacy_durations = prepared_15f.frame_durations.clone();
     ALLOCATOR.start_tracking();
     let mut legacy_raw: Vec<Vec<u8>> = Vec::with_capacity(frame_count);

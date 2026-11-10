@@ -793,7 +793,12 @@ mod tests {
                 Ok(RgbaImage::from_pixel(
                     4,
                     4,
-                    image::Rgba([10 * idx, 20 * idx, 30 * idx, alpha]),
+                    image::Rgba([
+                        ((idx as u16 * 10) % 256) as u8,
+                        ((idx as u16 * 15) % 256) as u8,
+                        ((idx as u16 * 20) % 256) as u8,
+                        alpha,
+                    ]),
                 ))
             },
         );
