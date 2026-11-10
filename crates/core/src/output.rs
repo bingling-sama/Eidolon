@@ -780,7 +780,7 @@ mod tests {
                 fps: 15,
                 speed: 1.0,
                 loop_count: 0,
-                size: (4, 4),
+                size: (64, 64),
             },
             |time| {
                 frame_call_count += 1;
@@ -791,8 +791,8 @@ mod tests {
                     _ => 255,
                 };
                 Ok(RgbaImage::from_pixel(
-                    4,
-                    4,
+                    64,
+                    64,
                     image::Rgba([
                         ((idx as u16 * 10) % 256) as u8,
                         ((idx as u16 * 15) % 256) as u8,
@@ -827,9 +827,9 @@ mod tests {
                 fps: 15,
                 speed: 1.0,
                 loop_count: 0,
-                size: (4, 4),
+                size: (64, 64),
             },
-            |_| Ok(RgbaImage::new(2, 2)),
+            |_| Ok(RgbaImage::new(32, 32)),
         );
         assert!(
             matches!(mismatch_result, Err(EidolonError::Output(_))),
