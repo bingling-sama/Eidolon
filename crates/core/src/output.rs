@@ -259,8 +259,13 @@ fn rounded_units(frame_boundary: u32, units_per_second: u32, fps: u32) -> u32 {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn webp_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
+fn frame_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
     rounded_units(frame_boundary, 1_000, fps)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn webp_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
+    frame_timestamp_ms(frame_boundary, fps)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -400,8 +405,8 @@ fn write_animation(
             for frame_index in 0..schedule.frame_count() {
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
-                let duration_ms = webp_timestamp_ms(frame_index + 1, schedule.fps())
-                    - webp_timestamp_ms(frame_index, schedule.fps());
+                let duration_ms = frame_timestamp_ms(frame_index + 1, schedule.fps())
+                    - frame_timestamp_ms(frame_index, schedule.fps());
                 frame_durations.push(duration_ms);
 
                 raw_frames.push(image.into_raw());

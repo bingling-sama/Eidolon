@@ -78,7 +78,10 @@ unsafe impl GlobalAlloc for TrackingAllocator {
 static ALLOCATOR: TrackingAllocator = TrackingAllocator::new();
 
 #[test]
-fn avif_single_frame_zero_copy_performs_zero_heap_allocations() {
+fn avif_export_memory_allocation_quantification() {
+    // ------------------------------------------------------------------------
+    // Part 1: Single 800x600 frame buffer preparation
+    // ------------------------------------------------------------------------
     let width = 800;
     let height = 600;
     let sample_raw = vec![0u8; width * height * 4];
@@ -120,10 +123,10 @@ fn avif_single_frame_zero_copy_performs_zero_heap_allocations() {
         "Legacy allocation must allocate exactly width*height*4 bytes ({})",
         width * height * 4
     );
-}
 
-#[test]
-fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
+    // ------------------------------------------------------------------------
+    // Part 2: 15-frame animation pipeline memory quantification
+    // ------------------------------------------------------------------------
     let frame_count = 15;
     let width = 400;
     let height = 300;
@@ -142,7 +145,7 @@ fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
         });
     }
     std::hint::black_box(&zc_frames);
-    let (zc_allocs, zc_bytes) = ALLOCATOR.stop_tracking();
+    let (zc_pipeline_allocs, zc_pipeline_bytes) = ALLOCATOR.stop_tracking();
 
     // 2. Legacy pipeline: allocate Vec<RGBA8> for each frame
     ALLOCATOR.start_tracking();
@@ -164,12 +167,12 @@ fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
         });
     }
     std::hint::black_box(&legacy_frames);
-    let (legacy_allocs, legacy_bytes) = ALLOCATOR.stop_tracking();
+    let (legacy_pipeline_allocs, legacy_pipeline_bytes) = ALLOCATOR.stop_tracking();
 
     let expected_frame_heap_bytes = frame_count * width * height * 4;
     let expected_vector_header_bytes = frame_count * std::mem::size_of::<Vec<zenravif::RGBA8>>();
     assert_eq!(
-        legacy_bytes.saturating_sub(zc_bytes),
+        legacy_pipeline_bytes.saturating_sub(zc_pipeline_bytes),
         expected_frame_heap_bytes + expected_vector_header_bytes,
         "Legacy pipeline must allocate pixel buffers ({}) plus Vec headers ({}) more bytes than zero-copy across {} frames",
         expected_frame_heap_bytes,
@@ -177,11 +180,11 @@ fn avif_animation_frame_prep_pipeline_quantifies_memory_reduction() {
         frame_count
     );
     assert_eq!(
-        zc_allocs, 1,
+        zc_pipeline_allocs, 1,
         "Zero-copy pipeline only performs 1 allocation for the outer AnimFrameRgba slice vector"
     );
     assert_eq!(
-        legacy_allocs,
+        legacy_pipeline_allocs,
         frame_count + 2,
         "Legacy pipeline performs {} per-frame buffer allocations plus 2 vector container allocations",
         frame_count
