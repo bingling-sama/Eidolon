@@ -1,19 +1,30 @@
 //! Automated verification and memory allocation quantification for AVIF export (Issue #24).
 //!
-//! Evaluates the shared production implementation (`PreparedAvifAnimation`) against
-//! maintainer @bingling-sama's test design requirements:
-//! - T1: Verifies encoder input views directly borrow backing raw buffers via pointer invariance.
-//! - T2: Quantifies allocation volume during production frame preparation under strict boundaries.
+//! Evaluates the shared internal production implementation (`output_avif::PreparedAvifAnimation`)
+//! in an isolated integration-test process for `#[global_allocator]` hygiene:
+//! - Verifies encoder input views borrow backing raw buffers directly (pointer identity,
+//!   dimensions, channel values, and frame `duration_ms`).
+//! - Quantifies allocation volume during production frame preparation under symmetric A/B
+//!   container boundaries.
 //!
-//! Note: T3 (end-to-end CPU export correctness) is implemented in `crates/core/src/output.rs::tests`.
+//! Note: End-to-end CPU export & ISOBMFF container verification lives in `crates/core/src/output.rs::tests`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use eidolon_core::animation::{AnimationPreset, AnimationSchedule};
-use eidolon_core::output::PreparedAvifAnimation;
+// Re-export public submodules so the shared private `output_avif.rs` resolves identical
+// `crate::animation` and `crate::error` paths here and inside `eidolon_core`.
+use eidolon_core::{animation, error};
+
+#[path = "../src/output_avif.rs"]
+mod output_avif;
+
+use animation::{AnimationPreset, AnimationSchedule};
+use error::EidolonError;
 use image::{Rgba, RgbaImage};
+use output_avif::{frame_timestamp_ms, validate_frame, PreparedAvifAnimation};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Default)]
 struct AllocationStats {
@@ -122,22 +133,108 @@ unsafe impl GlobalAlloc for TrackingAllocator {
 #[global_allocator]
 static ALLOCATOR: TrackingAllocator = TrackingAllocator::new();
 
-/// Verifies T1: Input views directly borrow raw buffers (pointer invariance and pixel fidelity).
-fn assert_pointer_and_pixel_invariance(
+/// Computes an explicit metadata container allocation budget for `PreparedAvifAnimation`.
+fn expected_prep_metadata_budget(frame_count: usize) -> usize {
+    let raw_frames_vec = frame_count * std::mem::size_of::<Vec<u8>>();
+    let durations_vec = frame_count * std::mem::size_of::<u32>();
+    let anim_frames_vec = frame_count * std::mem::size_of::<zenravif::AnimFrameRgba<'_>>();
+    raw_frames_vec + durations_vec + anim_frames_vec + 3 * 128
+}
+
+/// Legacy baseline mirroring pre-optimization `write_animation` AVIF collection and pixel copy
+/// with symmetric container boundaries (frame container + duration list + encoder view list).
+struct LegacyAvifAnimation {
+    frames_data: Vec<Vec<zenravif::RGBA8>>,
+    frame_durations: Vec<u32>,
+}
+
+impl LegacyAvifAnimation {
+    fn collect_frames<F>(
+        size: (u32, u32),
+        schedule: &AnimationSchedule,
+        mut frame_producer: F,
+    ) -> Result<Self, EidolonError>
+    where
+        F: FnMut(Duration) -> Result<RgbaImage, EidolonError>,
+    {
+        let frame_count = schedule.frame_count() as usize;
+        let mut frames_data = Vec::with_capacity(frame_count);
+        let mut frame_durations = Vec::with_capacity(frame_count);
+
+        for frame_index in 0..schedule.frame_count() {
+            let image = frame_producer(schedule.sample_time(frame_index))?;
+            validate_frame(&image, size)?;
+            let duration_ms = frame_timestamp_ms(frame_index + 1, schedule.fps())
+                - frame_timestamp_ms(frame_index, schedule.fps());
+            frame_durations.push(duration_ms);
+
+            let raw = image.into_raw();
+            let rgba_vec: Vec<zenravif::RGBA8> = raw
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| zenravif::RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+                .collect();
+            frames_data.push(rgba_vec);
+        }
+
+        Ok(Self {
+            frames_data,
+            frame_durations,
+        })
+    }
+
+    fn to_anim_frames(&self, size: (u32, u32)) -> Vec<zenravif::AnimFrameRgba<'_>> {
+        let mut anim_frames = Vec::with_capacity(self.frames_data.len());
+        let width = size.0 as usize;
+        let height = size.1 as usize;
+        for (data, &duration_ms) in self.frames_data.iter().zip(self.frame_durations.iter()) {
+            anim_frames.push(zenravif::AnimFrameRgba {
+                rgba: zenravif::Img::new(data.as_slice(), width, height),
+                duration_ms,
+            });
+        }
+        anim_frames
+    }
+}
+
+/// Verifies encoder input views directly borrow backing buffers with exact geometry, timing, and pixels.
+fn assert_pointer_and_view_invariance(
     width: u32,
     height: u32,
     prepared: &PreparedAvifAnimation,
     expected_ptrs: &[*const u8],
+    expected_durations: &[u32],
     expected_images: &[RgbaImage],
 ) {
-    let anim_frames = prepared.to_anim_frames((width, height));
+    let anim_frames = prepared.to_anim_frames();
     assert_eq!(
         anim_frames.len(),
         expected_ptrs.len(),
         "Frame count must match expected"
     );
+    assert_eq!(
+        expected_durations.len(),
+        expected_ptrs.len(),
+        "Duration count must match frame count"
+    );
 
     for (i, frame) in anim_frames.iter().enumerate() {
+        assert_eq!(
+            frame.rgba.width(),
+            width as usize,
+            "Frame {i} width must match target width"
+        );
+        assert_eq!(
+            frame.rgba.height(),
+            height as usize,
+            "Frame {i} height must match target height"
+        );
+        assert_eq!(
+            frame.duration_ms, expected_durations[i],
+            "Frame {i} duration_ms must match cumulative-rounded schedule duration"
+        );
+
         let slice: &[zenravif::RGBA8] = frame.rgba.buf();
         assert_eq!(
             slice.len(),
@@ -149,7 +246,7 @@ fn assert_pointer_and_pixel_invariance(
         let slice_ptr = slice.as_ptr() as *const u8;
         assert_eq!(
             slice_ptr, expected_ptrs[i],
-            "T1 Regression Failure: Frame {i} slice does not borrow backing buffer directly!"
+            "Zero-copy regression: Frame {i} slice does not borrow backing buffer directly!"
         );
 
         // Value & channel order preservation check
@@ -164,15 +261,22 @@ fn assert_pointer_and_pixel_invariance(
     }
 }
 
+fn expected_schedule_durations(schedule: &AnimationSchedule) -> Vec<u32> {
+    (0..schedule.frame_count())
+        .map(|i| frame_timestamp_ms(i + 1, schedule.fps()) - frame_timestamp_ms(i, schedule.fps()))
+        .collect()
+}
+
 #[test]
-fn avif_t1_and_t2_production_pipeline_verification() {
+fn avif_frame_prep_zero_copy_and_allocations() {
     // ------------------------------------------------------------------------
-    // Part A: T1 & T2 Single-Frame Verification (800x600)
+    // Part A: Single-Frame Verification (800x600)
     // ------------------------------------------------------------------------
     let width = 800;
     let height = 600;
     let pixel_bytes = (width * height * 4) as usize;
     let schedule_1f = AnimationSchedule::new(AnimationPreset::Walk, 1, 1.0).unwrap();
+    let expected_durations_1f = expected_schedule_durations(&schedule_1f);
 
     // 1. Pre-create input image before measurement window
     let mut img_1f = RgbaImage::new(width, height);
@@ -181,43 +285,52 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     }
     let expected_ptr_1f = img_1f.as_raw().as_ptr();
     let expected_img_1f = img_1f.clone();
-
-    // 2. Measure production frame preparation window (T2)
-    ALLOCATOR.start_tracking();
     let mut source_1f = Some(img_1f);
+
+    // 2. Measure production frame preparation window
+    ALLOCATOR.start_tracking();
     let prepared_1f = PreparedAvifAnimation::collect_frames((width, height), &schedule_1f, |_| {
         Ok(source_1f.take().expect("Single frame requested once"))
     })
     .expect("collect_frames must succeed");
-    let anim_frames_1f = prepared_1f.to_anim_frames((width, height));
+    let anim_frames_1f = prepared_1f.to_anim_frames();
     std::hint::black_box(&anim_frames_1f);
     let zc_stats_1f = ALLOCATOR.stop_tracking();
+    drop(anim_frames_1f);
 
-    // 3. T1 Verification: Assert pointer invariance and pixel values
-    assert_pointer_and_pixel_invariance(
+    // 3. Pointer, dimension, duration, and pixel invariance verification
+    assert_pointer_and_view_invariance(
         width,
         height,
         &prepared_1f,
         &[expected_ptr_1f],
+        &expected_durations_1f,
         &[expected_img_1f],
     );
 
-    // 4. T2 Allocation assertion: zero pixel buffer allocations
-    // Total requested bytes must be orders of magnitude below a single pixel buffer (1,920,000 B)
-    assert!(
-        zc_stats_1f.total_requested_bytes() < pixel_bytes,
-        "Production frame prep must not allocate pixel buffers (allocated {} bytes, frame is {} bytes)",
-        zc_stats_1f.total_requested_bytes(),
-        pixel_bytes
+    // 4. Allocation verification: only bounded pre-allocated metadata containers, zero pixel buffers
+    let budget_1f = expected_prep_metadata_budget(1);
+    assert_eq!(
+        zc_stats_1f.realloc_calls, 0,
+        "Pre-allocated zero-copy prep must not trigger reallocations"
     );
-    // Specifically, only container metadata is allocated (raw_frames + durations + anim_frames)
+    assert_eq!(
+        zc_stats_1f.alloc_zeroed_calls, 0,
+        "Zero-copy prep must not zero-allocate buffers"
+    );
+    assert!(
+        zc_stats_1f.total_requested_bytes() <= budget_1f && zc_stats_1f.total_requested_bytes() < pixel_bytes,
+        "Zero-copy prep bytes ({} B) must stay within metadata budget ({budget_1f} B) and below 1 pixel buffer ({pixel_bytes} B)",
+        zc_stats_1f.total_requested_bytes()
+    );
     assert!(
         zc_stats_1f.total_calls() <= 3,
-        "Zero-copy frame prep only allocates necessary metadata containers"
+        "Zero-copy frame prep allocates only the 3 metadata containers (got {})",
+        zc_stats_1f.total_calls()
     );
 
     // ------------------------------------------------------------------------
-    // Part B: T1 & T2 Multi-Frame Verification (15 frames, 400x300, 15fps)
+    // Part B: Multi-Frame Symmetric A/B Verification (15 frames, 400x300, 15fps)
     // ------------------------------------------------------------------------
     let frame_count = 15;
     let width_15f = 400;
@@ -225,8 +338,9 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     let frame_pixel_bytes = (width_15f * height_15f * 4) as usize;
     let total_pixel_bytes = frame_count * frame_pixel_bytes;
     let schedule_15f = AnimationSchedule::new(AnimationPreset::Walk, 15, 1.0).unwrap();
+    let expected_durations_15f = expected_schedule_durations(&schedule_15f);
 
-    // 1. Pre-create 15 distinct input images with varying RGB and alpha values
+    // 1. Pre-create 15 distinct input images with varying RGB and alpha values before tracking
     let images_15f: Vec<RgbaImage> = (0..frame_count)
         .map(|idx| {
             let alpha = match idx % 3 {
@@ -244,88 +358,76 @@ fn avif_t1_and_t2_production_pipeline_verification() {
     let expected_ptrs_15f: Vec<*const u8> =
         images_15f.iter().map(|img| img.as_raw().as_ptr()).collect();
     let expected_images_15f = images_15f.clone();
+    let mut zc_source_iter = images_15f.into_iter();
 
-    // 2. Measure production zero-copy pipeline window (T2)
+    // 2. Measure production zero-copy pipeline window
     ALLOCATOR.start_tracking();
-    let mut source_15f = images_15f;
     let prepared_15f =
         PreparedAvifAnimation::collect_frames((width_15f, height_15f), &schedule_15f, |_| {
-            Ok(source_15f.remove(0))
+            Ok(zc_source_iter.next().expect("frame count matches schedule"))
         })
         .expect("collect_frames must succeed");
-    let anim_frames_15f = prepared_15f.to_anim_frames((width_15f, height_15f));
+    let anim_frames_15f = prepared_15f.to_anim_frames();
     std::hint::black_box(&anim_frames_15f);
     let zc_stats_15f = ALLOCATOR.stop_tracking();
+    drop(anim_frames_15f);
 
-    // 3. T1 Verification: Check all 15 frames for pointer invariance & channel order
-    assert_pointer_and_pixel_invariance(
+    // 3. View & pointer invariance verification across all 15 frames
+    assert_pointer_and_view_invariance(
         width_15f,
         height_15f,
         &prepared_15f,
         &expected_ptrs_15f,
+        &expected_durations_15f,
         &expected_images_15f,
     );
 
-    // 4. Measure legacy baseline under identical inputs and symmetric container boundaries
-    let mut legacy_source: Vec<RgbaImage> = expected_images_15f.clone();
-    let legacy_durations = prepared_15f.frame_durations.clone();
+    // 4. Symmetric legacy baseline measurement (identical inputs & 3-container structure in window)
+    let mut legacy_source_iter = expected_images_15f.into_iter();
     ALLOCATOR.start_tracking();
-    let mut legacy_raw: Vec<Vec<u8>> = Vec::with_capacity(frame_count);
-    for _ in 0..frame_count {
-        let img = legacy_source.remove(0);
-        legacy_raw.push(img.into_raw());
-    }
-    // Legacy pixel copy loop into Vec<RGBA8>
-    let mut legacy_buffers: Vec<Vec<zenravif::RGBA8>> = Vec::with_capacity(frame_count);
-    for raw in &legacy_raw {
-        let rgba_vec: Vec<zenravif::RGBA8> = raw
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|chunk| zenravif::RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-            .collect();
-        legacy_buffers.push(rgba_vec);
-    }
-    let mut legacy_anim_frames: Vec<zenravif::AnimFrameRgba> = Vec::with_capacity(frame_count);
-    for (buf, &duration_ms) in legacy_buffers.iter().zip(legacy_durations.iter()) {
-        legacy_anim_frames.push(zenravif::AnimFrameRgba {
-            rgba: zenravif::Img::new(buf.as_slice(), width_15f as usize, height_15f as usize),
-            duration_ms,
-        });
-    }
+    let legacy_15f =
+        LegacyAvifAnimation::collect_frames((width_15f, height_15f), &schedule_15f, |_| {
+            Ok(legacy_source_iter
+                .next()
+                .expect("frame count matches schedule"))
+        })
+        .expect("legacy collect_frames must succeed");
+    let legacy_anim_frames = legacy_15f.to_anim_frames((width_15f, height_15f));
     std::hint::black_box(&legacy_anim_frames);
     let legacy_stats_15f = ALLOCATOR.stop_tracking();
+    drop(legacy_anim_frames);
 
     // 5. Empirical comparison and regression assertions
-    // Zero-copy requested bytes MUST exclude pixel buffers (total < 1 frame's pixel buffer)
+    let budget_15f = expected_prep_metadata_budget(frame_count);
+    assert_eq!(
+        zc_stats_15f.realloc_calls, 0,
+        "Multi-frame zero-copy prep must not trigger reallocations"
+    );
     assert!(
-        zc_stats_15f.total_requested_bytes() < frame_pixel_bytes,
-        "Multi-frame zero-copy must not allocate pixel buffers (total allocated: {} B, 1 frame is {} B)",
-        zc_stats_15f.total_requested_bytes(),
-        frame_pixel_bytes
+        zc_stats_15f.total_requested_bytes() <= budget_15f
+            && zc_stats_15f.total_requested_bytes() < frame_pixel_bytes,
+        "Multi-frame zero-copy bytes ({} B) must stay within metadata budget ({budget_15f} B) and below 1 pixel buffer ({frame_pixel_bytes} B)",
+        zc_stats_15f.total_requested_bytes()
     );
 
-    // Legacy requested bytes must include all 15 pixel buffers (>= 7.20 MB)
     assert!(
         legacy_stats_15f.total_requested_bytes() >= total_pixel_bytes,
-        "Legacy baseline must allocate at least 15 pixel buffers ({total_pixel_bytes} B)"
+        "Legacy baseline must allocate at least {frame_count} pixel buffers ({total_pixel_bytes} B)"
     );
 
-    // Difference between legacy and zero-copy must be >= the 15 frame pixel buffers (7.20 MB)
     let net_memory_saved = legacy_stats_15f
         .total_requested_bytes()
         .saturating_sub(zc_stats_15f.total_requested_bytes());
     assert!(
         net_memory_saved >= total_pixel_bytes,
-        "Zero-copy eliminates at least {total_pixel_bytes} bytes of pixel heap allocation (saved {net_memory_saved} B)"
+        "Zero-copy eliminates at least {total_pixel_bytes} B of pixel heap allocation (saved {net_memory_saved} B)"
     );
 
-    // Allocation calls: legacy performs 15 extra pixel buffer allocations
-    assert_eq!(
-        legacy_stats_15f
-            .alloc_calls
-            .saturating_sub(zc_stats_15f.alloc_calls),
-        frame_count,
-        "Legacy pipeline performs exactly {frame_count} extra heap allocations for pixel buffers"
+    assert!(
+        legacy_stats_15f.total_calls() >= zc_stats_15f.total_calls() + frame_count,
+        "Symmetric legacy pipeline must perform at least {frame_count} extra pixel buffer allocations \
+         (legacy total_calls={}, zero-copy total_calls={})",
+        legacy_stats_15f.total_calls(),
+        zc_stats_15f.total_calls()
     );
 }

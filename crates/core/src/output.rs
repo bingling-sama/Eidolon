@@ -2,6 +2,9 @@
 
 use crate::animation::{AnimationPreset, AnimationSchedule};
 use crate::error::EidolonError;
+use crate::output_avif::validate_frame;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::output_avif::{frame_timestamp_ms, rounded_units, PreparedAvifAnimation};
 use image::{ImageFormat, RgbaImage};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -213,19 +216,6 @@ fn validate_size((width, height): (u32, u32)) -> Result<(), EidolonError> {
     Ok(())
 }
 
-fn validate_frame(image: &RgbaImage, (width, height): (u32, u32)) -> Result<(), EidolonError> {
-    if image.dimensions() != (width, height) {
-        return Err(EidolonError::output(format!(
-            "frame dimensions {}x{} do not match requested output {}x{}",
-            image.width(),
-            image.height(),
-            width,
-            height
-        )));
-    }
-    Ok(())
-}
-
 fn validate_animation(size: (u32, u32), fps: u32, speed: f32) -> Result<(), EidolonError> {
     if size.0 > 2_048 || size.1 > 2_048 {
         return Err(EidolonError::output(
@@ -254,83 +244,8 @@ fn resolve_path(path: &Path, extension: &str) -> Result<PathBuf, EidolonError> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn rounded_units(frame_boundary: u32, units_per_second: u32, fps: u32) -> u32 {
-    (frame_boundary * units_per_second + fps / 2) / fps
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn frame_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
-    rounded_units(frame_boundary, 1_000, fps)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn webp_timestamp_ms(frame_boundary: u32, fps: u32) -> u32 {
-    frame_timestamp_ms(frame_boundary, fps)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn gif_delay_cs(frame_index: u32, fps: u32) -> u32 {
     rounded_units(frame_index + 1, 100, fps) - rounded_units(frame_index, 100, fps)
-}
-
-/// Internal prepared animation frames and zero-copy encoder views for AVIF export.
-///
-/// Holds raw pixel allocations in `raw_frames` while `to_anim_frames` produces
-/// borrowed `zenravif::AnimFrameRgba` slices referencing them with zero copy.
-#[doc(hidden)]
-#[cfg(not(target_arch = "wasm32"))]
-pub struct PreparedAvifAnimation {
-    pub raw_frames: Vec<Vec<u8>>,
-    pub frame_durations: Vec<u32>,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl PreparedAvifAnimation {
-    /// Collects and validates raw frames, computing accumulated rounded frame durations.
-    pub fn collect_frames<F>(
-        size: (u32, u32),
-        schedule: &AnimationSchedule,
-        mut frame_producer: F,
-    ) -> Result<Self, EidolonError>
-    where
-        F: FnMut(Duration) -> Result<RgbaImage, EidolonError>,
-    {
-        let frame_count = schedule.frame_count() as usize;
-        let mut raw_frames = Vec::with_capacity(frame_count);
-        let mut frame_durations = Vec::with_capacity(frame_count);
-
-        for frame_index in 0..schedule.frame_count() {
-            let image = frame_producer(schedule.sample_time(frame_index))?;
-            validate_frame(&image, size)?;
-            let duration_ms = frame_timestamp_ms(frame_index + 1, schedule.fps())
-                - frame_timestamp_ms(frame_index, schedule.fps());
-            frame_durations.push(duration_ms);
-
-            raw_frames.push(image.into_raw());
-        }
-
-        Ok(Self {
-            raw_frames,
-            frame_durations,
-        })
-    }
-
-    /// Constructs zero-copy encoder input views borrowing directly from the backing raw pixel buffers.
-    ///
-    /// Performs 0 pixel allocations: borrows `&[zenravif::RGBA8]` slices directly via `as_rgba()`.
-    #[inline]
-    pub fn to_anim_frames(&self, size: (u32, u32)) -> Vec<zenravif::AnimFrameRgba<'_>> {
-        use rgb::FromSlice;
-        let mut anim_frames = Vec::with_capacity(self.raw_frames.len());
-        for (raw, &duration_ms) in self.raw_frames.iter().zip(self.frame_durations.iter()) {
-            let rgba_slice: &[zenravif::RGBA8] = raw.as_slice().as_rgba();
-            anim_frames.push(zenravif::AnimFrameRgba {
-                rgba: zenravif::Img::new(rgba_slice, size.0 as usize, size.1 as usize),
-                duration_ms,
-            });
-        }
-        anim_frames
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -396,7 +311,7 @@ fn write_animation(
                 let image = frame_producer(schedule.sample_time(frame_index))?;
                 validate_frame(&image, size)?;
                 let rgba = image.into_raw();
-                let timestamp: i32 = webp_timestamp_ms(frame_index, schedule.fps())
+                let timestamp: i32 = frame_timestamp_ms(frame_index, schedule.fps())
                     .try_into()
                     .map_err(|error| {
                         EidolonError::output(format!("invalid WebP timestamp: {error}"))
@@ -405,7 +320,7 @@ fn write_animation(
                     EidolonError::output(format!("failed to write WebP: {error}"))
                 })?;
             }
-            let duration: i32 = webp_timestamp_ms(schedule.frame_count(), schedule.fps())
+            let duration: i32 = frame_timestamp_ms(schedule.frame_count(), schedule.fps())
                 .try_into()
                 .map_err(|error| EidolonError::output(format!("invalid WebP duration: {error}")))?;
             encoder
@@ -459,7 +374,7 @@ fn write_animation(
 
             let prepared =
                 PreparedAvifAnimation::collect_frames(size, schedule, &mut *frame_producer)?;
-            let anim_frames = prepared.to_anim_frames(size);
+            let anim_frames = prepared.to_anim_frames();
 
             let encoder = AvifEncoder::new().with_speed(6);
             let encoded = encoder
@@ -593,11 +508,12 @@ mod tests {
         assert!(matches!(result, Err(EidolonError::Output(_))));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn encoder_timing_rounds_without_drift() {
         let schedule = AnimationSchedule::new(AnimationPreset::Walk, 30, 1.0).unwrap();
         assert_eq!(schedule.frame_count(), 30);
-        assert_eq!(webp_timestamp_ms(30, schedule.fps()), 1_000);
+        assert_eq!(frame_timestamp_ms(30, schedule.fps()), 1_000);
         assert_eq!(
             (0..30)
                 .map(|frame| gif_delay_cs(frame, schedule.fps()))
@@ -753,25 +669,268 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    struct IsoBox<'a> {
+        kind: [u8; 4],
+        payload: &'a [u8],
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[derive(Debug)]
+    struct ParsedAvifTrack {
+        track_id: u32,
+        handler: [u8; 4],
+        tkhd_size: (u32, u32),
+        av01_size: (u32, u32),
+        mdhd_timescale: u32,
+        mdhd_duration: u64,
+        stsz_sample_sizes: Vec<u32>,
+        frame_durations: Vec<u32>,
+        auxl_refs: Vec<u32>,
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[derive(Debug)]
+    struct ParsedAvifContainer {
+        major_brand: [u8; 4],
+        compatible_brands: Vec<[u8; 4]>,
+        mvhd_timescale: u32,
+        mvhd_duration: u64,
+        tracks: Vec<ParsedAvifTrack>,
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn read_u16_be(bytes: &[u8], offset: usize) -> Result<u16, String> {
+        let slice = bytes
+            .get(offset..offset + 2)
+            .ok_or_else(|| format!("unexpected EOF reading u16 at offset {offset}"))?;
+        Ok(u16::from_be_bytes([slice[0], slice[1]]))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn read_u32_be(bytes: &[u8], offset: usize) -> Result<u32, String> {
+        let slice = bytes
+            .get(offset..offset + 4)
+            .ok_or_else(|| format!("unexpected EOF reading u32 at offset {offset}"))?;
+        Ok(u32::from_be_bytes([slice[0], slice[1], slice[2], slice[3]]))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn read_u64_be(bytes: &[u8], offset: usize) -> Result<u64, String> {
+        let slice = bytes
+            .get(offset..offset + 8)
+            .ok_or_else(|| format!("unexpected EOF reading u64 at offset {offset}"))?;
+        Ok(u64::from_be_bytes([
+            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
+        ]))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn read_fourcc(bytes: &[u8], offset: usize) -> Result<[u8; 4], String> {
+        let slice = bytes
+            .get(offset..offset + 4)
+            .ok_or_else(|| format!("unexpected EOF reading 4CC at offset {offset}"))?;
+        Ok([slice[0], slice[1], slice[2], slice[3]])
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn iter_iso_boxes(mut data: &[u8]) -> Result<Vec<IsoBox<'_>>, String> {
+        let mut boxes = Vec::new();
+        while !data.is_empty() {
+            if data.len() < 8 {
+                return Err(format!(
+                    "truncated ISOBMFF box header ({} bytes left)",
+                    data.len()
+                ));
+            }
+            let size32 = read_u32_be(data, 0)? as usize;
+            let kind = read_fourcc(data, 4)?;
+            let (header_len, total_len) = match size32 {
+                0 => (8, data.len()),
+                1 => {
+                    let ext = usize::try_from(read_u64_be(data, 8)?)
+                        .map_err(|_| "ISOBMFF box size overflow".to_string())?;
+                    (16, ext)
+                }
+                n => (8, n),
+            };
+            if total_len < header_len || total_len > data.len() {
+                return Err(format!(
+                    "invalid ISOBMFF box {:?} size {total_len} (available {})",
+                    String::from_utf8_lossy(&kind),
+                    data.len()
+                ));
+            }
+            boxes.push(IsoBox {
+                kind,
+                payload: &data[header_len..total_len],
+            });
+            data = &data[total_len..];
+        }
+        Ok(boxes)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn find_iso_box<'a>(boxes: &'a [IsoBox<'a>], kind: &[u8; 4]) -> Result<&'a [u8], String> {
+        boxes
+            .iter()
+            .find(|b| &b.kind == kind)
+            .map(|b| b.payload)
+            .ok_or_else(|| {
+                format!(
+                    "missing required ISOBMFF box {:?}",
+                    String::from_utf8_lossy(kind)
+                )
+            })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn parse_timescale_and_duration(payload: &[u8]) -> Result<(u32, u64), String> {
+        let version = *payload
+            .first()
+            .ok_or_else(|| "empty FullBox timing header".to_string())?;
+        match version {
+            0 => Ok((
+                read_u32_be(payload, 12)?,
+                u64::from(read_u32_be(payload, 16)?),
+            )),
+            1 => Ok((read_u32_be(payload, 20)?, read_u64_be(payload, 24)?)),
+            v => Err(format!("unsupported FullBox timing version {v}")),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn parse_avif_track(trak_payload: &[u8]) -> Result<ParsedAvifTrack, String> {
+        let trak_boxes = iter_iso_boxes(trak_payload)?;
+
+        let tkhd = find_iso_box(&trak_boxes, b"tkhd")?;
+        let tkhd_version = *tkhd.first().ok_or_else(|| "empty tkhd box".to_string())?;
+        let (track_id, dim_offset) = match tkhd_version {
+            0 => (read_u32_be(tkhd, 12)?, 76),
+            1 => (read_u32_be(tkhd, 20)?, 88),
+            v => return Err(format!("unsupported tkhd version {v}")),
+        };
+        let tkhd_width = read_u32_be(tkhd, dim_offset)? >> 16;
+        let tkhd_height = read_u32_be(tkhd, dim_offset + 4)? >> 16;
+
+        let mdia_boxes = iter_iso_boxes(find_iso_box(&trak_boxes, b"mdia")?)?;
+        let (mdhd_timescale, mdhd_duration) =
+            parse_timescale_and_duration(find_iso_box(&mdia_boxes, b"mdhd")?)?;
+        let handler = read_fourcc(find_iso_box(&mdia_boxes, b"hdlr")?, 8)?;
+
+        let minf_boxes = iter_iso_boxes(find_iso_box(&mdia_boxes, b"minf")?)?;
+        let stbl_boxes = iter_iso_boxes(find_iso_box(&minf_boxes, b"stbl")?)?;
+
+        let stsd = find_iso_box(&stbl_boxes, b"stsd")?;
+        let entry_count = read_u32_be(stsd, 4)?;
+        if entry_count < 1 {
+            return Err("stsd must contain at least 1 sample entry".to_string());
+        }
+        let sample_entries = iter_iso_boxes(&stsd[8..])?;
+        let av01 = find_iso_box(&sample_entries, b"av01")?;
+        let av01_size = (
+            u32::from(read_u16_be(av01, 24)?),
+            u32::from(read_u16_be(av01, 26)?),
+        );
+
+        let stts = find_iso_box(&stbl_boxes, b"stts")?;
+        let stts_count = read_u32_be(stts, 4)? as usize;
+        let mut frame_durations = Vec::new();
+        for idx in 0..stts_count {
+            let entry_offset = 8 + idx * 8;
+            let sample_count = read_u32_be(stts, entry_offset)?;
+            let sample_delta = read_u32_be(stts, entry_offset + 4)?;
+            frame_durations.extend(std::iter::repeat_n(sample_delta, sample_count as usize));
+        }
+
+        let stsz = find_iso_box(&stbl_boxes, b"stsz")?;
+        let uniform_size = read_u32_be(stsz, 4)?;
+        let sample_count = read_u32_be(stsz, 8)? as usize;
+        let mut stsz_sample_sizes = Vec::with_capacity(sample_count);
+        if uniform_size != 0 {
+            stsz_sample_sizes.resize(sample_count, uniform_size);
+        } else {
+            for idx in 0..sample_count {
+                stsz_sample_sizes.push(read_u32_be(stsz, 12 + idx * 4)?);
+            }
+        }
+
+        let mut auxl_refs = Vec::new();
+        if let Ok(tref_payload) = find_iso_box(&trak_boxes, b"tref") {
+            let tref_boxes = iter_iso_boxes(tref_payload)?;
+            if let Ok(auxl_payload) = find_iso_box(&tref_boxes, b"auxl") {
+                for offset in (0..auxl_payload.len()).step_by(4) {
+                    auxl_refs.push(read_u32_be(auxl_payload, offset)?);
+                }
+            }
+        }
+
+        Ok(ParsedAvifTrack {
+            track_id,
+            handler,
+            tkhd_size: (tkhd_width, tkhd_height),
+            av01_size,
+            mdhd_timescale,
+            mdhd_duration,
+            stsz_sample_sizes,
+            frame_durations,
+            auxl_refs,
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn parse_avif_animation(bytes: &[u8]) -> Result<ParsedAvifContainer, String> {
+        let top_boxes = iter_iso_boxes(bytes)?;
+
+        let ftyp = find_iso_box(&top_boxes, b"ftyp")?;
+        let major_brand = read_fourcc(ftyp, 0)?;
+        let mut compatible_brands = Vec::new();
+        for offset in (8..ftyp.len()).step_by(4) {
+            compatible_brands.push(read_fourcc(ftyp, offset)?);
+        }
+
+        let _meta = find_iso_box(&top_boxes, b"meta")?;
+        let moov_boxes = iter_iso_boxes(find_iso_box(&top_boxes, b"moov")?)?;
+        let (mvhd_timescale, mvhd_duration) =
+            parse_timescale_and_duration(find_iso_box(&moov_boxes, b"mvhd")?)?;
+
+        let mut tracks = Vec::new();
+        for b in &moov_boxes {
+            if &b.kind == b"trak" {
+                tracks.push(parse_avif_track(b.payload)?);
+            }
+        }
+
+        Ok(ParsedAvifContainer {
+            major_brand,
+            compatible_brands,
+            mvhd_timescale,
+            mvhd_duration,
+            tracks,
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn avif_export_correctness_and_validation() {
-        let path =
-            std::env::temp_dir().join(format!("eidolon-t3-avif-{}.avif", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "eidolon-avif-correctness-{}.avif",
+            std::process::id()
+        ));
         let schedule = AnimationSchedule::new(AnimationPreset::Walk, 15, 1.0).unwrap();
         assert_eq!(schedule.fps(), 15);
         assert_eq!(schedule.frame_count(), 15);
 
-        // Check frame duration calculation (cumulative rounding without drift)
-        let total_duration: u32 = (0..15)
+        let expected_durations: Vec<u32> = (0..15)
             .map(|i| frame_timestamp_ms(i + 1, 15) - frame_timestamp_ms(i, 15))
-            .sum();
+            .collect();
+        let expected_total_duration: u32 = expected_durations.iter().sum();
         assert_eq!(
-            total_duration, 1_000,
+            expected_total_duration, 1_000,
             "15 frames at 15fps must total exactly 1000ms"
         );
 
-        // Producer returning frames with different colors and alpha (transparent, semi-transparent, opaque)
-        let mut frame_call_count = 0;
+        // Producer returning frames with varied RGB and alpha (transparent, semi-transparent, opaque)
+        let mut frame_call_count = 0u32;
         let result = write_output(
             &path,
             OutputIntent::Animation {
@@ -782,9 +941,9 @@ mod tests {
                 loop_count: 0,
                 size: (64, 64),
             },
-            |time| {
+            |_| {
+                let idx = frame_call_count;
                 frame_call_count += 1;
-                let idx = (time.as_millis() / 66) as u8;
                 let alpha = match idx % 3 {
                     0 => 0,
                     1 => 128,
@@ -794,9 +953,9 @@ mod tests {
                     64,
                     64,
                     image::Rgba([
-                        ((idx as u16 * 10) % 256) as u8,
-                        ((idx as u16 * 15) % 256) as u8,
-                        ((idx as u16 * 20) % 256) as u8,
+                        ((idx * 17) % 256) as u8,
+                        ((idx * 29) % 256) as u8,
+                        ((idx * 43) % 256) as u8,
                         alpha,
                     ]),
                 ))
@@ -810,13 +969,108 @@ mod tests {
         assert_eq!(frame_call_count, 15, "Must sample all 15 frames");
 
         let encoded = fs::read(&path).unwrap();
-        assert!(encoded.len() > 12);
-        assert_eq!(
-            &encoded[4..8],
-            b"ftyp",
-            "Must have valid ISOBMFF / AVIF ftyp box header"
+        fs::remove_file(&path).ok();
+
+        let parsed = parse_avif_animation(&encoded)
+            .expect("encoded AVIF animation must contain valid ISOBMFF container boxes");
+        assert_eq!(parsed.major_brand, *b"avis", "Major brand must be avis");
+        assert!(
+            parsed.compatible_brands.contains(b"avif"),
+            "Compatible brands must include avif"
         );
-        fs::remove_file(path).ok();
+        assert_eq!(
+            parsed.mvhd_timescale, 1_000,
+            "mvhd timescale must be 1000ms"
+        );
+        assert_eq!(
+            parsed.mvhd_duration,
+            u64::from(expected_total_duration),
+            "mvhd duration must match serialized 1000ms total"
+        );
+        assert_eq!(
+            parsed.tracks.len(),
+            2,
+            "Translucent RGBA animation must emit both color (pict) and alpha (auxv) tracks"
+        );
+
+        let color_track = parsed
+            .tracks
+            .iter()
+            .find(|t| &t.handler == b"pict")
+            .expect("Must contain pict color track");
+        assert_eq!(color_track.tkhd_size, (64, 64));
+        assert_eq!(color_track.av01_size, (64, 64));
+        assert_eq!(color_track.mdhd_timescale, 1_000);
+        assert_eq!(
+            color_track.mdhd_duration,
+            u64::from(expected_total_duration)
+        );
+        assert_eq!(color_track.stsz_sample_sizes.len(), 15);
+        assert!(color_track.stsz_sample_sizes.iter().all(|&sz| sz > 0));
+        assert_eq!(
+            color_track.frame_durations, expected_durations,
+            "Encoded ISOBMFF stts durations must match cumulative-rounded 15fps schedule"
+        );
+
+        let alpha_track = parsed
+            .tracks
+            .iter()
+            .find(|t| &t.handler == b"auxv")
+            .expect("Must contain auxv alpha auxiliary track");
+        assert_eq!(alpha_track.tkhd_size, (64, 64));
+        assert_eq!(alpha_track.av01_size, (64, 64));
+        assert_eq!(alpha_track.mdhd_timescale, 1_000);
+        assert_eq!(
+            alpha_track.mdhd_duration,
+            u64::from(expected_total_duration)
+        );
+        assert_eq!(alpha_track.stsz_sample_sizes.len(), 15);
+        assert!(alpha_track.stsz_sample_sizes.iter().all(|&sz| sz > 0));
+        assert_eq!(alpha_track.frame_durations, expected_durations);
+        assert_eq!(
+            alpha_track.auxl_refs,
+            vec![color_track.track_id],
+            "Alpha track must reference the color track via tref/auxl"
+        );
+
+        // Opaque input must omit the auxiliary alpha track (proving auxv responds to alpha presence)
+        let opaque_path =
+            std::env::temp_dir().join(format!("eidolon-avif-opaque-{}.avif", std::process::id()));
+        let mut opaque_idx = 0u8;
+        write_output(
+            &opaque_path,
+            OutputIntent::Animation {
+                format: AnimationFormat::Avif,
+                preset: AnimationPreset::Walk,
+                fps: 4,
+                speed: 1.0,
+                loop_count: 0,
+                size: (64, 64),
+            },
+            |_| {
+                let c = opaque_idx.wrapping_mul(50);
+                opaque_idx = opaque_idx.wrapping_add(1);
+                Ok(RgbaImage::from_pixel(
+                    64,
+                    64,
+                    image::Rgba([c, 120, 200, 255]),
+                ))
+            },
+        )
+        .expect("Opaque AVIF export must succeed");
+        let opaque_encoded = fs::read(&opaque_path).unwrap();
+        fs::remove_file(&opaque_path).ok();
+
+        let opaque_parsed = parse_avif_animation(&opaque_encoded)
+            .expect("Opaque AVIF animation must parse cleanly");
+        assert_eq!(
+            opaque_parsed.tracks.len(),
+            1,
+            "Opaque animation must emit only the color track without auxv"
+        );
+        assert_eq!(opaque_parsed.tracks[0].handler, *b"pict");
+        assert_eq!(opaque_parsed.tracks[0].stsz_sample_sizes.len(), 4);
+        assert_eq!(opaque_parsed.tracks[0].frame_durations, vec![250; 4]);
 
         // Reject frame dimension mismatch
         let mismatch_result = write_output(
