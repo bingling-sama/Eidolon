@@ -320,6 +320,14 @@ fn bench_animation_export(c: &mut Criterion) {
     group.finish();
 }
 
+fn legacy_raw_to_rgba_vec(raw: &[u8]) -> Vec<zenravif::RGBA8> {
+    raw.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|chunk| zenravif::RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+        .collect()
+}
+
 /// Micro-benchmark and end-to-end comparison for AVIF export (Issue #24).
 /// (Note: Precise heap allocation quantification assertions are isolated in `tests/memory_allocation.rs`).
 ///
@@ -362,14 +370,8 @@ fn bench_avif_export(c: &mut Criterion) {
     });
 
     prep_group.bench_function("legacy_chunk_alloc_vec", |b| {
-        use zenravif::RGBA8;
         b.iter(|| {
-            let rgba_vec: Vec<RGBA8> = sample_raw
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-                .collect();
+            let rgba_vec = legacy_raw_to_rgba_vec(&sample_raw);
             std::hint::black_box(rgba_vec);
         });
     });
@@ -421,20 +423,14 @@ fn bench_avif_export(c: &mut Criterion) {
                 char_legacy.posture =
                     AnimationPreset::Walk.sample(schedule.sample_time(frame_index));
                 let img = renderer.render(&char_legacy, &camera, 400, 300).unwrap();
-                // Match the cumulative rounding timestamp logic from production write_output
+                // Mirrors internal `output_avif::frame_timestamp_ms` without adding public helper APIs.
                 let fps = schedule.fps();
                 let duration_ms = ((frame_index + 1) * 1_000 + fps / 2) / fps
                     - (frame_index * 1_000 + fps / 2) / fps;
                 frame_durations.push(duration_ms);
 
                 let raw = img.into_raw();
-                let rgba_vec: Vec<RGBA8> = raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .map(|chunk| RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
-                    .collect();
-                frames_data.push(rgba_vec);
+                frames_data.push(legacy_raw_to_rgba_vec(&raw));
             }
 
             let anim_frames: Vec<AnimFrameRgba> = frames_data
