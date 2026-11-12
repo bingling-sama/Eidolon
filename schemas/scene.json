@@ -55,10 +55,33 @@
           "nametag": { "type": ["string", "null"] },
           "nametag_see_through": { "type": "boolean", "default": true },
           "cape": { "type": ["string", "null"] },
-          "elytra": { "type": ["string", "null"] }
+          "elytra": { "type": ["string", "null"] },
+          "body_visibility": { "$ref": "#/$defs/bodyVisibility" }
         }
       }
     }
   },
-  "required": ["characters"]
+  "required": ["characters"],
+  "$defs": {
+    "partVisibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inner": { "type": "boolean", "default": true },
+        "outer": { "type": "boolean", "default": true }
+      }
+    },
+    "bodyVisibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "head": { "$ref": "#/$defs/partVisibility" },
+        "body": { "$ref": "#/$defs/partVisibility" },
+        "right_arm": { "$ref": "#/$defs/partVisibility" },
+        "left_arm": { "$ref": "#/$defs/partVisibility" },
+        "right_leg": { "$ref": "#/$defs/partVisibility" },
+        "left_leg": { "$ref": "#/$defs/partVisibility" }
+      }
+    }
+  }
 }
