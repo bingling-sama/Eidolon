@@ -7,6 +7,7 @@ use eidolon_core::camera::Camera;
 use eidolon_core::character::{Character, DefaultPostures, Posture, SkinType};
 use eidolon_core::renderer::Renderer;
 use eidolon_core::scene::Scene;
+use eidolon_core::visibility::{BodyPartId, BodyVisibility};
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageFormat;
@@ -28,6 +29,7 @@ pub struct CanvasRenderer {
     elytra_override: Option<(f32, f32)>,
     nametag: Option<String>,
     nametag_see_through: bool,
+    pending_body_visibility: BodyVisibility,
 }
 
 #[wasm_bindgen]
@@ -51,6 +53,7 @@ impl CanvasRenderer {
             elytra_override: None,
             nametag: None,
             nametag_see_through: true,
+            pending_body_visibility: BodyVisibility::default(),
         })
     }
 
@@ -70,6 +73,7 @@ impl CanvasRenderer {
                 .unwrap_or(DefaultPostures::STAND);
             character.nametag = self.nametag.clone();
             character.nametag_see_through = self.nametag_see_through;
+            character.body_visibility = self.pending_body_visibility;
             self.character = Some(character);
         }
         log::info!("Skin loaded");
@@ -93,6 +97,7 @@ impl CanvasRenderer {
                 .unwrap_or(DefaultPostures::STAND);
             character.nametag = self.nametag.clone();
             character.nametag_see_through = self.nametag_see_through;
+            character.body_visibility = self.pending_body_visibility;
             self.character = Some(character);
         }
         log::info!("Cape loaded");
@@ -113,6 +118,11 @@ impl CanvasRenderer {
             .is_some_and(|c| c.back_equipment().is_none());
         if only_body {
             self.pending_posture = self.character.as_ref().map(|c| c.posture);
+            self.pending_body_visibility = self
+                .character
+                .as_ref()
+                .map(|c| c.body_visibility)
+                .unwrap_or_default();
             self.character = None;
         } else if let Some(character) = &mut self.character {
             let _ = character.remove_body();
@@ -137,6 +147,7 @@ impl CanvasRenderer {
                 .unwrap_or(DefaultPostures::STAND);
             character.nametag = self.nametag.clone();
             character.nametag_see_through = self.nametag_see_through;
+            character.body_visibility = self.pending_body_visibility;
             self.character = Some(character);
         }
         log::info!("Elytra loaded");
@@ -282,6 +293,49 @@ impl CanvasRenderer {
             body.set_skin_type(self.skin_type);
         }
         Ok(())
+    }
+
+    /// Set one body's inner and outer visibility. Can be called before loading a skin.
+    pub fn set_part_visibility(
+        &mut self,
+        part: &str,
+        inner: bool,
+        outer: bool,
+    ) -> Result<(), JsValue> {
+        let part = parse_body_part(part)?;
+        if let Some(character) = &mut self.character {
+            character.body_visibility.set_part(part, inner, outer);
+        } else {
+            self.pending_body_visibility.set_part(part, inner, outer);
+        }
+        Ok(())
+    }
+
+    /// Set visibility for all inner/base body meshes.
+    pub fn set_inner_layers_visible(&mut self, visible: bool) {
+        if let Some(character) = &mut self.character {
+            character.body_visibility.set_inner_layers(visible);
+        } else {
+            self.pending_body_visibility.set_inner_layers(visible);
+        }
+    }
+
+    /// Set visibility for all outer/overlay body meshes.
+    pub fn set_outer_layers_visible(&mut self, visible: bool) {
+        if let Some(character) = &mut self.character {
+            character.body_visibility.set_outer_layers(visible);
+        } else {
+            self.pending_body_visibility.set_outer_layers(visible);
+        }
+    }
+
+    /// Set visibility for every body mesh.
+    pub fn set_all_parts_visible(&mut self, visible: bool) {
+        if let Some(character) = &mut self.character {
+            character.body_visibility.set_all(visible);
+        } else {
+            self.pending_body_visibility.set_all(visible);
+        }
     }
 
     /// Set or clear the player nametag. An empty string or whitespace removes the nametag.
@@ -548,6 +602,54 @@ impl CanvasRenderer {
         Ok(())
     }
 
+    /// Set one body's inner and outer visibility for a scene character.
+    pub fn set_character_part_visibility(
+        &mut self,
+        id: u32,
+        part: &str,
+        inner: bool,
+        outer: bool,
+    ) -> Result<(), JsValue> {
+        let part = parse_body_part(part)?;
+        let character = self.get_character_mut(id)?;
+        character.body_visibility.set_part(part, inner, outer);
+        Ok(())
+    }
+
+    /// Set visibility for all inner/base meshes of a scene character.
+    pub fn set_character_inner_layers_visible(
+        &mut self,
+        id: u32,
+        visible: bool,
+    ) -> Result<(), JsValue> {
+        self.get_character_mut(id)?
+            .body_visibility
+            .set_inner_layers(visible);
+        Ok(())
+    }
+
+    /// Set visibility for all outer/overlay meshes of a scene character.
+    pub fn set_character_outer_layers_visible(
+        &mut self,
+        id: u32,
+        visible: bool,
+    ) -> Result<(), JsValue> {
+        self.get_character_mut(id)?
+            .body_visibility
+            .set_outer_layers(visible);
+        Ok(())
+    }
+
+    /// Set visibility for every body mesh of a scene character.
+    pub fn set_character_all_parts_visible(
+        &mut self,
+        id: u32,
+        visible: bool,
+    ) -> Result<(), JsValue> {
+        self.get_character_mut(id)?.body_visibility.set_all(visible);
+        Ok(())
+    }
+
     /// Set world position for an existing character entity.
     pub fn set_character_position(
         &mut self,
@@ -631,12 +733,31 @@ impl CanvasRenderer {
             .is_some_and(|character| character.body().is_none());
         if only_back_equipment {
             self.pending_posture = self.character.as_ref().map(|character| character.posture);
+            self.pending_body_visibility = self
+                .character
+                .as_ref()
+                .map(|character| character.body_visibility)
+                .unwrap_or_default();
             self.character = None;
         } else if let Some(character) = &mut self.character {
             character
                 .unequip()
                 .expect("body-backed character can remove back equipment");
         }
+    }
+}
+
+fn parse_body_part(part: &str) -> Result<BodyPartId, JsValue> {
+    match part {
+        "head" => Ok(BodyPartId::Head),
+        "body" => Ok(BodyPartId::Body),
+        "rightArm" => Ok(BodyPartId::RightArm),
+        "leftArm" => Ok(BodyPartId::LeftArm),
+        "rightLeg" => Ok(BodyPartId::RightLeg),
+        "leftLeg" => Ok(BodyPartId::LeftLeg),
+        other => Err(JsValue::from_str(&format!(
+            "unknown body part: '{other}' (expected head, body, rightArm, leftArm, rightLeg, or leftLeg)"
+        ))),
     }
 }
 
