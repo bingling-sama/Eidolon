@@ -7,7 +7,7 @@ use eidolon_core::{
     error::EidolonError,
     renderer::Renderer,
     scene::Scene,
-    visibility::{BodyPartId, BodyVisibility, PartVisibility},
+    visibility::{BodyPartId, BodyVisibility},
 };
 use serde::{Deserialize, Serialize};
 
@@ -589,7 +589,10 @@ mod tests {
 
         assert!(visibility.head.inner);
         assert!(!visibility.head.outer);
-        assert_eq!(visibility.body, PartVisibility::default());
+        assert_eq!(
+            visibility.body,
+            eidolon_core::visibility::PartVisibility::default()
+        );
     }
 
     #[test]

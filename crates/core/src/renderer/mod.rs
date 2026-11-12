@@ -807,8 +807,8 @@ impl Renderer {
 
                     if let (Some(body), Some(model)) = (body, model) {
                         render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
-                        for i in 0..PART_CONFIGS.len() {
-                            let visibility = character.body_visibility.get(PART_CONFIGS[i].2);
+                        for (i, (_, _, part_id)) in PART_CONFIGS.iter().enumerate() {
+                            let visibility = character.body_visibility.get(*part_id);
                             if !visibility.inner && !visibility.outer {
                                 continue;
                             }
