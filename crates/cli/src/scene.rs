@@ -560,6 +560,39 @@ mod tests {
     }
 
     #[test]
+    fn scene_visibility_defaults_to_all_visible() {
+        let (state, _) = scene_state_and_camera_from_scene(&default_scene());
+        assert_eq!(state.body_visibility, BodyVisibility::default());
+    }
+
+    #[test]
+    fn scene_visibility_applies_batch_and_part_hides() {
+        let mut scene = default_scene();
+        scene.hide_outer = true;
+        scene.hide_parts = vec![crate::args::BodyPartCli::Head];
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+
+        assert!(!state.body_visibility.head.inner);
+        assert!(!state.body_visibility.head.outer);
+        assert!(state.body_visibility.body.inner);
+        assert!(!state.body_visibility.body.outer);
+    }
+
+    #[test]
+    fn partial_scene_visibility_config_defaults_omitted_layers_to_visible() {
+        let config = parse_scene_config_str(
+            r#"{"characters":[{"skin":"skin.png","body_visibility":{"head":{"outer":false}}}]}"#,
+            false,
+        )
+        .unwrap();
+        let visibility: BodyVisibility = (&config.characters[0].body_visibility).into();
+
+        assert!(visibility.head.inner);
+        assert!(!visibility.head.outer);
+        assert_eq!(visibility.body, PartVisibility::default());
+    }
+
+    #[test]
     fn scene_posture_wave_overrides_base() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;
