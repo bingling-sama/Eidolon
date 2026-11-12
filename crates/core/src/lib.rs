@@ -22,6 +22,7 @@ pub mod converter;
 pub mod error;
 pub mod model;
 pub mod output;
+mod output_avif;
 pub mod renderer;
 pub mod scene;
 #[cfg(test)]

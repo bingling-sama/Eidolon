@@ -320,6 +320,137 @@ fn bench_animation_export(c: &mut Criterion) {
     group.finish();
 }
 
+fn legacy_raw_to_rgba_vec(raw: &[u8]) -> Vec<zenravif::RGBA8> {
+    raw.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|chunk| zenravif::RGBA8::new(chunk[0], chunk[1], chunk[2], chunk[3]))
+        .collect()
+}
+
+/// Micro-benchmark and end-to-end comparison for AVIF export (Issue #24).
+/// (Note: Precise heap allocation quantification assertions are isolated in `tests/memory_allocation.rs`).
+///
+/// 1. Micro-benchmark (`avif_frame_prep_800x600`):
+///    Measures isolated per-frame buffer preparation overhead. Zero-copy slice borrowing
+///    (`as_rgba`) eliminates the scalar chunk loop and redundant allocations.
+///
+/// 2. End-to-end export comparison (`export_walk_avif_comparison_400x300_15fps`):
+///    Measures end-to-end animation export pipeline (render + prep + encode).
+///    Both pipelines use strictly identical frame durations via cumulative rounding
+///    (`((boundary * 1000 + fps / 2) / fps)`) for fair A/B comparison.
+///    Demonstrates that while buffer preparation is nearly instant, overall export
+///    duration is dominated by the underlying AV1 video encoder (zenrav1e).
+fn bench_avif_export(c: &mut Criterion) {
+    let renderer = shared_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("Failed to load body");
+    let character = Character::from_body(body);
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 80.0,
+        scale: 1.0,
+        target: [0.0, 1.0, 0.0],
+    };
+
+    // 1. Isolated single-frame buffer preparation micro-benchmark (800x600)
+    let sample_img = renderer.render(&character, &camera, 800, 600).unwrap();
+    let sample_raw = sample_img.into_raw();
+
+    let mut prep_group = c.benchmark_group("avif_frame_prep_800x600");
+    prep_group.sample_size(10);
+
+    prep_group.bench_function("zerocopy_slice_borrow", |b| {
+        use rgb::FromSlice;
+        b.iter(|| {
+            let rgba_slice: &[zenravif::RGBA8] = sample_raw.as_slice().as_rgba();
+            std::hint::black_box(rgba_slice);
+        });
+    });
+
+    prep_group.bench_function("legacy_chunk_alloc_vec", |b| {
+        b.iter(|| {
+            let rgba_vec = legacy_raw_to_rgba_vec(&sample_raw);
+            std::hint::black_box(rgba_vec);
+        });
+    });
+
+    prep_group.finish();
+
+    // 2. End-to-end comparison (400x300, 15fps)
+    let temp_dir = TempDirGuard::new("eidolon_bench_avif");
+    let path_zerocopy = temp_dir.path().join("walk_zerocopy.avif");
+    let path_legacy = temp_dir.path().join("walk_legacy.avif");
+
+    let mut e2e_group = c.benchmark_group("export_walk_avif_comparison_400x300_15fps");
+    e2e_group.sample_size(10);
+
+    let mut char_zerocopy = character.clone();
+    e2e_group.bench_function("zerocopy_pipeline", |b| {
+        b.iter(|| {
+            write_output(
+                &path_zerocopy,
+                OutputIntent::Animation {
+                    format: AnimationFormat::Avif,
+                    preset: AnimationPreset::Walk,
+                    fps: 15,
+                    speed: 1.0,
+                    loop_count: 0,
+                    size: (400, 300),
+                },
+                |time| {
+                    char_zerocopy.posture = AnimationPreset::Walk.sample(time);
+                    renderer.render(&char_zerocopy, &camera, 400, 300)
+                },
+            )
+            .expect("Failed to export walk AVIF animation (zerocopy)");
+        });
+    });
+
+    let mut char_legacy = character.clone();
+    e2e_group.bench_function("legacy_allocation_pipeline", |b| {
+        use eidolon_core::animation::AnimationSchedule;
+        use zenravif::{AnimFrameRgba, Encoder as AvifEncoder, Img, RGBA8};
+
+        let schedule = AnimationSchedule::new(AnimationPreset::Walk, 15, 1.0).unwrap();
+        b.iter(|| {
+            let frame_count = schedule.frame_count() as usize;
+            let mut frames_data: Vec<Vec<RGBA8>> = Vec::with_capacity(frame_count);
+            let mut frame_durations: Vec<u32> = Vec::with_capacity(frame_count);
+
+            for frame_index in 0..schedule.frame_count() {
+                char_legacy.posture =
+                    AnimationPreset::Walk.sample(schedule.sample_time(frame_index));
+                let img = renderer.render(&char_legacy, &camera, 400, 300).unwrap();
+                // Mirrors internal `output_avif::frame_timestamp_ms` without adding public helper APIs.
+                let fps = schedule.fps();
+                let duration_ms = ((frame_index + 1) * 1_000 + fps / 2) / fps
+                    - (frame_index * 1_000 + fps / 2) / fps;
+                frame_durations.push(duration_ms);
+
+                let raw = img.into_raw();
+                frames_data.push(legacy_raw_to_rgba_vec(&raw));
+            }
+
+            let anim_frames: Vec<AnimFrameRgba> = frames_data
+                .iter()
+                .zip(frame_durations.iter())
+                .map(|(data, &duration_ms)| AnimFrameRgba {
+                    rgba: Img::new(data.as_slice(), 400, 300),
+                    duration_ms,
+                })
+                .collect();
+
+            let encoder = AvifEncoder::new().with_speed(6);
+            let encoded = encoder.encode_animation_rgba(&anim_frames).unwrap();
+            std::fs::write(&path_legacy, &encoded.avif_file).unwrap();
+        });
+    });
+
+    e2e_group.finish();
+}
+
 criterion_group!(
     benches,
     bench_render_resolutions,
@@ -329,5 +460,6 @@ criterion_group!(
     bench_animation_and_pose,
     bench_encoding_static,
     bench_animation_export,
+    bench_avif_export,
 );
 criterion_main!(benches);
