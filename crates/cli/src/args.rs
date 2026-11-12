@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use eidolon_core::visibility::BodyPartId;
 use eidolon_core::{animation::AnimationPreset, character::Posture};
 
 /// Minecraft skin renderer and skin-atlas utilities.
@@ -26,6 +27,29 @@ pub enum PostureCli {
     Run,
     Wave,
     Fly,
+}
+
+#[derive(Clone, Copy, ValueEnum, Debug, PartialEq, Eq)]
+pub enum BodyPartCli {
+    Head,
+    Body,
+    RightArm,
+    LeftArm,
+    RightLeg,
+    LeftLeg,
+}
+
+impl From<BodyPartCli> for BodyPartId {
+    fn from(value: BodyPartCli) -> Self {
+        match value {
+            BodyPartCli::Head => Self::Head,
+            BodyPartCli::Body => Self::Body,
+            BodyPartCli::RightArm => Self::RightArm,
+            BodyPartCli::LeftArm => Self::LeftArm,
+            BodyPartCli::RightLeg => Self::RightLeg,
+            BodyPartCli::LeftLeg => Self::LeftLeg,
+        }
+    }
 }
 
 impl PostureCli {
@@ -159,6 +183,18 @@ pub struct SceneArgs {
     /// Render elytra using the specified 64x32 PNG texture.
     #[arg(long, conflicts_with = "cape")]
     pub elytra: Option<String>,
+
+    /// Hide all inner/base body meshes. Cannot be combined with --scene-config.
+    #[arg(long, conflicts_with = "scene_config")]
+    pub hide_inner: bool,
+
+    /// Hide all outer/overlay body meshes. Cannot be combined with --scene-config.
+    #[arg(long, conflicts_with = "scene_config")]
+    pub hide_outer: bool,
+
+    /// Hide both layers of one or more body parts. Cannot be combined with --scene-config.
+    #[arg(long, value_delimiter = ',', conflicts_with = "scene_config")]
+    pub hide_parts: Vec<BodyPartCli>,
 
     /// Override the posture's cape pitch in degrees.
     #[arg(long)]

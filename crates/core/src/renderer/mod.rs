@@ -807,19 +807,27 @@ impl Renderer {
 
                     if let (Some(body), Some(model)) = (body, model) {
                         render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
-                        for i in 0..PART_CONFIGS.len() {
+                        for (i, (_, _, part_id)) in PART_CONFIGS.iter().enumerate() {
+                            let visibility = character.body_visibility.get(*part_id);
+                            if !visibility.inner && !visibility.outer {
+                                continue;
+                            }
                             let body_part = body_part_ref(i, model);
                             let dynamic_offset =
                                 ((slot_base + i) as u32) * self.uniform_aligned_size;
                             render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
 
-                            render_pass
-                                .set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
-                            render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                            if visibility.inner {
+                                render_pass
+                                    .set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
+                                render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                            }
 
-                            render_pass
-                                .set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
-                            render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                            if visibility.outer {
+                                render_pass
+                                    .set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
+                                render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                            }
                         }
                     }
 

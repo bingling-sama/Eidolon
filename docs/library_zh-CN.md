@@ -59,6 +59,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `StaticFormat` 支持 `Png` 与 `WebP`。`OutputIntent` 显式指定格式，输出模块会统一扩展名并返回最终路径。
 - `AnimationFormat` 支持 `Gif`、Animated `WebP`、`Apng` 与 `Avif`。`OutputIntent::Animation` 接受 `AnimationPreset`、FPS、速度倍率、循环次数和 frame producer，并返回最终路径。
 
+## 身体显隐
+
+每个 `Character` 都有 `body_visibility`，可以控制头部、躯干、左右手臂和左右腿
+的内层与外层网格。默认 12 个值全部显示。
+
+```rust
+use eidolon::visibility::BodyPartId;
+
+character.body_visibility.set_outer_layers(false);
+character.body_visibility.set_part(BodyPartId::Head, true, true);
+```
+
+`inner` 是基础皮肤网格，`outer` 是帽子、夹克、袖子或裤子覆盖层。显隐状态属于角色，
+在替换皮肤后保留；不会隐藏披风、鞘翅或名字牌。`set_all(false)` 只隐藏身体几何，
+不卸载 Body，也不改变相机取景。
+
 ## 错误处理
 
 公共 API 返回强类型枚举 `EidolonError`：

@@ -157,6 +157,22 @@ fn body_is_owned_by_character_and_renders() {
 }
 
 #[test]
+fn hidden_body_layers_produce_no_body_pixels() {
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
+    character.body_visibility.set_all(false);
+
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("hidden body render failed");
+
+    assert!(
+        image.pixels().all(|pixel| pixel[3] == 0),
+        "hidden body should not produce non-transparent pixels"
+    );
+}
+
+#[test]
 fn cloned_character_reuses_resources_with_the_same_renderer() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);

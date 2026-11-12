@@ -26,6 +26,9 @@ cargo run -- render [选项] <皮肤 PNG> [输出]
 - `--disable-nametag-see-through` 让被场景几何遮挡的 nametag 像素完全隐藏；默认以低透明度显示
 - `--cape <PNG>` 使用指定的后背装备图集渲染披风；没有默认图集，省略时不渲染
 - `--elytra <PNG>` 使用 2:1 披风图集（64×32 或等比例高清图集）渲染鞘翅；与 `--cape` 互斥
+- `--hide-inner` 隐藏所有基础皮肤网格；不能与 `--scene-config` 同时使用
+- `--hide-outer` 隐藏所有外层覆盖网格；不能与 `--scene-config` 同时使用
+- `--hide-parts <PARTS>` 隐藏部件两层；值为 `head`、`body`、`right-arm`、`left-arm`、`right-leg`、`left-leg`，可用逗号分隔
 - `--cape-pitch <DEG>` 覆盖所选姿势的披风角度；默认使用姿势自带角度
 - `--elytra-pitch <DEG>` 覆盖所选姿势的鞘翅 pitch；默认使用姿势自带角度
 - `--elytra-spread <DEG>` 覆盖所选姿势的鞘翅开合角；默认使用姿势自带角度

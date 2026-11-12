@@ -7,6 +7,7 @@ use eidolon_core::{
     error::EidolonError,
     renderer::Renderer,
     scene::Scene,
+    visibility::{BodyPartId, BodyVisibility},
 };
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +61,60 @@ pub struct CharacterConfig {
     pub cape: Option<String>,
     #[serde(default)]
     pub elytra: Option<String>,
+    #[serde(default)]
+    pub body_visibility: BodyVisibilityConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PartVisibilityConfig {
+    #[serde(default = "default_true")]
+    pub inner: bool,
+    #[serde(default = "default_true")]
+    pub outer: bool,
+}
+
+impl Default for PartVisibilityConfig {
+    fn default() -> Self {
+        Self {
+            inner: true,
+            outer: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BodyVisibilityConfig {
+    #[serde(default)]
+    pub head: PartVisibilityConfig,
+    #[serde(default)]
+    pub body: PartVisibilityConfig,
+    #[serde(default)]
+    pub right_arm: PartVisibilityConfig,
+    #[serde(default)]
+    pub left_arm: PartVisibilityConfig,
+    #[serde(default)]
+    pub right_leg: PartVisibilityConfig,
+    #[serde(default)]
+    pub left_leg: PartVisibilityConfig,
+}
+
+impl From<&BodyVisibilityConfig> for BodyVisibility {
+    fn from(config: &BodyVisibilityConfig) -> Self {
+        let mut visibility = Self::default();
+        for (part, value) in [
+            (BodyPartId::Head, &config.head),
+            (BodyPartId::Body, &config.body),
+            (BodyPartId::RightArm, &config.right_arm),
+            (BodyPartId::LeftArm, &config.left_arm),
+            (BodyPartId::RightLeg, &config.right_leg),
+            (BodyPartId::LeftLeg, &config.left_leg),
+        ] {
+            visibility.set_part(part, value.inner, value.outer);
+        }
+        visibility
+    }
 }
 
 fn default_skin_type() -> String {
@@ -219,6 +274,7 @@ pub fn load_scene_from_config<P: AsRef<Path>>(
         character.posture = char_cfg.parse_posture()?;
         character.nametag = char_cfg.nametag;
         character.nametag_see_through = char_cfg.nametag_see_through;
+        character.body_visibility = (&char_cfg.body_visibility).into();
 
         if let Some(cape_rel) = char_cfg.cape {
             let cape_path = base_dir.join(cape_rel);
@@ -261,6 +317,7 @@ pub struct SceneState {
     pub posture: Posture,
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Vector3<f32>,
+    pub body_visibility: BodyVisibility,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -323,6 +380,7 @@ impl SceneState {
         character.posture = self.posture;
         character.position = self.position;
         character.rotation = self.rotation;
+        character.body_visibility = self.body_visibility;
     }
 }
 
@@ -349,6 +407,7 @@ pub fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Came
         posture,
         position: cgmath::Vector3::new(scene.pos_x, scene.pos_y, scene.pos_z),
         rotation: cgmath::Vector3::new(scene.rot_x, scene.rot_y, scene.rot_z),
+        body_visibility: body_visibility_from_args(scene),
     };
 
     let camera = Camera {
@@ -358,6 +417,20 @@ pub fn scene_state_and_camera_from_scene(scene: &SceneArgs) -> (SceneState, Came
         target: [0.0, 1.0, 0.0],
     };
     (state, camera)
+}
+
+fn body_visibility_from_args(scene: &SceneArgs) -> BodyVisibility {
+    let mut visibility = BodyVisibility::default();
+    if scene.hide_inner {
+        visibility.set_inner_layers(false);
+    }
+    if scene.hide_outer {
+        visibility.set_outer_layers(false);
+    }
+    for part in &scene.hide_parts {
+        visibility.set_part((*part).into(), false, false);
+    }
+    visibility
 }
 
 pub fn load_character(
@@ -392,6 +465,9 @@ mod tests {
             disable_nametag_see_through: false,
             cape: None,
             elytra: None,
+            hide_inner: false,
+            hide_outer: false,
+            hide_parts: Vec::new(),
             cape_pitch: None,
             elytra_pitch: None,
             elytra_spread: None,
@@ -481,6 +557,42 @@ mod tests {
         assert_eq!(cam.yaw, 45.0);
         assert_eq!(cam.pitch, 30.0);
         assert_eq!(cam.scale, 2.5);
+    }
+
+    #[test]
+    fn scene_visibility_defaults_to_all_visible() {
+        let (state, _) = scene_state_and_camera_from_scene(&default_scene());
+        assert_eq!(state.body_visibility, BodyVisibility::default());
+    }
+
+    #[test]
+    fn scene_visibility_applies_batch_and_part_hides() {
+        let mut scene = default_scene();
+        scene.hide_outer = true;
+        scene.hide_parts = vec![crate::args::BodyPartCli::Head];
+        let (state, _) = scene_state_and_camera_from_scene(&scene);
+
+        assert!(!state.body_visibility.head.inner);
+        assert!(!state.body_visibility.head.outer);
+        assert!(state.body_visibility.body.inner);
+        assert!(!state.body_visibility.body.outer);
+    }
+
+    #[test]
+    fn partial_scene_visibility_config_defaults_omitted_layers_to_visible() {
+        let config = parse_scene_config_str(
+            r#"{"characters":[{"skin":"skin.png","body_visibility":{"head":{"outer":false}}}]}"#,
+            false,
+        )
+        .unwrap();
+        let visibility: BodyVisibility = (&config.characters[0].body_visibility).into();
+
+        assert!(visibility.head.inner);
+        assert!(!visibility.head.outer);
+        assert_eq!(
+            visibility.body,
+            eidolon_core::visibility::PartVisibility::default()
+        );
     }
 
     #[test]

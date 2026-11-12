@@ -23,6 +23,7 @@ yarn add @eidolonmc/wasm
 - **Classic & Slim Player Models**: Accurate Steve and Alex geometry with dual-layer overlay support.
 - **Interactive Controls**: Camera orbit, zoom, and procedural animations (`idle`, `walk`, `run`, `wave`, `fly`).
 - **Texture Analysis**: In-memory inspection and classification of Minecraft skin textures.
+- **Body Visibility**: Independently toggle the inner and outer mesh of each body part.
 
 ## Quick Start
 
