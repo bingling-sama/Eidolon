@@ -497,7 +497,7 @@ rtk cargo bench -p eidolon-core --bench performance_benchmark
 
 #### 当前验证证据
 
-- `cargo test --workspace -- --test-threads=1`：本地 233 个测试通过；GitHub CI Rust 测试通过。
+- `cargo test --workspace -- --test-threads=1`：本地 251 个测试通过；GitHub CI Rust 测试通过。
 - `cargo clippy --workspace --all-targets -- -D warnings`：通过。
 - `wasm-pack build --target bundler`：通过。
 - GitHub CI Playwright（提交 `b2a07b2`）：WebGPU/WebGL2 共 30 个测试通过，其中新增 `visibility.spec.js` 的 4 个测试均通过；扩展用例覆盖预加载、clear/reload、slim 替换、动画推进、导出和场景实体错误路径。
