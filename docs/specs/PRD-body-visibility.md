@@ -502,6 +502,9 @@ rtk cargo bench -p eidolon-core --bench performance_benchmark
 - `wasm-pack build --target bundler`：通过。
 - GitHub CI Playwright（提交 `b2a07b2`）：WebGPU/WebGL2 共 30 个测试通过，其中新增 `visibility.spec.js` 的 4 个测试均通过；扩展用例覆盖预加载、clear/reload、slim 替换、动画推进、导出和场景实体错误路径。
 - `python -m json.tool schemas/scene.json`：通过。
+- Core integration `48 passed`：覆盖透明外层对照、12/6/1/0 body draw 计数、头部区域边界、隐藏身体下名字牌、hide/show 相机不变、18 角色跨 chunk 和 GPU 资源上传计数。
+- CLI tests `67 passed`：覆盖 CLI 参数冲突、JSON/TOML 非法字段、JSON/TOML 显隐配置往返和动画/preview 共用 `SceneState`。
+- CLI 动画冒烟：`eidolon render ... --animate --fps 1 --hide-outer` 成功生成 `800x600` GIF；preview 使用同一 `SceneState` 初始化路径，窗口冒烟需桌面显示服务。
 - 默认 CLI 输出基线与当前输出 SHA-256 均为
   `857d9a356776c761e2fb42c5e327af07804e97e2d89f8a6d5f324d46ad7ca897`。
 - Criterion `render_resolution/render/800x600`：基线 `317.28 µs`（`e8431ed`），当前 `320.58 µs`（20 samples），中位数变化 `+1.04%`；当前显隐模式为全显示 `318.42 µs`、无外层 `316.44 µs`、仅头 `315.80 µs`、全隐藏 `311.49 µs`（100 samples）。

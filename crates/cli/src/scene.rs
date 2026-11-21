@@ -633,6 +633,45 @@ mod tests {
     }
 
     #[test]
+    fn visibility_config_round_trips_through_json_and_toml() {
+        let config = parse_scene_config_str(
+            r#"{"characters":[{"skin":"skin.png","body_visibility":{"head":{"inner":false,"outer":true},"left_leg":{"outer":false}}}]}"#,
+            false,
+        )
+        .unwrap();
+        let json = serde_json::to_string(&config).expect("serialize JSON config");
+        let json_round_trip = parse_scene_config_str(&json, false).unwrap();
+        assert_eq!(
+            BodyVisibility::from(&json_round_trip.characters[0].body_visibility),
+            BodyVisibility::from(&config.characters[0].body_visibility)
+        );
+
+        let toml = toml::to_string(&config).expect("serialize TOML config");
+        let toml_round_trip = parse_scene_config_str(&toml, true).unwrap();
+        assert_eq!(
+            BodyVisibility::from(&toml_round_trip.characters[0].body_visibility),
+            BodyVisibility::from(&config.characters[0].body_visibility)
+        );
+    }
+
+    #[test]
+    fn scene_state_applies_visibility_to_preview_and_animation_characters() {
+        let mut args = default_scene();
+        args.hide_outer = true;
+        args.posture = PostureCli::Walk;
+        let (state, _) = scene_state_and_camera_from_scene(&args);
+        let sampled = apply_posture_overrides(
+            args.posture
+                .animation_preset()
+                .sample(args.posture.sample_time()),
+            &args,
+        );
+        assert_eq!(state.posture, sampled);
+        assert!(state.body_visibility.head.inner);
+        assert!(!state.body_visibility.head.outer);
+    }
+
+    #[test]
     fn scene_posture_wave_overrides_base() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;
