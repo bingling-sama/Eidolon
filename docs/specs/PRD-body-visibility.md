@@ -486,11 +486,20 @@ rtk cargo bench -p eidolon-core --bench performance_benchmark
 
 ### 8.5 合并检查表
 
-- [ ] 确认 7.2、7.3、7.6、7.7 的建议决策，无未解决的阻塞设计问题。
-- [ ] 六部件及双层覆盖完整，所有默认值为 true。
-- [ ] 单角色/多角色、classic/slim、离屏/窗口/浏览器选择同一显隐状态。
-- [ ] Skin 替换、clear/reload、克隆、动画均保留预期状态。
-- [ ] 配置、Schema、CLI 帮助和 WASM 文档一致。
-- [ ] V01–V18 有测试结果或要求的人工/性能证据；环境阻塞单独记录。
-- [ ] 默认 RGBA 回归对照通过，性能结论附基线与测量环境。
-- [ ] 中英文示例可复现；未扩大到 Studio 重设计或渲染资源重构。
+- [ ] **设计决策**：7.2、7.3、7.6、7.7 尚未获得维护者明确确认；当前实现按本文建议决策执行。
+- [x] **部件与默认值**：Core `BodyVisibility` 覆盖六部件和两层，默认 12 个值均为 `true`；Core 单元测试通过。
+- [ ] **入口一致性**：单角色/多角色共用渲染 pass，WebGPU/WebGL2 E2E 已通过；classic/slim 的完整交叉矩阵和 `preview` 窗口冒烟尚未提供。
+- [ ] **生命周期**：代码保留 Skin 替换、clear/reload、克隆和动画状态的设计；现有测试尚未覆盖完整的显隐生命周期矩阵。
+- [ ] **文档与配置**：JSON Schema、CLI 参数和 Rust/WASM 说明已更新；WASM 新增方法的完整 API 示例和 CLI 帮助与文档逐项对照仍待完成。
+- [ ] **V01–V18 证据**：已有 Core/CLI 测试、隐藏身体渲染测试和 WebGPU/WebGL2 可见性 E2E；V04、V06–V08、V10–V12、V14–V15、V18 尚无完整对应证据。
+- [ ] **回归与性能**：CI 的 Rust 测试、Clippy 和 WASM E2E 均通过；尚未采集改动前后的默认 RGBA 基线和 Criterion 性能基线。
+- [x] **范围**：实现未扩展到 Studio 控制面板、渲染资源重构或其他非目标；中英文核心使用文档已更新，但示例复现仍需补充验证。
+
+#### 当前验证证据
+
+- `cargo test --workspace -- --test-threads=1`：本地 233 个测试通过；GitHub CI Rust 测试通过。
+- `cargo clippy --workspace --all-targets -- -D warnings`：通过。
+- `wasm-pack build --target bundler`：通过。
+- GitHub CI Playwright：WebGPU/WebGL2 共 30 个测试通过，其中新增 `visibility.spec.js` 的 4 个测试均通过。
+- `python -m json.tool schemas/scene.json`：通过。
+- 已验证 CLI 全隐藏渲染可生成 800×600 RGBA PNG；尚未形成默认输出的前后 RGBA 基线报告。
