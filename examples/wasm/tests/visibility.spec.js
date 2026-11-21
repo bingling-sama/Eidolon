@@ -42,6 +42,10 @@ test('single-character visibility setters change rendered output and preserve pe
   });
   const headOnly = await renderAndShot(page);
   expect(headOnly).not.toBe(baseOnly);
+  expect(await page.evaluate(async () => {
+    const bytes = await window.__eidolon_renderer.capture_frame(128, 128, 'png');
+    return bytes.length;
+  })).toBeGreaterThan(100);
 
   await page.locator('#btn-clear-skin').click();
   await page.locator('#file-input').setInputFiles(skinPath);
@@ -85,7 +89,13 @@ test('visibility setters are available for scene character IDs', async ({ page }
       renderer.set_character_part_visibility(id, 'torso', true, true);
       return false;
     } catch {
-      return true;
+      renderer.remove_character(secondId);
+      try {
+        renderer.set_character_all_parts_visible(secondId, true);
+        return false;
+      } catch {
+        return true;
+      }
     }
   });
   expect(result).toBe(true);

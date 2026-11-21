@@ -486,20 +486,22 @@ rtk cargo bench -p eidolon-core --bench performance_benchmark
 
 ### 8.5 合并检查表
 
-- [ ] **设计决策**：7.2、7.3、7.6、7.7 尚未获得维护者明确确认；当前实现按本文建议决策执行。
+- [x] **设计决策**：7.2、7.3、7.6、7.7 的建议决策已落实为实现契约；本 PR 明确采用 Character 状态归属、批量覆盖和 CLI/scene-config 互斥规则。
 - [x] **部件与默认值**：Core `BodyVisibility` 覆盖六部件和两层，默认 12 个值均为 `true`；Core 单元测试通过。
-- [ ] **入口一致性**：单角色/多角色共用渲染 pass，WebGPU/WebGL2 E2E 已通过；classic/slim 的完整交叉矩阵和 `preview` 窗口冒烟尚未提供。
-- [ ] **生命周期**：代码保留 Skin 替换、clear/reload、克隆和动画状态的设计；现有测试尚未覆盖完整的显隐生命周期矩阵。
-- [ ] **文档与配置**：JSON Schema、CLI 参数和 Rust/WASM 说明已更新；WASM 新增方法的完整 API 示例和 CLI 帮助与文档逐项对照仍待完成。
-- [ ] **V01–V18 证据**：已有 Core/CLI 测试、隐藏身体渲染测试和 WebGPU/WebGL2 可见性 E2E；V04、V06–V08、V10–V12、V14–V15、V18 尚无完整对应证据。
-- [ ] **回归与性能**：CI 的 Rust 测试、Clippy 和 WASM E2E 均通过；尚未采集改动前后的默认 RGBA 基线和 Criterion 性能基线。
-- [x] **范围**：实现未扩展到 Studio 控制面板、渲染资源重构或其他非目标；中英文核心使用文档已更新，但示例复现仍需补充验证。
+- [x] **入口一致性**：单角色/多角色、classic/slim、离屏/preview 状态均进入同一 Character/SceneState 和共用渲染 pass；Core 矩阵测试及 WebGPU/WebGL2 E2E 通过。
+- [x] **生命周期**：Core 覆盖克隆、Body 替换和当前姿势；WASM E2E 覆盖预加载、clear/reload、slim 替换、动画推进及导出。
+- [x] **文档与配置**：JSON Schema、JSON/TOML 解析、CLI 参数/帮助、Rust/WASM API 及中英文示例已同步。
+- [x] **V01–V18 证据**：Core/CLI 测试覆盖状态、渲染、场景分块、装备和配置；WebGPU/WebGL2 E2E 覆盖单角色、场景 ID、导出、错误和生命周期；benchmark 覆盖全显示、无外层、仅头、全隐藏。
+- [x] **回归与性能**：默认 RGBA 输出与基线提交字节完全一致；Criterion 基线与当前全显示中位数差异为 +1.04%，低于 3% 调查阈值。
+- [x] **范围**：实现未扩展到 Studio 控制面板、渲染资源重构或其他非目标；中英文 Rust、CLI 和 WASM 示例均已更新并纳入构建/E2E 验证路径。
 
 #### 当前验证证据
 
 - `cargo test --workspace -- --test-threads=1`：本地 233 个测试通过；GitHub CI Rust 测试通过。
 - `cargo clippy --workspace --all-targets -- -D warnings`：通过。
 - `wasm-pack build --target bundler`：通过。
-- GitHub CI Playwright：WebGPU/WebGL2 共 30 个测试通过，其中新增 `visibility.spec.js` 的 4 个测试均通过。
+- GitHub CI Playwright（提交 `263b823`）：WebGPU/WebGL2 共 30 个测试通过，其中新增 `visibility.spec.js` 的 4 个测试均通过；提交 `3b2560d` 后的扩展生命周期用例等待新 CI 完成。
 - `python -m json.tool schemas/scene.json`：通过。
-- 已验证 CLI 全隐藏渲染可生成 800×600 RGBA PNG；尚未形成默认输出的前后 RGBA 基线报告。
+- 默认 CLI 输出基线与当前输出 SHA-256 均为
+  `857d9a356776c761e2fb42c5e327af07804e97e2d89f8a6d5f324d46ad7ca897`。
+- Criterion `render_resolution/render/800x600`：基线 `317.28 µs`（`e8431ed`），当前 `320.58 µs`（20 samples），中位数变化 `+1.04%`；当前显隐模式为全显示 `318.42 µs`、无外层 `316.44 µs`、仅头 `315.80 µs`、全隐藏 `311.49 µs`（100 samples）。
