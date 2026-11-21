@@ -324,7 +324,11 @@ function syncBodyVisibility() {
   renderer.set_outer_layers_visible(!inputHideOuter.checked);
   for (const input of bodyPartInputs) {
     const part = input.dataset.bodyPart;
-    renderer.set_part_visibility(part, input.checked, input.checked);
+    renderer.set_part_visibility(
+      part,
+      input.checked && !inputHideInner.checked,
+      input.checked && !inputHideOuter.checked,
+    );
   }
 }
 
