@@ -7,6 +7,8 @@
 
 mod common;
 
+use std::io::Cursor;
+
 use common::{resource, resource_str};
 use eidolon_core::back_equipment::{BackEquipment, BackEquipmentKind};
 use eidolon_core::camera::Camera;
@@ -15,6 +17,7 @@ use eidolon_core::model::Model;
 use eidolon_core::output::{write_output, OutputIntent, StaticFormat};
 use eidolon_core::renderer::Renderer;
 use eidolon_core::scene::Scene;
+use image::{DynamicImage, ImageFormat, Rgba};
 
 fn make_renderer() -> Renderer {
     Renderer::new().expect("Failed to create Renderer")
@@ -50,6 +53,33 @@ fn camera_default() -> Camera {
         scale: 1.0,
         target: [0.0, 1.0, 0.0],
     }
+}
+
+fn skin_with_transparent_outer_atlas() -> Vec<u8> {
+    let bytes = std::fs::read(resource("bingling_sama.png")).expect("read skin");
+    let mut image = image::load_from_memory(&bytes)
+        .expect("decode skin")
+        .to_rgba8();
+    // 64x64 classic/Alex double-layer atlas regions used by the OBJ layer meshes.
+    for (x0, y0, x1, y1) in [
+        (32, 0, 64, 16),  // hat
+        (16, 32, 40, 48), // jacket
+        (40, 32, 56, 48), // right sleeve
+        (48, 48, 64, 64), // left sleeve
+        (0, 32, 16, 48),  // right pants
+        (0, 48, 16, 64),  // left pants
+    ] {
+        for y in y0..y1 {
+            for x in x0..x1 {
+                image.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+            }
+        }
+    }
+    let mut output = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(image)
+        .write_to(&mut output, ImageFormat::Png)
+        .expect("encode transparent outer skin");
+    output.into_inner()
 }
 
 #[test]
@@ -173,6 +203,77 @@ fn hidden_body_layers_produce_no_body_pixels() {
 }
 
 #[test]
+fn hiding_outer_layers_matches_a_transparent_outer_atlas() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("load body");
+    let transparent_outer_body = renderer
+        .load_body_from_memory(&skin_with_transparent_outer_atlas(), SkinType::Classic)
+        .expect("load transparent outer body");
+    let mut hidden = Character::from_body(body);
+    hidden.body_visibility.set_outer_layers(false);
+    let transparent = Character::from_body(transparent_outer_body);
+
+    let hidden_image = renderer
+        .render(&hidden, &camera_default(), 200, 150)
+        .expect("hidden outer render");
+    let transparent_image = renderer
+        .render(&transparent, &camera_default(), 200, 150)
+        .expect("transparent outer render");
+    assert_eq!(hidden_image, transparent_image);
+}
+
+#[test]
+fn body_draw_count_matches_inner_and_outer_visibility() {
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
+
+    renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("all-visible render");
+    assert_eq!(renderer.body_draw_count(), 12);
+
+    character.body_visibility.set_outer_layers(false);
+    renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("inner-only render");
+    assert_eq!(renderer.body_draw_count(), 6);
+
+    character.body_visibility.set_all(false);
+    character.body_visibility.head.outer = true;
+    renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("outer-only render");
+    assert_eq!(renderer.body_draw_count(), 1);
+
+    character.body_visibility.set_all(false);
+    renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("all-hidden render");
+    assert_eq!(renderer.body_draw_count(), 0);
+}
+
+#[test]
+fn visibility_changes_do_not_upload_gpu_resources() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("load body");
+    let mut character = Character::from_body(body);
+    let before = renderer.resource_upload_count();
+
+    character.body_visibility.set_outer_layers(false);
+    character.body_visibility.set_all(false);
+    character.body_visibility.head.inner = true;
+    renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("visibility render");
+
+    assert_eq!(renderer.resource_upload_count(), before);
+}
+
+#[test]
 fn explicit_default_visibility_matches_implicit_default() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
@@ -215,6 +316,29 @@ fn each_body_part_can_be_rendered_independently() {
             "part {part:?} should produce visible pixels"
         );
     }
+}
+
+#[test]
+fn head_only_render_is_confined_to_the_head_region() {
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
+    character.body_visibility.set_all(false);
+    character
+        .body_visibility
+        .set_part(eidolon_core::visibility::BodyPartId::Head, true, true);
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("head-only render failed");
+    let pixels: Vec<(u32, u32)> = image
+        .enumerate_pixels()
+        .filter_map(|(x, y, pixel)| (pixel[3] > 0).then_some((x, y)))
+        .collect();
+    assert!(!pixels.is_empty(), "head should remain visible");
+    let max_y = pixels.iter().map(|(_, y)| *y).max().unwrap();
+    assert!(
+        max_y < 100,
+        "head-only pixels reached body region at y={max_y}"
+    );
 }
 
 #[test]
@@ -320,6 +444,54 @@ fn hidden_body_does_not_hide_back_equipment() {
         .render(&character, &camera_default(), 200, 150)
         .expect("cape render failed");
     assert!(image.pixels().any(|pixel| pixel[3] > 0));
+}
+
+#[test]
+fn hidden_body_does_not_hide_nametag() {
+    let renderer = make_renderer();
+    let mut without_tag = character_with_skin(&renderer);
+    without_tag.body_visibility.set_all(false);
+    let mut with_tag = without_tag.clone();
+    with_tag.nametag = Some("HiddenBody".to_owned());
+
+    let body_only = renderer
+        .render(&without_tag, &camera_default(), 400, 300)
+        .expect("hidden body render");
+    let tagged = renderer
+        .render(&with_tag, &camera_default(), 400, 300)
+        .expect("hidden body nametag render");
+    assert!(
+        body_only
+            .enumerate_pixels()
+            .zip(tagged.enumerate_pixels())
+            .any(|((_, _, before), (_, _, after))| before != after),
+        "nametag should remain visible when body meshes are hidden"
+    );
+}
+
+#[test]
+fn hide_show_preserves_render_state_and_scene_camera() {
+    let renderer = make_renderer();
+    let mut character = character_with_skin(&renderer);
+    let camera = camera_default();
+    let mut scene = Scene::with_characters(vec![character.clone()], camera);
+    let before_bounds = scene.compute_bounding_box();
+    let before_camera = scene.camera;
+
+    let baseline = renderer
+        .render(&character, &camera, 200, 150)
+        .expect("baseline render");
+    character.body_visibility.set_all(false);
+    character.body_visibility.set_all(true);
+    let restored = renderer
+        .render(&character, &camera, 200, 150)
+        .expect("restored render");
+
+    scene.characters[0].body_visibility.set_all(false);
+    scene.characters[0].body_visibility.set_all(true);
+    assert_eq!(before_bounds, scene.compute_bounding_box());
+    assert_eq!(before_camera, scene.camera);
+    assert_eq!(baseline, restored);
 }
 
 #[test]
