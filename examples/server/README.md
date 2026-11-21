@@ -152,6 +152,9 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 | `height` | u32 | `512` | Image height in pixels |
 | `format` | string | `png` | `png` or `webp` |
 | `nametag` | string | `None` | Player nameplate rendered above head |
+| `hideInner` / `hide_inner` | bool | `false` | Hide all base skin meshes |
+| `hideOuter` / `hide_outer` | bool | `false` | Hide all overlay meshes |
+| `hideParts` / `hide_parts` | comma-separated string | `None` | Hide both layers of `head`, `body`, `right-arm`, `left-arm`, `right-leg`, or `left-leg` |
 | `cam_yaw` | f32 | `180.0` | Camera orbit yaw (degrees) |
 | `cam_pitch` | f32 | `90.0` | Camera orbit pitch (degrees) |
 | `cam_zoom` | f32 | `1.0` | Camera zoom multiplier |
@@ -159,7 +162,7 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 #### Example Request
 
 ```bash
-curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&capeUrl=https://textures.minecraft.net/texture/yyy&slim=1&posture=wave" -o player.png
+curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&hideOuter=true&hideParts=right-arm,left-arm" -o player.png
 ```
 
 #### `POST /scene/render` (Multi-character Scene Rendering)
