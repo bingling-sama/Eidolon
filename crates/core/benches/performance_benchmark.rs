@@ -151,6 +151,53 @@ fn bench_render_scenes(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_render_visibility_modes(c: &mut Criterion) {
+    let renderer = shared_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("Failed to load body");
+    let camera = Camera {
+        yaw: 180.0,
+        pitch: 80.0,
+        scale: 1.0,
+        target: [0.0, 1.0, 0.0],
+    };
+
+    let mut outer_hidden = Character::from_body(body.clone());
+    outer_hidden.body_visibility.set_outer_layers(false);
+    let mut head_only = Character::from_body(body.clone());
+    head_only.body_visibility.set_all(false);
+    head_only.body_visibility.head.inner = true;
+    head_only.body_visibility.head.outer = true;
+    let mut all_hidden = Character::from_body(body);
+    all_hidden.body_visibility.set_all(false);
+
+    let cases = [
+        (
+            "all_visible",
+            Character::from_body(
+                renderer
+                    .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+                    .expect("Failed to load baseline body"),
+            ),
+        ),
+        ("outer_hidden", outer_hidden),
+        ("head_only", head_only),
+        ("all_hidden", all_hidden),
+    ];
+    let mut group = c.benchmark_group("render_visibility_800x600");
+    for (name, character) in cases {
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                renderer
+                    .render(&character, &camera, 800, 600)
+                    .expect("Render failed")
+            });
+        });
+    }
+    group.finish();
+}
+
 fn bench_asset_loading(c: &mut Criterion) {
     let renderer = Renderer::new().expect("Failed to create renderer");
     let skin_bytes = fs::read(resource("bingling_sama.png")).expect("Failed to read skin");
@@ -455,6 +502,7 @@ criterion_group!(
     benches,
     bench_render_resolutions,
     bench_render_scenes,
+    bench_render_visibility_modes,
     bench_asset_loading,
     bench_image_processing,
     bench_animation_and_pose,

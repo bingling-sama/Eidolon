@@ -457,9 +457,48 @@ mod tests {
                 assert_eq!(scene.nametag, None);
                 assert_eq!(scene.cape, None);
                 assert_eq!(scene.elytra, None);
+                assert!(!scene.hide_inner);
+                assert!(!scene.hide_outer);
+                assert!(scene.hide_parts.is_empty());
             }
             _ => panic!("Expected Render"),
         }
+    }
+
+    #[test]
+    fn cli_visibility_options_parse_and_reject_scene_config_conflicts() {
+        let args = Args::try_parse_from([
+            "eidolon",
+            "render",
+            "skin.png",
+            "--hide-inner",
+            "--hide-outer",
+            "--hide-parts",
+            "head,right-arm",
+        ])
+        .expect("visibility options should parse");
+        let Command::Render { scene, .. } = args.command else {
+            panic!("Expected Render");
+        };
+        assert!(scene.hide_inner);
+        assert!(scene.hide_outer);
+        assert_eq!(
+            scene.hide_parts,
+            vec![BodyPartCli::Head, BodyPartCli::RightArm]
+        );
+
+        assert!(Args::try_parse_from([
+            "eidolon",
+            "render",
+            "--scene-config",
+            "scene.json",
+            "--hide-outer",
+        ])
+        .is_err());
+        assert!(
+            Args::try_parse_from(["eidolon", "render", "skin.png", "--hide-parts", "torso",])
+                .is_err()
+        );
     }
 
     #[test]

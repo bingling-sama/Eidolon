@@ -596,6 +596,20 @@ mod tests {
     }
 
     #[test]
+    fn scene_visibility_config_rejects_unknown_fields_and_invalid_types() {
+        assert!(parse_scene_config_str(
+            r#"{"characters":[{"skin":"skin.png","body_visibility":{"head":{"visible":false}}}]}"#,
+            false,
+        )
+        .is_err());
+        assert!(parse_scene_config_str(
+            r#"{"characters":[{"skin":"skin.png","body_visibility":{"head":{"inner":"false"}}}]}"#,
+            false,
+        )
+        .is_err());
+    }
+
+    #[test]
     fn scene_posture_wave_overrides_base() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;

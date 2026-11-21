@@ -175,4 +175,15 @@ mod tests {
             !value.inner && !value.outer
         }));
     }
+
+    #[test]
+    fn every_part_supports_all_four_layer_combinations() {
+        for part in PARTS {
+            for (inner, outer) in [(false, false), (false, true), (true, false), (true, true)] {
+                let mut visibility = BodyVisibility::default();
+                visibility.set_part(part, inner, outer);
+                assert_eq!(visibility.get(part), &PartVisibility { inner, outer });
+            }
+        }
+    }
 }

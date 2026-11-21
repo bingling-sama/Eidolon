@@ -173,6 +173,95 @@ fn hidden_body_layers_produce_no_body_pixels() {
 }
 
 #[test]
+fn explicit_default_visibility_matches_implicit_default() {
+    let renderer = make_renderer();
+    let character = character_with_skin(&renderer);
+    let mut explicit = character.clone();
+    explicit.body_visibility.set_all(true);
+
+    let implicit_image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("implicit default render failed");
+    let explicit_image = renderer
+        .render(&explicit, &camera_default(), 200, 150)
+        .expect("explicit default render failed");
+
+    assert_eq!(implicit_image, explicit_image);
+}
+
+#[test]
+fn each_body_part_can_be_rendered_independently() {
+    use eidolon_core::visibility::BodyPartId;
+
+    let renderer = make_renderer();
+    let parts = [
+        BodyPartId::Head,
+        BodyPartId::Body,
+        BodyPartId::RightArm,
+        BodyPartId::LeftArm,
+        BodyPartId::RightLeg,
+        BodyPartId::LeftLeg,
+    ];
+
+    for part in parts {
+        let mut character = character_with_skin(&renderer);
+        character.body_visibility.set_all(false);
+        character.body_visibility.set_part(part, true, true);
+        let image = renderer
+            .render(&character, &camera_default(), 200, 150)
+            .expect("part-only render failed");
+        assert!(
+            image.pixels().any(|pixel| pixel[3] > 0),
+            "part {part:?} should produce visible pixels"
+        );
+    }
+}
+
+#[test]
+fn visibility_survives_clone_body_replacement_and_current_posture() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("load body failed");
+    let replacement = renderer
+        .load_body(&resource_str("undefinedR2.png"), SkinType::Slim)
+        .expect("load replacement body failed");
+    let mut character = Character::from_body(body);
+    character.body_visibility.set_all(false);
+    character.body_visibility.head.inner = true;
+    character.posture = DefaultPostures::WAVE;
+
+    let mut clone = character.clone();
+    clone.body_visibility.set_all(true);
+    assert!(!character.body_visibility.head.outer);
+    assert!(clone.body_visibility.head.outer);
+
+    character.attach_body(replacement);
+    assert!(!character.body_visibility.body.inner);
+    assert!(character.body_visibility.head.inner);
+    assert_eq!(character.posture, DefaultPostures::WAVE);
+}
+
+#[test]
+fn hidden_body_does_not_hide_back_equipment() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("load body failed");
+    let atlas = renderer
+        .load_back_equipment_atlas(&resource_str("Turtle_Cape.png"))
+        .expect("load cape failed");
+    let mut character = Character::from_body(body);
+    character.body_visibility.set_all(false);
+    character.equip(BackEquipment::new(atlas, BackEquipmentKind::Cape));
+
+    let image = renderer
+        .render(&character, &camera_default(), 200, 150)
+        .expect("cape render failed");
+    assert!(image.pixels().any(|pixel| pixel[3] > 0));
+}
+
+#[test]
 fn cloned_character_reuses_resources_with_the_same_renderer() {
     let renderer = make_renderer();
     let character = character_with_skin(&renderer);
