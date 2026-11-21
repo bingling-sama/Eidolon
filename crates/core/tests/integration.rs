@@ -218,6 +218,67 @@ fn each_body_part_can_be_rendered_independently() {
 }
 
 #[test]
+fn layer_and_part_switches_change_only_the_requested_render_state() {
+    let renderer = make_renderer();
+    let baseline = character_with_skin(&renderer);
+
+    let mut outer_hidden = baseline.clone();
+    outer_hidden.body_visibility.set_outer_layers(false);
+    let mut inner_hidden = baseline.clone();
+    inner_hidden.body_visibility.set_inner_layers(false);
+    let mut head_only = baseline.clone();
+    head_only.body_visibility.set_all(false);
+    head_only.body_visibility.head.inner = true;
+    head_only.body_visibility.head.outer = true;
+
+    let baseline_image = renderer
+        .render(&baseline, &camera_default(), 200, 150)
+        .expect("baseline render failed");
+    let outer_hidden_image = renderer
+        .render(&outer_hidden, &camera_default(), 200, 150)
+        .expect("outer-hidden render failed");
+    let inner_hidden_image = renderer
+        .render(&inner_hidden, &camera_default(), 200, 150)
+        .expect("inner-hidden render failed");
+    let head_only_image = renderer
+        .render(&head_only, &camera_default(), 200, 150)
+        .expect("head-only render failed");
+
+    assert_ne!(baseline_image, outer_hidden_image);
+    assert_ne!(baseline_image, inner_hidden_image);
+    assert_ne!(baseline_image, head_only_image);
+    assert!(head_only_image.pixels().any(|pixel| pixel[3] > 0));
+}
+
+#[test]
+fn visibility_is_independent_across_scene_chunks() {
+    let renderer = make_renderer();
+    let body = renderer
+        .load_body(&resource_str("bingling_sama.png"), SkinType::Classic)
+        .expect("load body failed");
+    let mut visible_scene = Scene::new(camera_default());
+    let mut hidden_scene = Scene::new(camera_default());
+    for index in 0..18 {
+        let mut visible = Character::from_body(body.clone());
+        visible.position.x = index as f32 * 1.2;
+        let mut hidden = visible.clone();
+        if index == 0 {
+            hidden.body_visibility.set_all(false);
+        }
+        visible_scene.add_character(visible);
+        hidden_scene.add_character(hidden);
+    }
+
+    let visible_image = renderer
+        .render_scene(&visible_scene, 800, 600)
+        .expect("visible scene render failed");
+    let hidden_image = renderer
+        .render_scene(&hidden_scene, 800, 600)
+        .expect("hidden scene render failed");
+    assert_ne!(visible_image, hidden_image);
+}
+
+#[test]
 fn visibility_survives_clone_body_replacement_and_current_posture() {
     let renderer = make_renderer();
     let body = renderer

@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 const skinPath = fileURLToPath(
   new URL('../../../resources/bingling_sama.png', import.meta.url),
 );
+const slimSkinPath = fileURLToPath(
+  new URL('../../../resources/undefinedR2.png', import.meta.url),
+);
 
 async function loadSkin(page) {
   await page.goto('/');
@@ -40,6 +43,22 @@ test('single-character visibility setters change rendered output and preserve pe
   const headOnly = await renderAndShot(page);
   expect(headOnly).not.toBe(baseOnly);
 
+  await page.locator('#btn-clear-skin').click();
+  await page.locator('#file-input').setInputFiles(skinPath);
+  await expect(page.locator('#btn-export')).toBeEnabled();
+  expect(await renderAndShot(page)).toBe(headOnly);
+
+  await page.locator('#file-input').setInputFiles(slimSkinPath);
+  await expect(page.locator('#btn-export')).toBeEnabled();
+  await page.evaluate(() => window.__eidolon_renderer.set_skin_type('slim'));
+  await expect(page.evaluate(() => {
+    window.__eidolon_renderer.set_animation('walk');
+    window.__eidolon_renderer.set_all_parts_visible(false);
+    window.__eidolon_renderer.set_part_visibility('head', true, true);
+    window.__eidolon_renderer.advance_animation(0.1);
+    return true;
+  })).resolves.toBe(true);
+
   await expect(page.evaluate(() => {
     try {
       window.__eidolon_renderer.set_part_visibility('right_arm', true, true);
@@ -57,8 +76,11 @@ test('visibility setters are available for scene character IDs', async ({ page }
     const bytes = new Uint8Array(await input.files[0].arrayBuffer());
     const renderer = window.__eidolon_renderer;
     const id = renderer.add_character(bytes, 'classic');
+    const secondId = renderer.add_character(bytes, 'classic');
     renderer.set_character_all_parts_visible(id, false);
     renderer.set_character_part_visibility(id, 'head', true, true);
+    renderer.set_character_outer_layers_visible(secondId, false);
+    renderer.render_frame();
     try {
       renderer.set_character_part_visibility(id, 'torso', true, true);
       return false;

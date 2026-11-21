@@ -610,6 +610,29 @@ mod tests {
     }
 
     #[test]
+    fn toml_visibility_config_matches_json_defaults_and_values() {
+        let config = parse_scene_config_str(
+            r#"
+                [[characters]]
+                skin = "skin.png"
+
+                [characters.body_visibility.head]
+                outer = false
+            "#,
+            true,
+        )
+        .unwrap();
+        let visibility: BodyVisibility = (&config.characters[0].body_visibility).into();
+
+        assert!(visibility.head.inner);
+        assert!(!visibility.head.outer);
+        assert_eq!(
+            visibility.right_leg,
+            eidolon_core::visibility::PartVisibility::default()
+        );
+    }
+
+    #[test]
     fn scene_posture_wave_overrides_base() {
         let mut scene = default_scene();
         scene.posture = PostureCli::Wave;

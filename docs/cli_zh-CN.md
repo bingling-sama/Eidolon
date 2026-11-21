@@ -57,6 +57,8 @@ cargo run -- render resources/bingling_sama.png --cape cape.png --cape-pitch 25
 cargo run -- render resources/bingling_sama.png --elytra cape.png --elytra-pitch 18 --elytra-spread 45
 cargo run -- render resources/bingling_sama.png --nametag Steve
 cargo run -- render resources/bingling_sama.png --nametag Steve --disable-nametag-see-through
+cargo run -- render resources/bingling_sama.png --hide-outer
+cargo run -- render resources/bingling_sama.png --hide-parts body,right-arm,left-arm,right-leg,left-leg
 cargo run -- render --scene-config scene.json output.png
 ```
 
