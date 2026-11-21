@@ -20,6 +20,24 @@ use winit::window::{Window, WindowId};
 use crate::args::PostureCli;
 use crate::scene::{load_scene_from_config, PostureOverrides, SceneState};
 
+pub(crate) fn load_preview_character(
+    renderer: &Renderer,
+    texture_path: &str,
+    scene_state: &SceneState,
+    cape_atlas_path: Option<&str>,
+    elytra_atlas_path: Option<&str>,
+) -> Result<Character, EidolonError> {
+    let body = renderer.load_body(texture_path, scene_state.skin_type)?;
+    let mut character = Character::from_body(body);
+    scene_state.apply_to(&mut character);
+    let atlas_path = cape_atlas_path.or(elytra_atlas_path);
+    if let (Some(path), Some(kind)) = (atlas_path, scene_state.back_equipment_kind) {
+        let atlas = renderer.load_back_equipment_atlas(path)?;
+        character.equip(BackEquipment::new(atlas, kind));
+    }
+    Ok(character)
+}
+
 pub struct PreviewApp {
     pub renderer: Option<Renderer>,
     pub window: Option<Arc<Window>>,
@@ -323,21 +341,14 @@ impl ApplicationHandler for PreviewApp {
             self.camera = loaded_scene.camera;
             self.scene = Some(loaded_scene);
         } else if let Some(texture_path) = &self.texture_path {
-            let body = renderer
-                .load_body(texture_path, self.scene_state.skin_type)
-                .expect("Failed to load body");
-            let mut character = Character::from_body(body);
-            self.scene_state.apply_to(&mut character);
-            let atlas_path = self
-                .cape_atlas_path
-                .as_deref()
-                .or(self.elytra_atlas_path.as_deref());
-            if let (Some(path), Some(kind)) = (atlas_path, self.scene_state.back_equipment_kind) {
-                let atlas = renderer
-                    .load_back_equipment_atlas(path)
-                    .expect("Failed to load back equipment atlas");
-                character.equip(BackEquipment::new(atlas, kind));
-            }
+            let character = load_preview_character(
+                &renderer,
+                texture_path,
+                &self.scene_state,
+                self.cape_atlas_path.as_deref(),
+                self.elytra_atlas_path.as_deref(),
+            )
+            .expect("Failed to load preview character");
             self.character = Some(character);
         }
 
@@ -502,6 +513,8 @@ impl ApplicationHandler for PreviewApp {
 mod tests {
     use super::*;
     use clap::Parser;
+    use eidolon_core::character::SkinType;
+    use eidolon_core::visibility::BodyVisibility;
 
     #[test]
     fn preview_left_drag_pans_without_rotating() {
@@ -516,6 +529,43 @@ mod tests {
         assert_ne!(position, cgmath::Vector3::new(0.0, 0.0, 0.0));
         assert_eq!(camera.yaw, 180.0);
         assert_eq!(camera.pitch, 90.0);
+    }
+
+    #[test]
+    fn headless_preview_loads_character_and_renders_visibility_state() {
+        let renderer = Renderer::new().expect("create headless preview renderer");
+        let skin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("resources")
+            .join("bingling_sama.png");
+        let mut body_visibility = BodyVisibility::default();
+        body_visibility.set_outer_layers(false);
+        let state = SceneState {
+            skin_type: SkinType::Classic,
+            nametag: None,
+            nametag_see_through: true,
+            back_equipment_kind: None,
+            posture: crate::args::PostureCli::Walk.into(),
+            position: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            rotation: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            body_visibility,
+        };
+
+        let character = load_preview_character(
+            &renderer,
+            skin.to_str().expect("skin path"),
+            &state,
+            None,
+            None,
+        )
+        .expect("load headless preview character");
+        let image = renderer
+            .render(&character, &Camera::default(), 200, 150)
+            .expect("render headless preview character");
+
+        assert!(image.pixels().any(|pixel| pixel[3] > 0));
+        assert_eq!(renderer.body_draw_count(), 6);
     }
 
     #[test]
