@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 use tracing::{error, info};
 
 use crate::error::AppError;
-use crate::model::{RenderQuery, SceneCharacterQuery, SceneRenderQuery};
+use crate::model::{apply_visibility, RenderQuery, SceneCharacterQuery, SceneRenderQuery};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderMode {
@@ -235,6 +235,12 @@ fn build_character_with_posture(
 
     character.nametag = query.resolved_nametag().map(|s| s.to_string());
     character.nametag_see_through = !query.disable_nametag_see_through.unwrap_or(false);
+    apply_visibility(
+        &mut character.body_visibility,
+        query.hide_inner,
+        query.hide_outer,
+        query.hide_parts.as_deref(),
+    );
 
     character.position = cgmath::Vector3::new(
         query.pos_x.unwrap_or(0.0),
@@ -342,6 +348,12 @@ fn build_scene_character(
 
     character.nametag = char_q.resolved_nametag().map(|s| s.to_string());
     character.nametag_see_through = char_q.resolved_nametag_see_through();
+    apply_visibility(
+        &mut character.body_visibility,
+        char_q.hide_inner,
+        char_q.hide_outer,
+        char_q.hide_parts.as_deref(),
+    );
 
     let pos = char_q.resolved_position();
     character.position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);

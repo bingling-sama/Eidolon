@@ -1,3 +1,4 @@
+use eidolon_core::visibility::{BodyPartId, BodyVisibility};
 use image::{DynamicImage, GenericImageView};
 use serde::{de, Deserialize, Deserializer};
 
@@ -82,6 +83,35 @@ where
     deserializer.deserialize_any(FlexibleBool)
 }
 
+pub fn apply_visibility(
+    visibility: &mut BodyVisibility,
+    hide_inner: Option<bool>,
+    hide_outer: Option<bool>,
+    hide_parts: Option<&str>,
+) {
+    if hide_inner.unwrap_or(false) {
+        visibility.set_inner_layers(false);
+    }
+    if hide_outer.unwrap_or(false) {
+        visibility.set_outer_layers(false);
+    }
+    for part in hide_parts.unwrap_or_default().split(',') {
+        let part = match part.trim().to_ascii_lowercase().as_str() {
+            "head" => Some(BodyPartId::Head),
+            "body" => Some(BodyPartId::Body),
+            "right-arm" | "right_arm" | "rightarm" => Some(BodyPartId::RightArm),
+            "left-arm" | "left_arm" | "leftarm" => Some(BodyPartId::LeftArm),
+            "right-leg" | "right_leg" | "rightleg" => Some(BodyPartId::RightLeg),
+            "left-leg" | "left_leg" | "leftleg" => Some(BodyPartId::LeftLeg),
+            "" => None,
+            _ => None,
+        };
+        if let Some(part) = part {
+            visibility.set_part(part, false, false);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct SceneCharacterQuery {
@@ -115,6 +145,23 @@ pub struct SceneCharacterQuery {
     pub disable_nametag_see_through: Option<bool>,
 
     pub posture: Option<String>,
+
+    #[serde(
+        default,
+        alias = "hideInner",
+        alias = "hide_inner",
+        deserialize_with = "deserialize_flexible_bool"
+    )]
+    pub hide_inner: Option<bool>,
+    #[serde(
+        default,
+        alias = "hideOuter",
+        alias = "hide_outer",
+        deserialize_with = "deserialize_flexible_bool"
+    )]
+    pub hide_outer: Option<bool>,
+    #[serde(alias = "hideParts", alias = "hide_parts")]
+    pub hide_parts: Option<String>,
 
     #[serde(alias = "capePitch", alias = "cape_pitch")]
     pub cape_pitch: Option<f32>,
@@ -296,6 +343,23 @@ pub struct RenderQuery {
     // Posture: idle, walk, run, wave, fly
     pub posture: Option<String>,
 
+    #[serde(
+        default,
+        alias = "hideInner",
+        alias = "hide_inner",
+        deserialize_with = "deserialize_flexible_bool"
+    )]
+    pub hide_inner: Option<bool>,
+    #[serde(
+        default,
+        alias = "hideOuter",
+        alias = "hide_outer",
+        deserialize_with = "deserialize_flexible_bool"
+    )]
+    pub hide_outer: Option<bool>,
+    #[serde(alias = "hideParts", alias = "hide_parts")]
+    pub hide_parts: Option<String>,
+
     // Overrides
     #[serde(alias = "capePitch", alias = "cape_pitch")]
     pub cape_pitch: Option<f32>,
@@ -410,6 +474,15 @@ impl RenderQuery {
         }
         if other.posture.is_some() {
             self.posture = other.posture;
+        }
+        if other.hide_inner.is_some() {
+            self.hide_inner = other.hide_inner;
+        }
+        if other.hide_outer.is_some() {
+            self.hide_outer = other.hide_outer;
+        }
+        if other.hide_parts.is_some() {
+            self.hide_parts = other.hide_parts;
         }
         if other.cape_pitch.is_some() {
             self.cape_pitch = other.cape_pitch;
@@ -599,5 +672,22 @@ mod tests {
         let json3 = r#"{}"#;
         let c3: SceneCharacterQuery = serde_json::from_str(json3).unwrap();
         assert!(c3.resolved_nametag_see_through());
+    }
+
+    #[test]
+    fn test_visibility_options_parse_and_apply() {
+        let query: RenderQuery =
+            serde_json::from_str(r#"{"hideInner":true,"hideParts":"head,right-arm"}"#).unwrap();
+        let mut visibility = BodyVisibility::default();
+        apply_visibility(
+            &mut visibility,
+            query.hide_inner,
+            query.hide_outer,
+            query.hide_parts.as_deref(),
+        );
+        assert!(!visibility.head.inner);
+        assert!(!visibility.head.outer);
+        assert!(!visibility.right_arm.inner);
+        assert!(!visibility.body.inner);
     }
 }

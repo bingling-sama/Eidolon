@@ -100,3 +100,25 @@ test('visibility setters are available for scene character IDs', async ({ page }
   });
   expect(result).toBe(true);
 });
+
+test('studio visibility controls are wired to the canvas renderer', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await loadSkin(page);
+  for (const selector of [
+    '#input-hide-inner',
+    '#input-hide-outer',
+    '[data-body-part="head"]',
+    '[data-body-part="rightArm"]',
+  ]) {
+    await expect(page.locator(selector)).toBeVisible();
+  }
+
+  const visible = await renderAndShot(page);
+  await page.locator('#input-hide-outer').check();
+  const innerOnly = await renderAndShot(page);
+  expect(innerOnly).not.toBe(visible);
+
+  await page.locator('[data-body-part="head"]').uncheck();
+  const noHead = await renderAndShot(page);
+  expect(noHead).not.toBe(innerOnly);
+});

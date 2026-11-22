@@ -64,6 +64,9 @@ const inputLoop = document.getElementById('input-loop');
 const btnResetElytra = document.getElementById('btn-reset-elytra');
 const inputNametag = document.getElementById('input-nametag');
 const inputNametagSeeThrough = document.getElementById('input-nametag-see-through');
+const inputHideInner = document.getElementById('input-hide-inner');
+const inputHideOuter = document.getElementById('input-hide-outer');
+const bodyPartInputs = [...document.querySelectorAll('[data-body-part]')];
 
 const canvas = document.createElement('canvas');
 canvas.style.display = 'block';
@@ -314,6 +317,26 @@ inputNametagSeeThrough.addEventListener('change', () => {
   if (!renderer) return;
   renderer.set_nametag_see_through(inputNametagSeeThrough.checked);
 });
+
+function syncBodyVisibility() {
+  if (!renderer) return;
+  renderer.set_inner_layers_visible(!inputHideInner.checked);
+  renderer.set_outer_layers_visible(!inputHideOuter.checked);
+  for (const input of bodyPartInputs) {
+    const part = input.dataset.bodyPart;
+    renderer.set_part_visibility(
+      part,
+      input.checked && !inputHideInner.checked,
+      input.checked && !inputHideOuter.checked,
+    );
+  }
+}
+
+inputHideInner.addEventListener('change', syncBodyVisibility);
+inputHideOuter.addEventListener('change', syncBodyVisibility);
+for (const input of bodyPartInputs) {
+  input.addEventListener('change', syncBodyVisibility);
+}
 
 // ---- Resolution presets ----
 sizePresets.addEventListener('click', (e) => {

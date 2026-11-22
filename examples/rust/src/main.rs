@@ -14,6 +14,7 @@ use eidolon::{
     character::{Character, DefaultPostures, Posture, SkinType},
     output::{write_output, OutputIntent, StaticFormat},
     renderer::Renderer,
+    visibility::BodyPartId,
 };
 use eidolon_core as eidolon;
 
@@ -72,6 +73,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &default_cam,
         StaticFormat::Png,
     )?;
+
+    // ── visibility controls ───────────────────────────────────────────
+    println!("classic-no-outer");
+    character.body_visibility.set_outer_layers(false);
+    save(
+        "classic-no-outer.png",
+        &character,
+        &default_cam,
+        StaticFormat::Png,
+    )?;
+
+    println!("head-only");
+    character.body_visibility.set_all(false);
+    character
+        .body_visibility
+        .set_part(BodyPartId::Head, true, true);
+    save("head-only.png", &character, &default_cam, StaticFormat::Png)?;
+    character.body_visibility.set_all(true);
 
     // ── 2. classic + wave (WebP) ─────────────────────────────────────
     println!("classic-wave");
@@ -158,6 +177,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rear_cam = Camera { yaw: 0.0, ..cam };
     save("slim-elytra.png", &character, &rear_cam, StaticFormat::Png)?;
 
-    println!("\nDone — {} images in {}", 7, out_dir.display());
+    println!("\nDone — {} images in {}", 9, out_dir.display());
     Ok(())
 }

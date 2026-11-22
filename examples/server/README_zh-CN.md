@@ -152,6 +152,9 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 | `height` | u32 | `512` | 输出图像高度（像素） |
 | `format` | string | `png` | `png` 或 `webp` |
 | `nametag` | string | `None` | 头顶名牌文本 |
+| `hideInner` / `hide_inner` | bool | `false` | 隐藏所有基础皮肤网格 |
+| `hideOuter` / `hide_outer` | bool | `false` | 隐藏所有外层覆盖网格 |
+| `hideParts` / `hide_parts` | 逗号分隔字符串 | `None` | 隐藏 `head`、`body`、`right-arm`、`left-arm`、`right-leg`、`left-leg` 的两层网格 |
 | `cam_yaw` | f32 | `180.0` | 相机水平偏航角（度） |
 | `cam_pitch` | f32 | `90.0` | 相机俯仰角（度） |
 | `cam_zoom` | f32 | `1.0` | 相机缩放倍数 |
@@ -159,7 +162,7 @@ curl "http://127.0.0.1:8080/littleskin/image/both?name=BinglingTX" -o bingling.p
 #### 示例请求
 
 ```bash
-curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&capeUrl=https://textures.minecraft.net/texture/yyy&slim=1&posture=wave" -o player.png
+curl "http://127.0.0.1:8080/render?skinUrl=https://textures.minecraft.net/texture/xxx&hideOuter=true&hideParts=right-arm,left-arm" -o player.png
 ```
 
 #### `POST /scene/render`（多人物场景渲染）
