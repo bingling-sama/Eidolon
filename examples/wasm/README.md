@@ -28,6 +28,17 @@ Open the URL printed by Vite (usually `http://localhost:5173`), pick a Minecraft
 
 After building the WASM package, run `npm run test:e2e` to verify desktop and mobile layout, playback, reduced-motion behavior, canvas updates, nametag rendering, and Elytra override reset in Chromium.
 
+Body visibility is available through the generated `CanvasRenderer` API:
+
+```js
+renderer.set_outer_layers_visible(false);
+renderer.set_part_visibility('head', true, true);
+renderer.set_all_parts_visible(true);
+```
+
+For multi-character scenes, use the corresponding
+`set_character_*_visibility` methods with the ID returned by `add_character`.
+
 ## How It Works
 
 1. `wasm-pack` compiles the WASM binding crate (`crates/wasm`) to a WASM module + JS glue in `pkg/`
@@ -74,4 +85,3 @@ pnpm --filter eidolon-wasm-example test:bench --project=webgl2
 | **Capture 800×600 WebP** | ~7.3 ms (65.8 MP/s) | ~8.3 ms (57.8 MP/s) | CPU encoding dominates overall duration |
 | **Capture 1080p PNG** | ~15.6 ms (133 MP/s) | ~16.4 ms (126 MP/s) | Consistent high-resolution capture throughput |
 | **Memory Delta (10x Exports)** | 0.00 MB | 0.00 MB | Zero heap growth across repeated offscreen captures |
-

@@ -23,6 +23,7 @@ yarn add @eidolonmc/wasm
 - **Classic & Slim Player Models**: Accurate Steve and Alex geometry with dual-layer overlay support.
 - **Interactive Controls**: Camera orbit, zoom, and procedural animations (`idle`, `walk`, `run`, `wave`, `fly`).
 - **Texture Analysis**: In-memory inspection and classification of Minecraft skin textures.
+- **Body Visibility**: Independently toggle the inner and outer mesh of each body part.
 
 ## Quick Start
 
@@ -49,6 +50,9 @@ async function main() {
   // Set pose and camera
   renderer.set_posture('wave');
   renderer.set_camera(180, 85, 1.2); // yaw, pitch, zoom
+  renderer.set_outer_layers_visible(false);
+  renderer.set_part_visibility('head', true, true);
+  renderer.set_all_parts_visible(true); // restore every body mesh
 
   // Render a frame
   renderer.render();
@@ -56,6 +60,12 @@ async function main() {
 
 main();
 ```
+
+The accepted single-character part names are `head`, `body`, `rightArm`,
+`leftArm`, `rightLeg`, and `leftLeg`. The scene entity equivalents are
+`set_character_part_visibility`, `set_character_inner_layers_visible`,
+`set_character_outer_layers_visible`, and `set_character_all_parts_visible`;
+they take the entity ID returned by `add_character`.
 
 ## Related Packages
 

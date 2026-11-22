@@ -59,6 +59,23 @@ Key points:
 - `StaticFormat` supports `Png` and `WebP`. `OutputIntent` makes the requested format explicit; the output module normalizes the filename extension and returns the final path.
 - `AnimationFormat` supports `Gif`, animated `WebP`, `Apng`, and `Avif`. `OutputIntent::Animation` accepts an `AnimationPreset`, FPS, speed multiplier, loop count, and frame producer, then returns the final path.
 
+## Body Visibility
+
+Each `Character` has a `body_visibility` value controlling the inner and outer mesh
+of the head, body, both arms, and both legs. All twelve values are visible by default.
+
+```rust
+use eidolon::visibility::BodyPartId;
+
+character.body_visibility.set_outer_layers(false);
+character.body_visibility.set_part(BodyPartId::Head, true, true);
+```
+
+`inner` is the base skin mesh and `outer` is the hat, jacket, sleeve, or pants overlay
+mesh. Visibility is per character, survives skin replacement, and does not hide capes,
+elytra, or nametags. `set_all(false)` hides body geometry without unloading the body
+or changing camera framing.
+
 ## Error Handling
 
 The public API returns `EidolonError`, a typed enum:

@@ -13,6 +13,7 @@ use cgmath::{Matrix4, Rad, Vector3};
 use crate::camera::Camera;
 use crate::character::Character;
 use crate::model::{BodyPart, Model};
+pub use crate::visibility::BodyPartId;
 
 /// Number of body parts in the model and draw loop.
 pub(crate) const BODY_PART_COUNT: usize = 6;
@@ -26,18 +27,6 @@ pub(crate) const MAX_SCENE_CHARACTERS: usize = 16;
 pub(crate) const CAPE_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 pub(crate) const ELYTRA_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.5, 0.125);
 const BODY_PIVOT: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
-
-/// Identifies a body part in [`PART_CONFIGS`] — single source of truth
-/// for mapping config entries to [`Model`] fields.
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum PartId {
-    Head,
-    RightArm,
-    LeftArm,
-    RightLeg,
-    LeftLeg,
-    Body,
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -56,19 +45,19 @@ pub(crate) struct Uniforms {
 /// Pivot points are joint positions from the Blockbench OBJ model.
 /// Coordinate system: Y-up, character centered at X=0 Z=0, feet at Y≈0,
 /// collision-box top at Y≈1.8.
-pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32, PartId); BODY_PART_COUNT] = &[
+pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32, BodyPartId); BODY_PART_COUNT] = &[
     // Head: pivot at neck joint
-    (Vector3::new(0.0, 1.5, 0.0), 0.0, PartId::Head),
+    (Vector3::new(0.0, 1.5, 0.0), 0.0, BodyPartId::Head),
     // Right Arm: pivot at right shoulder joint
-    (Vector3::new(0.3125, 1.375, 0.0), 0.0, PartId::RightArm),
+    (Vector3::new(0.3125, 1.375, 0.0), 0.0, BodyPartId::RightArm),
     // Left Arm: pivot at left shoulder joint (X mirror)
-    (Vector3::new(-0.3125, 1.375, 0.0), 0.0, PartId::LeftArm),
+    (Vector3::new(-0.3125, 1.375, 0.0), 0.0, BodyPartId::LeftArm),
     // Right Leg: pivot at right hip joint
-    (Vector3::new(0.125, 0.75, 0.0), 0.0, PartId::RightLeg),
+    (Vector3::new(0.125, 0.75, 0.0), 0.0, BodyPartId::RightLeg),
     // Left Leg: pivot at left hip joint (X mirror)
-    (Vector3::new(-0.125, 0.75, 0.0), 0.0, PartId::LeftLeg),
+    (Vector3::new(-0.125, 0.75, 0.0), 0.0, BodyPartId::LeftLeg),
     // Body: root — no pivot. Offset 0.0001 prevents Z-fighting with jacket layer.
-    (Vector3::new(0.0, 0.0, 0.0), 0.0001, PartId::Body),
+    (Vector3::new(0.0, 0.0, 0.0), 0.0001, BodyPartId::Body),
 ];
 
 /// Map a [`PART_CONFIGS`] index to the corresponding [`BodyPart`] in the model.
@@ -77,12 +66,12 @@ pub(crate) const PART_CONFIGS: &[(Vector3<f32>, f32, PartId); BODY_PART_COUNT] =
 /// separate hardcoded order to maintain.
 pub(crate) fn body_part_ref(i: usize, model: &Model) -> &BodyPart {
     match PART_CONFIGS[i].2 {
-        PartId::Head => &model.head,
-        PartId::RightArm => &model.right_arm,
-        PartId::LeftArm => &model.left_arm,
-        PartId::RightLeg => &model.right_leg,
-        PartId::LeftLeg => &model.left_leg,
-        PartId::Body => &model.body,
+        BodyPartId::Head => &model.head,
+        BodyPartId::RightArm => &model.right_arm,
+        BodyPartId::LeftArm => &model.left_arm,
+        BodyPartId::RightLeg => &model.right_leg,
+        BodyPartId::LeftLeg => &model.left_leg,
+        BodyPartId::Body => &model.body,
     }
 }
 

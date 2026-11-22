@@ -5,7 +5,7 @@ mod pipeline;
 mod readback;
 mod uniforms;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use image::{ImageBuffer, Rgba};
@@ -59,6 +59,10 @@ pub struct Renderer {
     offscreen_pool: Mutex<std::collections::HashMap<(u32, u32), OffscreenTarget>>,
     /// Cached windowed depth texture & view.
     windowed_depth: Mutex<Option<(u32, u32, wgpu::Texture, wgpu::TextureView)>>,
+    /// Number of Body mesh draws emitted by the most recent render pass.
+    body_draw_count: AtomicUsize,
+    /// Number of Body/Back equipment texture uploads performed by this renderer.
+    resource_upload_count: AtomicUsize,
 }
 
 pub(crate) struct OffscreenTarget {
@@ -500,6 +504,8 @@ impl Renderer {
             clear_color: [0.0, 0.0, 0.0, 0.0],
             offscreen_pool: Mutex::new(std::collections::HashMap::new()),
             windowed_depth: Mutex::new(None),
+            body_draw_count: AtomicUsize::new(0),
+            resource_upload_count: AtomicUsize::new(0),
         })
     }
 
@@ -578,6 +584,7 @@ impl Renderer {
             atlas.width(),
             atlas.height(),
         )?;
+        self.resource_upload_count.fetch_add(1, Ordering::Relaxed);
         Ok(BackEquipmentAtlas::new(texture, self.context_id))
     }
 
@@ -596,6 +603,7 @@ impl Renderer {
             skin.width(),
             skin.height(),
         )?;
+        self.resource_upload_count.fetch_add(1, Ordering::Relaxed);
         Ok(Body::new(texture, skin_type, self.context_id))
     }
 
@@ -648,6 +656,7 @@ impl Renderer {
         width: u32,
         height: u32,
     ) {
+        self.body_draw_count.store(0, Ordering::Relaxed);
         let uniform_size = std::mem::size_of::<uniforms::Uniforms>() as u32;
 
         // Resolve / cache nametags for all characters
@@ -807,19 +816,29 @@ impl Renderer {
 
                     if let (Some(body), Some(model)) = (body, model) {
                         render_pass.set_bind_group(1, &body.skin.bind_group, &[]);
-                        for i in 0..PART_CONFIGS.len() {
+                        for (i, (_, _, part_id)) in PART_CONFIGS.iter().enumerate() {
+                            let visibility = character.body_visibility.get(*part_id);
+                            if !visibility.inner && !visibility.outer {
+                                continue;
+                            }
                             let body_part = body_part_ref(i, model);
                             let dynamic_offset =
                                 ((slot_base + i) as u32) * self.uniform_aligned_size;
                             render_pass.set_bind_group(0, chunk_bind_group, &[dynamic_offset]);
 
-                            render_pass
-                                .set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
-                            render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                            if visibility.inner {
+                                render_pass
+                                    .set_vertex_buffer(0, body_part.main.vertex_buffer.slice(..));
+                                render_pass.draw(0..body_part.main.vertex_count, 0..1);
+                                self.body_draw_count.fetch_add(1, Ordering::Relaxed);
+                            }
 
-                            render_pass
-                                .set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
-                            render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                            if visibility.outer {
+                                render_pass
+                                    .set_vertex_buffer(0, body_part.layer.vertex_buffer.slice(..));
+                                render_pass.draw(0..body_part.layer.vertex_count, 0..1);
+                                self.body_draw_count.fetch_add(1, Ordering::Relaxed);
+                            }
                         }
                     }
 
@@ -1162,6 +1181,19 @@ impl Renderer {
     /// Set the render pass clear color (RGBA, 0.0–1.0). Default is transparent black.
     pub fn set_clear_color(&mut self, r: f64, g: f64, b: f64, a: f64) {
         self.clear_color = [r, g, b, a];
+    }
+
+    /// Return the number of inner and outer Body mesh draws emitted by the last render.
+    ///
+    /// This is intended for diagnostics and acceptance tests; it excludes capes, elytra,
+    /// nametags, and background work.
+    pub fn body_draw_count(&self) -> usize {
+        self.body_draw_count.load(Ordering::Relaxed)
+    }
+
+    /// Return the number of Body/Back equipment texture uploads performed by this renderer.
+    pub fn resource_upload_count(&self) -> usize {
+        self.resource_upload_count.load(Ordering::Relaxed)
     }
 
     /// Update surface extent after a resize; no-op if not windowed or size is zero.

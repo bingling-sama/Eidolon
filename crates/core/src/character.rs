@@ -1,6 +1,7 @@
 use crate::back_equipment::BackEquipment;
 use crate::body::Body;
 pub use crate::body::SkinType;
+use crate::visibility::BodyVisibility;
 use cgmath::Vector3;
 use std::fmt;
 
@@ -158,6 +159,8 @@ pub struct Character {
     pub position: Vector3<f32>,
     /// World-space rotation in degrees (Euler X, then Y, then Z) applied before joint matrices.
     pub rotation: Vector3<f32>,
+    /// Visibility of each body part's inner and outer mesh.
+    pub body_visibility: BodyVisibility,
 }
 
 impl Character {
@@ -171,6 +174,7 @@ impl Character {
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
+            body_visibility: BodyVisibility::default(),
         }
     }
 
@@ -236,6 +240,7 @@ impl Character {
             posture: DefaultPostures::STAND,
             position: Vector3::new(0.0, 0.0, 0.0),
             rotation: Vector3::new(0.0, 0.0, 0.0),
+            body_visibility: BodyVisibility::default(),
         }
     }
 }
@@ -250,6 +255,7 @@ impl fmt::Debug for Character {
             .field("posture", &self.posture)
             .field("position", &self.position)
             .field("rotation", &self.rotation)
+            .field("body_visibility", &self.body_visibility)
             .finish()
     }
 }

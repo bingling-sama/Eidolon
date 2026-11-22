@@ -33,6 +33,9 @@ eidolon render [OPTIONS] <SKIN> [OUTPUT]
 | `--disable-nametag-see-through` | Fully hide nametag pixels occluded by scene geometry | *(translucent when occluded)* |
 | `--cape <PNG>` | Render a Cape using the specified Back equipment atlas | *(no cape)* |
 | `--elytra <PNG>` | Render elytra using a 2:1 cape atlas (64x32 or HD) | *(no elytra)* |
+| `--hide-inner` | Hide all base skin meshes; cannot be combined with `--scene-config` | *(disabled)* |
+| `--hide-outer` | Hide all overlay meshes; cannot be combined with `--scene-config` | *(disabled)* |
+| `--hide-parts <PARTS>` | Hide both layers of comma-separated parts: `head`, `body`, `right-arm`, `left-arm`, `right-leg`, `left-leg` | *(none)* |
 | `--cape-pitch <DEG>` | Override the selected posture's cape angle | *(posture value)* |
 | `--elytra-pitch <DEG>` | Override the selected posture's elytra pitch | *(posture value)* |
 | `--elytra-spread <DEG>` | Override the selected posture's elytra opening angle | *(posture value)* |
